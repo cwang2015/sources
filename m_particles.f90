@@ -5719,8 +5719,8 @@ end function
            rav1 = parts%x(1,i) - parts%x(1,j)
             rav2 = parts%x(2,i) - parts%x(2,j)
             zb = abs(parts%n(1,j)*rav1 + parts%n(2,j)*rav2)! - parts%hsml(1)/4
-                lapsx =2* sqrt(parts%dgu(1,k)**2 + parts%dgu(2,k)**2)*water%viscosity* (dvx(1) - parts%n(1,j)*(dvx(1)*parts%n(1,j) + dvx(2)*parts%n(2,j)))/(parts%rhos(k)*zb) 
-                lapsy =2* sqrt(parts%dgu(1,k)**2 + parts%dgu(2,k)**2)*water%viscosity* (dvx(2) - parts%n(2,j)*(dvx(1)*parts%n(1,j) + dvx(2)*parts%n(2,j)))/(parts%rhos(k)*zb)
+                lapsx =2* sqrt(parts%dgu(1,k)**2 + parts%dgu(2,k)**2)*water%viscosity* (dvx(1) - parts%n(2,j)*(dvx(1)*parts%n(1,j) + dvx(2)*parts%n(2,j)))/(parts%rhos(k)*zb) 
+                lapsy =2* sqrt(parts%dgu(1,k)**2 + parts%dgu(2,k)**2)*water%viscosity* (dvx(2) - parts%n(1,j)*(dvx(1)*parts%n(1,j) + dvx(2)*parts%n(2,j)))/(parts%rhos(k)*zb)
              lap(1,i) = lap(1,i) - lapsx
              lap(2,i) = lap(2,i) - lapsy
       endif
@@ -5786,10 +5786,12 @@ end function
         i = parts%pair_i(k)
         j = parts%pair_j(k)
           do d = 1,parts%dim
-           dpre(d,i) = dpre(d,i) + parts%mass%r(j)/parts%rho%r(j)*(parts%rho%r(i)**2 * parts%p%r(j) + parts%rho%r(j)**2 * parts%p%r(i))  &
-                       /(parts%rho%r(i)*parts%rho%r(j))*parts%dwdx(d,k)   
-           dpre(d,j) = dpre(d,j) - parts%mass%r(i)/parts%rho%r(i)*(parts%rho%r(j)**2 * parts%p%r(i) + parts%rho%r(i)**2 * parts%p%r(j))  &
-                       /(parts%rho%r(i)*parts%rho%r(j))*parts%dwdx(d,k)
+            dpre(d,i) = dpre(d,i) + parts%mass%r(j)/parts%rho%r(j)*(parts%p%r(i) + parts%p%r(j))*parts%dwdx(d,k)
+            dpre(d,j) = dpre(d,j) - parts%mass%r(i)/parts%rho%r(i)*(parts%p%r(i) + parts%p%r(j))*parts%dwdx(d,k)
+ !          dpre(d,i) = dpre(d,i) + parts%mass%r(j)/parts%rho%r(j)*(parts%rho%r(i)**2 * parts%p%r(j) + parts%rho%r(j)**2 * parts%p%r(i))  &
+ !                      /(parts%rho%r(i)*parts%rho%r(j))*parts%dwdx(d,k)   
+ !          dpre(d,j) = dpre(d,j) - parts%mass%r(i)/parts%rho%r(i)*(parts%rho%r(j)**2 * parts%p%r(i) + parts%rho%r(i)**2 * parts%p%r(j))  &
+ !                      /(parts%rho%r(i)*parts%rho%r(j))*parts%dwdx(d,k)
 !            dpre(d,i) = dpre(d,i) + parts%rho%r(i) * parts%mass%r(j)*(parts%p%r(i)/parts%rho%r(i)**2 + parts%p%r(j)/parts%rho%r(j)**2)*parts%dwdx(d,k)
 !            dpre(d,j) = dpre(d,j) - parts%rho%r(j) * parts%mass%r(i)*(parts%p%r(j)/parts%rho%r(j)**2 + parts%p%r(i)/parts%rho%r(i)**2)*parts%dwdx(d,k)
           enddo
@@ -5797,7 +5799,8 @@ end function
             if(parts%rhos(k)==0)cycle
           do d = 1,parts%dim
 !            dpre(d,i) = dpre(d,i) - parts%rho%r(i) * (parts%p%r(i)/parts%rho%r(i)**2 + parts%ps(k)/parts%rhos(k)**2) * parts%rhos(k) * parts%dgu(d,k)  
-           dpre(d,i) = dpre(d,i) - (parts%rho%r(i)**2 * parts%ps(k) + parts%rhos(k)**2 * parts%p%r(i))/(parts%rho%r(i)*parts%rhos(k))*parts%dgu(d,k)
+!           dpre(d,i) = dpre(d,i) - (parts%rho%r(i)**2 * parts%ps(k) + parts%rhos(k)**2 * parts%p%r(i))/(parts%rho%r(i)*parts%rhos(k))*parts%dgu(d,k)
+            dpre(d,i) = dpre(d,i) - (parts%p%r(i) + parts%ps(k))*parts%dgu(d,k)
           enddo
         endif
       enddo
@@ -5848,8 +5851,8 @@ end function
 !                lapsx = 2.*sqrt(parts%dgu(1,k)**2 + parts%dgu(2,k)**2)*water%viscosity* (dvx(1)*abs(parts%n(2,j)))/(parts%rhos(k)*zb) 
 !                lapsy = 2.*sqrt(parts%dgu(1,k)**2 + parts%dgu(2,k)**2)*water%viscosity* (dvx(2)*abs(parts%n(1,j)))/(parts%rhos(k)*zb)
 
-                lapsx = 2.*sqrt(parts%dgu(1,k)**2 + parts%dgu(2,k)**2)*water%viscosity* (dvx(1) - parts%n(1,j)*(dvx(1)*parts%n(1,j) + dvx(2)*parts%n(2,j)))/(parts%rhos(k)*zb) 
-                lapsy = 2.*sqrt(parts%dgu(1,k)**2 + parts%dgu(2,k)**2)*water%viscosity* (dvx(2) - parts%n(2,j)*(dvx(1)*parts%n(1,j) + dvx(2)*parts%n(2,j)))/(parts%rhos(k)*zb)
+                lapsx = 2.*sqrt(parts%dgu(1,k)**2 + parts%dgu(2,k)**2)*water%viscosity* (dvx(1) - parts%n(2,j)*(dvx(1)*parts%n(1,j) + dvx(2)*parts%n(2,j)))/(parts%rhos(k)*zb) !这里面修改了n的方向
+                lapsy = 2.*sqrt(parts%dgu(1,k)**2 + parts%dgu(2,k)**2)*water%viscosity* (dvx(2) - parts%n(1,j)*(dvx(1)*parts%n(1,j) + dvx(2)*parts%n(2,j)))/(parts%rhos(k)*zb) !这里面修改了n的方向
 !             endif
 !            if(parts%x(1,i)<0.01) cycle
              lap(1,i) = lap(1,i) - lapsx
@@ -5968,8 +5971,10 @@ end function
            rav1 = parts%x(1,i) - parts%x(1,j)
             rav2 = parts%x(2,i) - parts%x(2,j)
             zb = abs(parts%n(1,j)*rav1 + parts%n(2,j)*rav2)! - parts%hsml(1)/4
-         lapsx = sqrt(parts%dgu(1,k)**2 + parts%dgu(2,k)**2)*water%viscosity* (dvx(1) - parts%n(1,j)*(dvx(1)*parts%n(1,j) + dvx(2)*parts%n(2,j)))/(parts%rhos(k)*zb) 
-         lapsy = sqrt(parts%dgu(1,k)**2 + parts%dgu(2,k)**2)*water%viscosity* (dvx(2) - parts%n(2,j)*(dvx(1)*parts%n(1,j) + dvx(2)*parts%n(2,j)))/(parts%rhos(k)*zb)
+!         lapsx = sqrt(parts%dgu(1,k)**2 + parts%dgu(2,k)**2)*water%viscosity* (dvx(1) - parts%n(1,j)*(dvx(1)*parts%n(1,j) + dvx(2)*parts%n(2,j)))/(parts%rhos(k)*zb) 
+!         lapsy = sqrt(parts%dgu(1,k)**2 + parts%dgu(2,k)**2)*water%viscosity* (dvx(2) - parts%n(2,j)*(dvx(1)*parts%n(1,j) + dvx(2)*parts%n(2,j)))/(parts%rhos(k)*zb)
+         lapsx = sqrt(parts%dgu(1,k)**2 + parts%dgu(2,k)**2)*water%viscosity* (dvx(1) - parts%n(2,j)*(dvx(1)*parts%n(1,j) + dvx(2)*parts%n(2,j)))/(parts%rhos(k)*zb) 
+         lapsy = sqrt(parts%dgu(1,k)**2 + parts%dgu(2,k)**2)*water%viscosity* (dvx(2) - parts%n(1,j)*(dvx(1)*parts%n(1,j) + dvx(2)*parts%n(2,j)))/(parts%rhos(k)*zb)
              lap(1,i) = lap(1,i) - lapsx
              lap(2,i) = lap(2,i) - lapsy
        endif
@@ -6092,21 +6097,21 @@ end function
            if(parts%rhos(k)==0) cycle
             rav1 = parts%x(1,i) - parts%x(1,j)
             rav2 = parts%x(2,i) - parts%x(2,j)
-            zb = abs(parts%n(1,j)*rav1 + parts%n(2,j)*rav2) - parts%hsml(1)/4
+            zb = abs(parts%n(1,j)*rav1 + parts%n(2,j)*rav2)! - parts%hsml(1)/4
             
-         lapsx =  sqrt(parts%dgu(1,k)**2 + parts%dgu(2,k)**2)*water%viscosity* (dvx(1) - parts%n(1,j)*(dvx(1)*parts%n(1,j) + dvx(2)*parts%n(2,j)))/(parts%rho%r(i)*zb) 
-!         lapsy =2* sqrt(parts%dgu(1,k)**2 + parts%dgu(2,k)**2)*water%viscosity* (dvx(2) - parts%n(2,j)*(dvx(1)*parts%n(1,j) + dvx(2)*parts%n(2,j)))/(parts%rho%r(i)*zb)
+         lapsx =2*  sqrt(parts%dgu(1,k)**2 + parts%dgu(2,k)**2)*water%viscosity* (dvx(1) - parts%n(2,j)*(dvx(1)*parts%n(1,j) + dvx(2)*parts%n(2,j)))/(parts%rho%r(i)*zb) 
+!         lapsy =2* sqrt(parts%dgu(1,k)**2 + parts%dgu(2,k)**2)*water%viscosity* (dvx(2) - parts%n(1,j)*(dvx(1)*parts%n(1,j) + dvx(2)*parts%n(2,j)))/(parts%rho%r(i)*zb)
              lap(1,i) = lap(1,i) - lapsx
 !             lap(2,i) = lap(2,i) - lapsy
        endif
       
-       if(parts%itype(i)>0.and.parts%itype(j)<0)then
-           if(parts%rhos(k)==0) cycle
-          lapsx =  sqrt(parts%dgu(1,k)**2+parts%dgu(2,k)**2) * parts%mons(1,k)/parts%rhos(k)
+!       if(parts%itype(i)>0.and.parts%itype(j)<0)then
+!           if(parts%rhos(k)==0) cycle
+!          lapsx =  sqrt(parts%dgu(1,k)**2+parts%dgu(2,k)**2) * parts%mons(1,k)/parts%rhos(k)
 !          lapsy =  sqrt(parts%dgu(1,k)**2+parts%dgu(2,k)**2) * parts%mons(2,k)/parts%rhos(k)            
-            lap(1,i) = lap(1,i) - lapsx
+!            lap(1,i) = lap(1,i) - lapsx
 !            lap(2,i) = lap(2,i) - lapsy
-       endif
+!       endif
 
       enddo
 
@@ -6306,7 +6311,7 @@ end function
             rav2 = parts%x(2,i) - parts%x(2,j)
             zb = abs(parts%n(1,j)*rav1 + parts%n(2,j)*rav2)! - parts%hsml(1)/4
             
-         lapsx =  sqrt(parts%dgu(1,k)**2 + parts%dgu(2,k)**2)*water%viscosity* (dvx(1) - parts%n(1,j)*(dvx(1)*parts%n(1,j) + dvx(2)*parts%n(2,j))) /(parts%rho%r(i)*zb) 
+         lapsx =  sqrt(parts%dgu(1,k)**2 + parts%dgu(2,k)**2)*water%viscosity* (dvx(1) - parts%n(2,j)*(dvx(1)*parts%n(1,j) + dvx(2)*parts%n(2,j))) /(parts%rho%r(i)*zb) 
 !         lapsy =2* sqrt(parts%dgu(1,k)**2 + parts%dgu(2,k)**2)*water%viscosity* (dvx(2) - parts%n(2,j)*(dvx(1)*parts%n(1,j) + dvx(2)*parts%n(2,j)))/(parts%rho%r(i)*zb)
              lap(1,i) = lap(1,i) - lapsx
 !             lap(2,i) = lap(2,i) - lapsy
@@ -6357,71 +6362,104 @@ end function
       allocate(dpre(parts%dim,parts%max_interaction))
       allocate(lap(parts%dim,parts%max_interaction))
 !      allocate(laps(parts%dim,parts%max_interaction))
-      
+
       do i = 1,parts%ntotal
           do d = 1,parts%dim
+!              dpre(d,i) = 0.d0
               lap(d,i) = 0.d0
 !              laps(d,i) = 0.d0
           enddo
       enddo
       
-!      do i = parts%ntotal + 1, parts%ntotal+parts%nvirt
-!          parts%p%r(i) = 0.
-!      enddo
-
-
+!      write(*,*) 'this is momentum_equation_unified3'
+      
+!      divvx  =  parts.div2(parts%vx)
+      
       do k=1,parts%niac
         i = parts%pair_i(k)
         j = parts%pair_j(k)
         vx_i = parts%vx%cmpt(i); vx_j = parts%vx%cmpt(j)
+!        if(parts%itype(i)>0.and.parts%itype(j)>0)then
            rr = 0.      
+       if(parts%x(1,i)>0.00078.and.parts%x(1,j)<0.00022.and.parts%itype(i)*parts%itype(j)>0)then
+!             write(*,*)'dx=',dx(1)
+           do d=1,parts%dim
+              dx(d) =  parts%x(d,i) - (parts%x(d,j) + 0.001)
+              dvx(d) = vx_i(d)%p - vx_j(d)%p
+              rr = rr + dx(d)*dx(d)
+           enddo  
+       elseif(parts%x(1,i)<0.00022.and.parts%x(1,j)>0.00078.and.parts%itype(i)*parts%itype(j)>0)then
+           do d=1,parts%dim
+              dx(d) =  parts%x(d,i) - (parts%x(d,j) - 0.001)
+              dvx(d) = vx_i(d)%p - vx_j(d)%p
+              rr = rr + dx(d)*dx(d)
+           enddo  
+       else
            do d=1,parts%dim
               dx(d) =  parts%x(d,i) - parts%x(d,j)
               dvx(d) = vx_i(d)%p - vx_j(d)%p
               rr = rr + dx(d)*dx(d)
            enddo  
+       endif
            rr = sqrt(rr)
            do d = 1,parts%dim
-!              lap(d,i) = lap(d,i) + parts%mass%r(j)*water%viscosity*2/(parts%rho%r(i)*parts%rho%r(j))/rr**2*(dvx(1)*dx(1)+dvx(2)*dx(2))*parts%dwdx(d,k)    !这里的dwdx是对i吧？？？(33)
-!              lap(d,j) = lap(d,j) - parts%mass%r(i)*water%viscosity*2/(parts%rho%r(i)*parts%rho%r(j))/rr**2*(dvx(1)*dx(1)+dvx(2)*dx(2))*parts%dwdx(d,k)    !改变一下优先级顺序
-              lap(d,i) = lap(d,i) + parts%mass%r(j)*water%viscosity*2/(parts%rho%r(i)*parts%rho%r(j))/rr**2*(dx(1)*parts%dwdx(1,k)+dx(2)*parts%dwdx(2,k))*dvx(d)    !这里的dwdx是对i吧？？？(33)
-              lap(d,j) = lap(d,j) - parts%mass%r(i)*water%viscosity*2/(parts%rho%r(i)*parts%rho%r(j))/rr**2*(dx(1)*parts%dwdx(1,k)+dx(2)*parts%dwdx(2,k))*dvx(d)    !改变一下优先级顺序
+              lap(d,i) = lap(d,i) + parts%mass%r(j)/parts%rho%r(j)*(water%viscosity/parts%rho%r(i) + water%viscosity/parts%rho%r(j))/2  &
+              * (((parts%dim + 2)/(rr**2)*(dvx(1)*dx(1) + dvx(2)*dx(2))*parts%dwdx(d,k)) + (parts%dwdx(1,k) * dx(1) &
+              + parts%dwdx(2,k) * dx(2))/(rr**2) * dvx(d))   !这里的dwdx是对i吧？？？(33)
+              lap(d,j) = lap(d,j) + parts%mass%r(i)/parts%rho%r(i)*(water%viscosity/parts%rho%r(i) + water%viscosity/parts%rho%r(j))/2  &
+              * (((parts%dim + 2)/(rr**2)*(dvx(1)*dx(1) + dvx(2)*dx(2))*(-parts%dwdx(d,k))) + (parts%dwdx(1,k) *dx(1) &
+              + parts%dwdx(2,k) * dx(2))/(rr**2) * (-dvx(d)))
            enddo
-        if(parts%itype(i)>0.and.parts%itype(j)<0)then
-            do d = 1,parts%dim
-                lap(d,i) = lap(d,i) - sqrt(parts%dgu(1,k)**2+parts%dgu(2,k)**2) * parts%mons(d,k)/parts%rho%r(i) 
-            enddo
-        endif
-        
-       if(parts%itype(i)>0.and.parts%itype(j)<0)then
+           
+      if(parts%itype(i)>0.and.parts%itype(j)<0)then
            if(parts%rhos(k)==0) cycle
-            rav1 = parts%x(1,i) - parts%x(1,j)
+           rav1 = parts%x(1,i) - parts%x(1,j)
             rav2 = parts%x(2,i) - parts%x(2,j)
-            zb = abs(parts%n(1,j)*rav1 + parts%n(2,j)*rav2) - parts%hsml(1)/4
-            lapsx =  sqrt(parts%dgu(1,k)**2 + parts%dgu(2,k)**2)*water%viscosity* (dvx(1) - parts%n(1,j)*(dvx(1)*parts%n(1,j) + dvx(2)*parts%n(2,j)))/(parts%rho%r(i)*zb) 
-            lap(1,i) = lap(1,i) - lapsx
+            zb = abs(parts%n(1,j)*rav1 + parts%n(2,j)*rav2)! - parts%hsml(1)/4
+!            if(parts%zone(j)==3) then
+!                lapsx = 0.
+!                lapsy = 2.*sqrt(parts%dgu(1,k)**2 + parts%dgu(2,k)**2)*water%viscosity* (dvx(2))/(parts%rhos(k)*zb)
+!            elseif(1403<j<1485) then
+!                lapsx = 2.*sqrt(parts%dgu(1,k)**2 + parts%dgu(2,k)**2)*water%viscosity* (dvx(1))/(parts%rhos(k)*zb) 
+!                lapsy = 0.
+!            else
+!                lapsx = 2.*sqrt(parts%dgu(1,k)**2 + parts%dgu(2,k)**2)*water%viscosity* (dvx(1)*abs(parts%n(2,j)))/(parts%rhos(k)*zb) 
+!                lapsy = 2.*sqrt(parts%dgu(1,k)**2 + parts%dgu(2,k)**2)*water%viscosity* (dvx(2)*abs(parts%n(1,j)))/(parts%rhos(k)*zb)
+
+                lapsx = 2.*sqrt(parts%dgu(1,k)**2 + parts%dgu(2,k)**2)*water%viscosity* (dvx(1) - parts%n(2,j)*(dvx(1)*parts%n(1,j) + dvx(2)*parts%n(2,j)))/(parts%rhos(k)*zb) !这里面修改了n的方向
+                lapsy = 2.*sqrt(parts%dgu(1,k)**2 + parts%dgu(2,k)**2)*water%viscosity* (dvx(2) - parts%n(1,j)*(dvx(1)*parts%n(1,j) + dvx(2)*parts%n(2,j)))/(parts%rhos(k)*zb) !这里面修改了n的方向
+!             endif
+!            if(parts%x(1,i)<0.01) cycle
+             lap(1,i) = lap(1,i) - lapsx
+             lap(2,i) = lap(2,i) - lapsy
        endif
-       
-!        if(parts%itype(i)>0.and.parts%itype(j)<0)then
-!            n(j-parts%ntotal) = n(j-parts%ntotal) + 1 
-!        parts%p%r(j) = parts%p%r(j) + parts%p%r(i) - dpre(1,i) * dx(1) - dpre(2,i) *dx(2)
-!        endif
+          
+           
+           
+!       if(parts%itype(i)>0.and.parts%itype(j)<0)then
+!           if(parts%rhos(k)==0) cycle
+!          lapsx =  sqrt(parts%dgu(1,k)**2+parts%dgu(2,k)**2) * parts%mons(1,k)/parts%rhos(k)
+!          lapsy =  sqrt(parts%dgu(1,k)**2+parts%dgu(2,k)**2) * parts%mons(2,k)/parts%rhos(k)            
+!            lap(1,i) = lap(1,i) - lapsx
+!            lap(2,i) = lap(2,i) - lapsy
 !       endif
       enddo
+
       
       do i=1, parts%ntotal
+!          if(parts%gammaa%r(i) == 0) parts%gammaa%r(i)=1
           do d=1, parts%dim
-             lap(d,i)= lap(d,i)/parts%gammaa%r(i)!这里用的（27）其实就已经除以了密度，是作业里面的（14）中的第二项
+!             lap(d,i)= (lap(d,i)-laps(d,i)/parts%rho%r(i))/wi(i)
+             lap(d,i)= lap(d,i)/parts%gammaa%r(i)!+10**-8)!这里用的（27）其实就已经除以了密度，是作业里面的（14）中的第二项
           enddo
       enddo
       
       do i = 1,parts%ntotal
-         parts%dvx%x%r(i) = -dpre(1,i)/parts%rho%r(i) + lap(1,i)!这里的lap之前就除以rho了
-         parts%dvx%y%r(i) = -dpre(2,i)/parts%rho%r(i) + lap(2,i) + parts%numeric%gravity  !这个地方的重力不知道是加号还是减号。。。。。。。。。。，
+         parts%dvx%x%r(i) =  lap(1,i)!这里的lap之前就除以rho了
+!         parts%dvx%y%r(i) = 0.!-dpre(2,i)/parts%rho%r(i) + lap(2,i) + parts%numeric%gravity  !这个地方的重力不知道是加号还是减号。。。。。。。。。。，
       enddo
       
       end subroutine
-      
       
       
 !----------------------------------------------------------------------
@@ -7596,13 +7634,16 @@ enddo
             rav1 = parts%x(1,i) - parts%x(1,j)
             rav2 = parts%x(2,i) - parts%x(2,j)
 !            rho%r(j) = rho%r(j) + parts%mass%r(i)*parts%w(k)
-            zb = abs(parts%n(1,j)*rav1 + parts%n(2,j)*rav2) - 0.0000125
+!            zb = abs(parts%n(1,j)*rav1 + parts%n(2,j)*rav2)! - 0.0000125
 !               parts%mone%x%r(j) = parts%mone%x%r(j) + parts%mass%r(i)/parts%rho%r(i)*water%viscosity*parts%vx%x%r(i)/zb*parts%w(k)
 !               parts%mone%y%r(j) = parts%mone%y%r(j) + parts%mass%r(i)/parts%rho%r(i)*water%viscosity*parts%vx%y%r(i)/zb*parts%w(k)   ! 这种方式很不好，这是1的方式
+
                 parts%mone%x%r(j) = parts%mone%x%r(j) + parts%mass%r(i)*water%viscosity*(parts%vx%x%r(i) - parts%vx%x%r(j))*parts%w(k)
                 parts%mone%y%r(j) = parts%mone%y%r(j) + parts%mass%r(i)*water%viscosity*(parts%vx%y%r(i) - parts%vx%y%r(j))*parts%w(k)   !换一种方式
+
 !                parts%mone%x%r(j) = parts%mone%x%r(j) + parts%mass%r(i)*water%viscosity*parts%vx%x%r(i)*parts%w(k)
 !                parts%mone%y%r(j) = parts%mone%y%r(j) + parts%mass%r(i)*water%viscosity*parts%vx%y%r(i)*parts%w(k)   !换一种方式
+                
 !                parts%mone%x%r(j) = parts%mone%x%r(j) + parts%mass%r(i)*water%viscosity*(-parts%vx%x%r(j))*parts%w(k)
 !                parts%mone%y%r(j) = parts%mone%y%r(j) + parts%mass%r(i)*water%viscosity*(-parts%vx%y%r(j))*parts%w(k)   !换一种方式
 

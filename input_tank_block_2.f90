@@ -9,6 +9,7 @@ integer i, j, d, k
 type(block) nozzle, tank
 type(material), pointer :: property
 double precision soil_surface,water_surface
+real,dimension(:,:)::a(478,2)
 logical :: dbg = .false.
 double precision element_size, soil_submerged_depth    
 
@@ -31,7 +32,27 @@ call tank%set(xl=1.8d0,yl=1.d0,m=90,n=50)
 
 npoint = tank%m*tank%n
 allocate(tank%x(npoint),tank%y(npoint),tank%zone(npoint))
-call tank%cell_center
+!1call tank%cell_center
+
+
+open(unit=9,file='D:\LiuSPH\data\stillwater2.txt',status='old')!文件的名字是a.txt
+!read(8,*)m,n
+!allocate(a(m,n))
+read(9,*)((a(i,j),j=1,2),i=1,478)!把矩阵a读入了
+
+do i =1,478
+write(*,*)a(i,1),a(i,2)
+enddo
+
+k = 0
+do i = 1, npoint
+ if(i<=478)then
+      k = k + 1
+      tank%x(k) = a(i,1)
+      tank%y(k) = a(i,2)
+ endif
+enddo
+
 !      write(*,*) 'x=', tank%x
 !      write(*,*) 'y=', tank%y
 !      just for test 1 
@@ -50,24 +71,26 @@ call tank%cell_center
 
 ! Zoning
 tank%zone = 2
-do i = 1, tank%m*tank%n
-   if(tank%x(i)<0.02.or.tank%x(i)>1.78.or.tank%y(i)<0.02) tank%zone(i) = 1
-   if(tank%zone(i)==1.and.tank%x(i)<0.02.and.tank%y(i)>0.02) tank%zone(i)=3
-   if(tank%zone(i)==1.and.tank%x(i)>0.02.and.tank%x(i)<1.78) tank%zone(i)=4
-   if(tank%zone(i)==1.and.tank%x(i)>1.78) tank%zone(i)=5
-   if(tank%x(i)<0.02.and.tank%y(i)<0.02)  tank%zone(i)=6
-   if(tank%x(i)>1.78.and.tank%y(i)<0.02)  tank%zone(i)=6
+do i = 1, 478
+   if(tank%x(i)<0.01.or.tank%x(i)>0.99.or.tank%y(i)<0.01) tank%zone(i) = 1
+   if(tank%x(i)<0.41.and.tank%x(i)>0.39.and.tank%y(i)<0.31) tank%zone(i)=1
+   if(tank%x(i)<0.59.and.tank%x(i)>0.41.and.tank%y(i)<0.31.and.tank%y(i)>0.29) tank%zone(i)=1
+!   if(tank%zone(i)==1.and.tank%x(i)>0.02.and.tank%x(i)<1.78) tank%zone(i)=4
+!   if(tank%zone(i)==1.and.tank%x(i)>1.78) tank%zone(i)=5
+!   if(tank%x(i)<0.02.and.tank%y(i)<0.02)  tank%zone(i)=6
+!   if(tank%x(i)>1.78.and.tank%y(i)<0.02)  tank%zone(i)=6
 
    if(tank%zone(i)==2.and.tank%y(i)>0.52)tank%zone(i)= 8
-   if(tank%zone(i)==2.and.tank%y(i)<0.4.and.tank%x(i)<0.6.and.tank%x(i)>0.4)tank%zone(i)= 8
-   if(tank%zone(i)==2.and.tank%x(i)>0.98)tank%zone(i)= 8
+!   if(tank%zone(i)==2.and.tank%y(i)<0.4.and.tank%x(i)<0.6.and.tank%x(i)>0.4)tank%zone(i)= 8
+!   if(tank%zone(i)==2.and.tank%x(i)>0.98)tank%zone(i)= 8
    
    
 enddo
 
 call parts%take_real(tank,2)
+call parts%take_virtual(tank,1)
 
-call parts%take_boundary_for_tank_block2(tank)
+!call parts%take_boundary_for_tank_block2(tank)
 
 call parts%setup_ndim1
 

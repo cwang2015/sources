@@ -72,7 +72,7 @@ call parts%setup_ndim1
 ! vol means the volume of a cell. We calculate the mass of each particle according to mass = rho*vol
 
 parts%vol = tank%dx*tank%dy
-parts%hsml = 2*tank%dx
+parts%hsml =2.0*tank%dx
 parts%dspp = tank%dx
 
 ! itype is positive for real particles, negative for virtual particles.
@@ -132,7 +132,7 @@ if(parts%zone(i) ==1)then
     parts%n(2,i) = -1.!(parts%x(1,i+1) - parts%x(1,i))/sqrt((parts%x(1,i) - parts%x(1,i+1))**2 + (parts%x(2,i) - parts%x(2,i+1))**2)
 else
     parts%n(1,i) = 0!(parts%x(2,i) - parts%x(2,i+1))/sqrt((parts%x(1,i) - parts%x(1,i+1))**2 + (parts%x(2,i) - parts%x(2,i+1))**2)
-    parts%n(2,i) = 1.!(parts%x(1,i+1) - parts%x(1,i))/sqrt((parts%x(1,i) - parts%x(1,i+1))**2 + (parts%x(2,i) - parts%x(2,i+1))**2)
+    parts%n(2,i) = -1.!(parts%x(1,i+1) - parts%x(1,i))/sqrt((parts%x(1,i) - parts%x(1,i+1))**2 + (parts%x(2,i) - parts%x(2,i+1))**2)
 endif
       !              nx = (parts%x(2,j) - parts%x(2,j+1))/sqrt((parts%x(1,j) - parts%x(1,j+1))**2 + (parts%x(2,j) - parts%x(2,j+1))**2)
 !              ny = (parts%x(1,j+1) - parts%x(1,j))/sqrt((parts%x(1,j) - parts%x(1,j+1))**2 + (parts%x(2,j) - parts%x(2,j+1))**2)
