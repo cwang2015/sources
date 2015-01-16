@@ -1,0 +1,4175 @@
+      subroutine art_heat(ntotal,hsml,mass,x,vx,niac,rho,u,
+     &           c,pair_i,pair_j,w,dwdx,dedt)
+
+c----------------------------------------------------------------------
+c     Subroutine to calculate the artificial heat(Fulk, 1994, p, a-17) 
+
+c     ntotal : Number of particles                                  [in]
+c     hsml   : Smoothing Length                                     [in]
+c     mass   : Particle masses                                      [in]
+c     x      : Coordinates of all particles                         [in]
+c     vx     : Velocities of all particles                          [in]
+c     rho    : Density                                              [in]
+c     u      : specific internal energy                             [in]
+c     c      : Sound veolcity                                       [in]
+c     niac   : Number of interaction pairs                          [in]
+c     pair_i : List of first partner of interaction pair            [in]
+c     pair_j : List of second partner of interaction pair           [in]
+c     w      : Kernel for all interaction pairs                     [in]
+c     dwdx   : Derivative of kernel with respect to x, y and z      [in]
+c     dedt   : produced artificial heat, adding to energy Eq.      [out]
+
+      use param
+      implicit none
+      
+      integer ntotal,niac,pair_i(max_interaction),
+     &        pair_j(max_interaction)
+      double precision hsml(maxn), mass(maxn), x(dim,maxn),vx(dim,maxn),
+     &                 rho(maxn), u(maxn), c(maxn),w(max_interaction),
+     &                 dwdx(dim,max_interaction), dedt(maxn)
+      integer i,j,k,d
+      double precision dx, dvx(dim), vr, rr, h, mc, mrho, mhsml, 
+     &                 vcc(maxn), hvcc, mui, muj, muij, rdwdx, g1,g2
+      
+c---  Parameter for the artificial heat conduction:
+     
+      g1=0.1
+      g2=1.0      
+      do i=1,ntotal
+        vcc(i) = 0.e0         
+        dedt(i) = 0.e0
+      enddo
+    
+      do k=1,niac
+        i = pair_i(k)
+        j = pair_j(k)
+        do d=1,dim
+          dvx(d) = vx(d,j) - vx(d,i) 
+        enddo        
+        hvcc = dvx(1)*dwdx(1,k)
+        do d=2,dim
+          hvcc = hvcc + dvx(d)*dwdx(d,k)
+        enddo    
+         vcc(i) = vcc(i) + mass(j)*hvcc/rho(j)
+         vcc(j) = vcc(j) + mass(i)*hvcc/rho(i)
+      enddo  
+   
+      do k=1,niac
+        i = pair_i(k)
+        j = pair_j(k)
+        mhsml= (hsml(i)+hsml(j))/2.
+        mrho = 0.5e0*(rho(i) + rho(j))                          
+        rr = 0.e0
+        rdwdx = 0.e0
+        do d=1,dim
+          dx = x(d,i) -  x(d,j)
+          rr = rr + dx*dx
+          rdwdx  = rdwdx + dx*dwdx(d,k)            
+        enddo             
+        mui=g1*hsml(i)*c(i) + g2*hsml(i)**2*(abs(vcc(i))-vcc(i))
+        muj=g1*hsml(j)*c(j) + g2*hsml(j)**2*(abs(vcc(j))-vcc(j))
+        muij= 0.5*(mui+muj)     
+        h = muij/(mrho*(rr+0.01*mhsml**2))*rdwdx
+        dedt(i) = dedt(i) + mass(j)*h*(u(i)-u(j))
+        dedt(j) = dedt(j) + mass(i)*h*(u(j)-u(i))
+      enddo
+
+      do i=1,ntotal
+        dedt(i) = 2.0e0*dedt(i)          
+      enddo
+
+      return
+      end subroutine
+      subroutine art_visc(parts)
+
+c----------------------------------------------------------------------
+c     Subroutine to calculate the artificial viscosity (Monaghan, 1992) 
+
+c     ntotal : Number of particles (including virtual particles)    [in]
+c     hsml   : Smoothing Length                                     [in]
+c     mass   : Particle masses                                      [in]
+c     x      : Coordinates of all particles                         [in]
+c     vx     : Velocities of all particles                          [in]
+c     niac   : Number of interaction pairs                          [in]
+c     rho    : Density                                              [in]
+c     c      : Temperature                                          [in]
+c     pair_i : List of first partner of interaction pair            [in]
+c     pair_j : List of second partner of interaction pair           [in]
+c     w      : Kernel for all interaction pairs                     [in]
+c     dwdx   : Derivative of kernel with respect to x, y and z      [in]
+c     dvxdt  : Acceleration with respect to x, y and z             [out] 
+c     dedt   : Change of specific internal energy                  [out]
+ 
+      use param
+      !use declarations_sph, ex_dvx => dvx
+      use m_particles
+      implicit none
+
+      type(particles) parts
+
+      integer ntotal, niac
+      integer, pointer, dimension(:) :: pair_i, pair_j      
+      double precision, pointer, dimension(:) :: hsml, mass, w, rho, c
+      double precision, pointer, dimension(:,:) :: x, dwdx, vx
+      double precision, pointer, dimension(:) :: dedt, dvxdt(:,:)
+
+      double precision dx, dvx(dim), alpha, beta, etq, piv,
+     &       muv, vr, rr, h, mc, mrho, mhsml
+      integer i,j,k,d
+
+c     Parameter for the artificial viscosity:
+c     Shear viscosity
+      parameter( alpha = 1.e0   )
+     
+c     Bulk viscosity
+      parameter( beta  = 1.e0  ) 
+      
+c     Parameter to avoid singularities
+      parameter( etq   = 0.1e0 )
+
+      ntotal   =  parts%ntotal + parts%nvirt
+      niac     =  parts%niac
+            
+      pair_i   => parts%pair_i
+      pair_j   => parts%pair_j
+      hsml     => parts%hsml
+      mass     => parts%mass
+      x        => parts%x
+      w        => parts%w
+      dwdx     => parts%dwdx
+      vx       => parts%vx
+      rho      => parts%rho
+      c        => parts%c
+      dvxdt    => parts%dvx
+      dedt     => parts%du
+          
+      !do i=1,ntotal
+      !  do d=1,dim
+      !    dvxdt(d,i) = 0.e0
+      !  enddo
+      !  dedt(i) = 0.e0
+      !enddo   
+     
+c     Calculate SPH sum for artificial viscosity
+      
+      do k=1,niac
+        i = pair_i(k)
+        j = pair_j(k)
+        mhsml= (hsml(i)+hsml(j))/2.
+        vr = 0.e0
+        rr = 0.e0
+        do d=1,dim
+          dvx(d) = vx(d,i) - vx(d,j)
+          dx     =  x(d,i) -  x(d,j)
+          vr     = vr + dvx(d)*dx
+          rr     = rr + dx*dx
+        enddo
+
+c     Artificial viscous force only if v_ij * r_ij < 0
+
+        if (vr.lt.0.e0) then
+
+c     Calculate muv_ij = hsml v_ij * r_ij / ( r_ij^2 + hsml^2 etq^2 )
+            
+          muv = mhsml*vr/(rr + mhsml*mhsml*etq*etq)
+          
+c     Calculate PIv_ij = (-alpha muv_ij c_ij + beta muv_ij^2) / rho_ij
+
+          mc   = 0.5e0*(c(i) + c(j))
+          mrho = 0.5e0*(rho(i) + rho(j))
+          piv  = (beta*muv - alpha*mc)*muv/mrho              
+
+c     Calculate SPH sum for artificial viscous force
+
+          do d=1,dim
+            h = -piv*dwdx(d,k)
+            dvxdt(d,i) = dvxdt(d,i) + mass(j)*h
+            dvxdt(d,j) = dvxdt(d,j) - mass(i)*h
+            dedt(i) = dedt(i) - mass(j)*dvx(d)*h
+            dedt(j) = dedt(j) - mass(i)*dvx(d)*h
+          enddo
+        endif
+      enddo
+
+c     Change of specific internal energy:
+
+      do i=1,ntotal
+         dedt(i) = 0.5e0*dedt(i)        
+      enddo
+
+      return
+      end subroutine
+      subroutine av_vel(parts)
+
+c----------------------------------------------------------------------
+c     Subroutine to calculate the average velocity to correct velocity
+c     for preventing.penetration (monaghan, 1992)
+
+c     ntotal : Number of particles                                  [in]
+c     mass   : Particle masses                                      [in]
+c     niac   : Number of interaction pairs                          [in]
+c     pair_i : List of first partner of interaction pair            [in]
+c     pair_j : List of second partner of interaction pair           [in]
+c     w      : Kernel for all interaction pairs                     [in]
+c     vx     : Velocity of each particle                            [in]
+c     rho    : Density of each particle                             [in]
+c     av     : Average velocityof each particle                    [out]
+   
+      use param 
+      !use declarations_sph, ex_dvx => dvx
+      use m_particles
+      implicit none
+
+      type(array) avel
+      type(particles) parts
+
+      integer ntotal, niac
+      integer, pointer, dimension(:) :: pair_i, pair_j
+      double precision, pointer, dimension(:) :: mass, w, rho
+      double precision, pointer, dimension(:,:) :: vx, av
+
+      double precision   vcc, dvx(dim), epsilon
+      integer i,j,k,d       
+
+      ntotal = parts%ntotal
+      niac   = parts%niac
+
+      pair_i => parts%pair_i
+      pair_j => parts%pair_j
+      mass   => parts%mass
+      w      => parts%w
+      vx     => parts%vx
+      rho    => parts%rho
+      av     => parts%av
+      
+c     epsilon --- a small constants chosen by experence, may lead to instability.
+c     for example, for the 1 dimensional shock tube problem, the E <= 0.3
+
+      epsilon = 0.5 !0.3
+      
+      do i = 1, ntotal
+        do d = 1, dim
+          av(d,i) = 0.
+        enddo 
+      enddo
+     
+      do k=1,niac       
+        i = pair_i(k)
+        j = pair_j(k)       
+        do d=1,dim
+          dvx(d) = vx(d,i) - vx(d,j)            
+          av(d, i) = av(d,i) - 2*mass(j)*dvx(d)/(rho(i)+rho(j))*w(k)
+          av(d, j) = av(d,j) + 2*mass(i)*dvx(d)/(rho(i)+rho(j))*w(k)                      
+        enddo                    
+      enddo  
+        
+      do i = 1, ntotal
+        do d = 1, dim
+          av(d,i) = epsilon * av(d,i)
+        enddo 
+      enddo             
+
+      return
+      end subroutine
+      subroutine sum_density(parts) 
+
+C----------------------------------------------------------------------
+C   Subroutine to calculate the density with SPH summation algorithm.
+
+C     ntotal : Number of particles                                  [in]
+C     hsml   : Smoothing Length                                     [in]
+C     mass   : Particle masses                                      [in]
+C     niac   : Number of interaction pairs                          [in]
+C     pair_i : List of first partner of interaction pair            [in]
+C     pair_j : List of second partner of interaction pair           [in]
+C     w      : Kernel for all interaction pairs                     [in]
+c     itype   : type of particles                                   [in]
+c     x       : Coordinates of all particles                        [in]
+c     rho    : Density                                             [out]
+   
+      use param 
+      !use declarations_sph
+      use m_particles
+      implicit none
+
+      type(particles) parts
+
+      integer ntotal, niac
+      integer, pointer, dimension(:) :: pair_i, pair_j, itype 
+      double precision, pointer, dimension(:) :: hsml, mass, w, rho
+      double precision, pointer, dimension(:,:) :: vx
+ 
+      integer i, j, k, d      
+      double precision selfdens, hv(dim), r, wi(maxn)     
+
+      ntotal = parts%ntotal + parts%nvirt
+      niac   = parts%niac
+      pair_i =>parts%pair_i
+      pair_j =>parts%pair_j
+      itype  =>parts%itype
+      hsml   =>parts%hsml
+      mass   =>parts%mass
+      w      =>parts%w
+      vx     =>parts%vx
+      rho    =>parts%rho
+
+c     wi(maxn)---integration of the kernel itself
+        
+      do d=1,dim
+        hv(d) = 0.e0
+      enddo
+
+c     Self density of each particle: Wii (Kernel for distance 0)
+c     and take contribution of particle itself:
+
+      r=0.
+      
+c     Firstly calculate the integration of the kernel over the space
+
+      do i=1,ntotal
+        call kernel(r,hv,hsml(i),selfdens,hv)
+        wi(i)=selfdens*mass(i)/rho(i)
+      enddo
+
+      do k=1,niac
+        i = pair_i(k)
+        j = pair_j(k)
+        wi(i) = wi(i) + mass(j)/rho(j)*w(k)
+        wi(j) = wi(j) + mass(i)/rho(i)*w(k)
+      enddo
+
+c     Secondly calculate the rho integration over the space
+
+      do i=1,ntotal
+        call kernel(r,hv,hsml(i),selfdens,hv)
+        rho(i) = selfdens*mass(i)
+      enddo
+
+c     Calculate SPH sum for rho:
+      do k=1,niac
+        i = pair_i(k)
+        j = pair_j(k)
+        rho(i) = rho(i) + mass(j)*w(k)
+        rho(j) = rho(j) + mass(i)*w(k)
+      enddo
+
+c     Thirdly, calculate the normalized rho, rho=sum(rho)/sum(w)
+      if (nor_density) then 
+        do i=1, ntotal
+          rho(i)=rho(i)/wi(i)
+        enddo
+      endif 
+ 
+      end
+      
+      subroutine con_density(parts)
+
+c----------------------------------------------------------------------
+c     Subroutine to calculate the density with SPH continuiity approach.
+
+c     ntotal : Number of particles                                  [in]
+c     mass   : Particle masses                                      [in]
+c     niac   : Number of interaction pairs                          [in]
+c     pair_i : List of first partner of interaction pair            [in]
+c     pair_j : List of second partner of interaction pair           [in]
+c     dwdx   : derivation of Kernel for all interaction pairs       [in]
+c     vx     : Velocities of all particles                          [in]
+c     itype   : type of particles                                   [in]
+c     x      : Coordinates of all particles                         [in]
+c     rho    : Density                                              [in]
+c     drhodt : Density change rate of each particle                [out]   
+
+      use param
+      !use declarations_sph, ex_dvx => dvx
+      use m_particles 
+      implicit none
+  
+      type(particles) parts      
+
+      integer ntotal,niac
+      integer, pointer, dimension(:) :: pair_i, pair_j, itype    
+      double precision, pointer, dimension(:) :: mass, rho, drhodt
+      double precision, pointer, dimension(:,:) :: x, dwdx, vx
+      integer i,j,k,d    
+      double precision vcc, dvx(dim) 
+      
+      ntotal = parts%ntotal + parts%nvirt
+      niac   = parts%niac
+      pair_i => parts%pair_i
+      pair_j => parts%pair_j
+      itype  => parts%itype
+      x      => parts%x
+      mass   => parts%mass
+      dwdx   => parts%dwdx
+      vx     => parts%vx
+      rho    => parts%rho
+      drhodt => parts%drho
+
+      do i = 1, ntotal
+        drhodt(i) = 0.
+      enddo
+     
+      do k=1,niac      
+        i = pair_i(k)
+        j = pair_j(k)
+        do d=1,dim
+          dvx(d) = vx(d,i) - vx(d,j) 
+        enddo        
+        vcc = dvx(1)*dwdx(1,k)        
+        do d=2,dim
+          vcc = vcc + dvx(d)*dwdx(d,k)
+        enddo    
+        drhodt(i) = drhodt(i) + mass(j)*vcc
+        drhodt(j) = drhodt(j) + mass(i)*vcc       
+      enddo    
+	 
+      end
+       subroutine direct_find(parts)
+
+c----------------------------------------------------------------------
+c   Subroutine to calculate the smoothing funciton for each particle and
+c   the interaction parameters used by the SPH algorithm. Interaction 
+c   pairs are determined by directly comparing the particle distance 
+c   with the corresponding smoothing length.
+
+c     itimestep : Current time step                                 [in]
+c     ntotal    : Number of particles                               [in]
+c     hsml      : Smoothing Length                                  [in]
+c     x         : Coordinates of all particles                      [in]
+c     niac      : Number of interaction pairs                      [out]
+c     pair_i    : List of first partner of interaction pair        [out]
+c     pair_j    : List of second partner of interaction pair       [out]
+c     w         : Kernel for all interaction pairs                 [out]
+c     dwdx      : Derivative of kernel with respect to x, y and z  [out]
+c     countiac  : Number of neighboring particles                  [out]
+
+      use param
+      use m_particles
+      implicit none
+      
+      type(particles), target :: parts
+
+      integer ntotal, niac,i,j,d
+      integer, pointer, dimension(:) :: pair_i, pair_j, countiac
+      double precision, pointer, dimension(:) :: hsml, w
+      double precision, pointer, dimension(:,:) :: x, dwdx
+      double precision dxiac(dim), driac, r, mhsml, tdwdx(dim)
+      integer  sumiac, maxiac, miniac, noiac, maxp, minp, scale_k 
+      logical :: dbg = .false.
+
+      if(dbg) write(*,*) 'In direct_find...'
+
+      ntotal   =   parts%ntotal + parts%nvirt
+      pair_i   =>  parts%pair_i
+      pair_j   =>  parts%pair_j
+      countiac =>  parts%countiac
+      hsml     =>  parts%hsml
+      x        =>  parts%x
+      w        =>  parts%w
+      dwdx     =>  parts%dwdx
+
+      if (skf.eq.1) then 
+        scale_k = 2 
+      else if (skf.eq.2) then 
+        scale_k = 3 
+      else if (skf.eq.3) then 
+        scale_k = 3 
+      endif 
+     
+      do i=1,ntotal
+        countiac(i) = 0
+      enddo
+
+      niac = 0
+
+      do i=1,ntotal-1     
+        do j = i+1, ntotal
+          dxiac(1) = x(1,i) - x(1,j)
+          driac    = dxiac(1)*dxiac(1)
+          do d=2,dim
+            dxiac(d) = x(d,i) - x(d,j)
+            driac    = driac + dxiac(d)*dxiac(d)
+          enddo
+          mhsml = (hsml(i)+hsml(j))/2.
+          if (sqrt(driac).lt.scale_k*mhsml) then
+            if (niac.lt.max_interaction) then    
+
+c     Neighboring pair list, and totalinteraction number and
+c     the interaction number for each particle 
+
+              niac = niac + 1
+              pair_i(niac) = i
+              pair_j(niac) = j
+              r = sqrt(driac)
+              countiac(i) = countiac(i) + 1
+              countiac(j) = countiac(j) + 1
+
+c     Kernel and derivations of kernel
+              call kernel(r,dxiac,mhsml,w(niac),tdwdx)
+              do d=1,dim
+                dwdx(d,niac) = tdwdx(d)
+              enddo                                  	     
+            else
+              print *,
+     &        ' >>> ERROR <<< : Too many interactions' 
+              stop
+            endif
+          endif
+        enddo
+      enddo  
+
+c     Statistics for the interaction
+
+      sumiac = 0
+      maxiac = 0
+      miniac = 1000
+      noiac  = 0
+      do i=1,ntotal
+        sumiac = sumiac + countiac(i)
+        if (countiac(i).gt.maxiac) then
+	  maxiac = countiac(i)
+	  maxp = i
+	endif
+	if (countiac(i).lt.miniac) then 
+	  miniac = countiac(i)
+          minp = i
+	endif
+        if (countiac(i).eq.0)      noiac  = noiac + 1
+      enddo
+
+      parts%niac = niac
+      parts%maxp = maxp;        parts%minp = minp  
+      parts%maxiac = maxiac;    parts%miniac = miniac
+      parts%sumiac = sumiac;    parts%noiac = noiac
+ 
+c      if (mod(itimestep,print_step).eq.0) then
+c        if (int_stat) then
+c          print *,' >> Statistics: interactions per particle:'
+c          print *,'**** Particle:',maxp, ' maximal interactions:',maxiac
+c          print *,'**** Particle:',minp, ' minimal interactions:',miniac
+c          print *,'**** Average :',real(sumiac)/real(ntotal)
+c          print *,'**** Total pairs : ',niac
+c          print *,'**** Particles with no interactions:',noiac
+c        endif     
+c      endif    
+
+      end
+
+       subroutine direct_find_2(parts,part2)
+
+c----------------------------------------------------------------------
+c   Subroutine to calculate the smoothing funciton for each particle and
+c   the interaction parameters used by the SPH algorithm. Interaction 
+c   pairs are determined by directly comparing the particle distance 
+c   with the corresponding smoothing length.
+
+c     itimestep : Current time step                                 [in]
+c     ntotal    : Number of particles                               [in]
+c     hsml      : Smoothing Length                                  [in]
+c     x         : Coordinates of all particles                      [in]
+c     niac      : Number of interaction pairs                      [out]
+c     pair_i    : List of first partner of interaction pair        [out]
+c     pair_j    : List of second partner of interaction pair       [out]
+c     w         : Kernel for all interaction pairs                 [out]
+c     dwdx      : Derivative of kernel with respect to x, y and z  [out]
+c     countiac  : Number of neighboring particles                  [out]
+
+      use param
+      use m_particles
+      implicit none
+      
+      type(particles), target :: parts, part2
+
+      integer ntotal, niac,i,j,d
+      integer, pointer, dimension(:) :: pair_i, pair_j, countiac
+      double precision, pointer, dimension(:) :: hsml, w
+      double precision, pointer, dimension(:,:) :: x, dwdx
+      double precision dxiac(dim), driac, r, mhsml, tdwdx(dim)
+      integer  sumiac, maxiac, miniac, noiac, maxp, minp, scale_k 
+      logical :: dbg = .false.
+
+      if(dbg) write(*,*) 'In direct_find...'
+
+      ntotal   =   parts%ntotal + parts%nvirt
+      pair_i   =>  parts%pair_i
+      pair_j   =>  parts%pair_j
+      countiac =>  parts%countiac
+      hsml     =>  parts%hsml
+      x        =>  parts%x
+      w        =>  parts%w
+      dwdx     =>  parts%dwdx
+
+      if (skf.eq.1) then 
+        scale_k = 2 
+      else if (skf.eq.2) then 
+        scale_k = 3 
+      else if (skf.eq.3) then 
+        scale_k = 3 
+      endif 
+     
+      do i=1,ntotal
+        countiac(i) = 0
+      enddo
+
+      niac = 0
+
+      do i=1,ntotal     
+        do j = 1, part2%ntotal
+          dxiac(1) = x(1,i) - part2%x(1,j)
+          driac    = dxiac(1)*dxiac(1)
+          do d=2,dim
+            dxiac(d) = x(d,i) - part2%x(d,j)
+            driac    = driac + dxiac(d)*dxiac(d)
+          enddo
+          mhsml = (hsml(i)+hsml(j))/2.
+          if (sqrt(driac).lt.scale_k*mhsml) then
+            if (niac.lt.max_interaction) then    
+
+c     Neighboring pair list, and totalinteraction number and
+c     the interaction number for each particle 
+
+              niac = niac + 1
+              pair_i(niac) = i
+              pair_j(niac) = j
+              r = sqrt(driac)
+              countiac(i) = countiac(i) + 1
+              countiac(j) = countiac(j) + 1
+
+c     Kernel and derivations of kernel
+              call kernel(r,dxiac,mhsml,w(niac),tdwdx)
+              do d=1,dim
+                dwdx(d,niac) = tdwdx(d)
+              enddo                                  	     
+            else
+              print *,
+     &        ' >>> ERROR <<< : Too many interactions' 
+              stop
+            endif
+          endif
+        enddo
+      enddo  
+
+c     Statistics for the interaction
+
+      sumiac = 0
+      maxiac = 0
+      miniac = 1000
+      noiac  = 0
+      do i=1,ntotal
+        sumiac = sumiac + countiac(i)
+        if (countiac(i).gt.maxiac) then
+	  maxiac = countiac(i)
+	  maxp = i
+	endif
+	if (countiac(i).lt.miniac) then 
+	  miniac = countiac(i)
+          minp = i
+	endif
+        if (countiac(i).eq.0)      noiac  = noiac + 1
+      enddo
+
+      parts%niac = niac
+      parts%maxp = maxp;        parts%minp = minp  
+      parts%maxiac = maxiac;    parts%miniac = miniac
+      parts%sumiac = sumiac;    parts%noiac = noiac
+ 
+c      if (mod(itimestep,print_step).eq.0) then
+c        if (int_stat) then
+c          print *,' >> Statistics: interactions per particle:'
+c          print *,'**** Particle:',maxp, ' maximal interactions:',maxiac
+c          print *,'**** Particle:',minp, ' minimal interactions:',miniac
+c          print *,'**** Average :',real(sumiac)/real(ntotal)
+c          print *,'**** Total pairs : ',niac
+c          print *,'**** Particles with no interactions:',noiac
+c        endif     
+c      endif    
+
+      end
+      subroutine p_gas(rho, u, p, c)
+      
+c----------------------------------------------------------------------
+c   Gamma law EOS: subroutine to calculate the pressure and sound  
+ 
+c     rho    : Density                                              [in]
+c     u      : Internal energy                                      [in]
+c     p      : Pressure                                            [out]
+c     c      : sound velocity                                      [out]
+          
+      implicit none
+      double precision rho, u, p, c   
+      double precision gamma 
+          
+c      For air (idea gas)
+
+      gamma=1.4
+      p = (gamma-1) * rho * u     
+      c = sqrt((gamma-1) * u) 
+     
+      end         
+      
+      subroutine p_art_water(rho, p, c)
+      
+c----------------------------------------------------------------------
+c   Artificial equation of state for the artificial compressibility 
+
+c     rho    : Density                                              [in]
+c     u      : Internal energy                                      [in]
+c     p      : Pressure                                            [out]
+c     c      : sound velocity                                      [out]
+c     Equation of state for artificial compressibility   
+
+      implicit none
+      double precision rho, u, p, c
+      double precision gamma, rho0, b
+
+c     Artificial EOS, Form 1 (Monaghan, 1994)
+      gamma=7.
+      rho0=1000.       
+      b = 14290 ! 1.013e5
+      p = b*((rho/rho0)**gamma-1)      
+c      c = 1480.
+      c = 10
+
+c     Artificial EOS, Form 2 (Morris, 1997)
+c      c = 0.01
+c      p = c**2 * rho      
+      
+      end
+
+      function rho_initial(p)
+c---------------------------------------------------------------------
+      implicit none
+      double precision rho_initial, p
+      double precision gamma, rho0, b
+
+      gamma = 7.
+      rho0=1000.*0.3
+      b = 14290 !1.013e5
+
+      rho_initial = rho0*(p/b+1)**(1/gamma)
+ 
+      return
+      end function
+
+c------------------------For soil--------------------------------------
+
+      subroutine p_art_soil(rho, p)
+c----------------------------------------------------------------------
+      implicit none
+      double precision rho, u, p, c
+      double precision k, rho0, b,pmax,g,hmax
+
+      rho0=2560.
+      g = -9.8
+      hmax = -0.6
+      pmax = rho0*g*hmax
+      k = 10.*pmax       
+
+      p = k*((rho/rho0)-1)      
+      
+      return
+      end subroutine
+
+      function rho_soil_initial(p)      
+c----------------------------------------------------------------------
+      implicit none
+      double precision rho, u, p, c
+      double precision k, rho0, b, pmax, g, hmax, rho_soil_initial
+
+      rho0=2560.*0.7
+      g = -9.8
+      hmax = -0.6
+
+      pmax = rho0*g*hmax
+
+      k = 10.*pmax       
+      rho_soil_initial = rho0*(p/k+1)      
+      
+      return
+      end function
+      
+      subroutine ext_force(parts)
+
+c--------------------------------------------------------------------------
+c     Subroutine to calculate the external forces, e.g. gravitational forces.      
+c     The forces from the interactions with boundary virtual particles 
+c     are also calculated here as external forces.
+
+c     here as the external force. 
+c     ntotal  : Number of particles                                 [in]
+c     mass    : Particle masses                                     [in]
+c     x       : Coordinates of all particles                        [in]
+c     pair_i : List of first partner of interaction pair            [in]
+c     pair_j : List of second partner of interaction pair           [in]
+c     itype   : type of particles                                   [in]
+c     hsml   : Smoothing Length                                     [in]
+c     dvxdt   : Acceleration with respect to x, y and z            [out] 
+
+      use param
+      !use declarations_sph
+      use m_particles
+      implicit none
+
+      type(particles) parts
+
+      integer ntotal, niac
+      integer, pointer, dimension(:) :: pair_i, pair_j, itype
+      double precision, pointer, dimension(:) :: mass, hsml, x(:,:)
+      double precision, pointer, dimension(:,:) :: dvxdt
+          
+      double precision dx(dim), rr, f, rr0, dd, p1, p2     
+      integer i, j, k, d
+
+      ntotal = parts%ntotal + parts%nvirt
+      niac   = parts%niac
+
+      pair_i   => parts%pair_i
+      pair_j   => parts%pair_j
+      itype    => parts%itype
+      mass     => parts%mass
+      x        => parts%x
+      hsml     => parts%hsml
+      dvxdt    => parts%dvx
+           
+      !do i = 1, ntotal
+      !  do d = 1, dim
+      !    dvxdt(d, i) = 0.
+      !	enddo
+      !enddo
+        
+c     Consider self-gravity or not ?
+
+      if (self_gravity) then
+        do i = 1, ntotal
+          dvxdt(dim, i) = dvxdt(dim,i)-9.8
+        enddo
+      endif 
+      
+c     Boundary particle force and penalty anti-penetration force. 
+      rr0 =0.02  !1.25e-5
+      dd = 1.e-2
+      p1 = 12
+      p2 = 4
+      
+      do  k=1,niac
+        i = pair_i(k)
+        j = pair_j(k)  
+        if(itype(i).gt.0.and.itype(j).lt.0) then  
+          rr = 0.      
+          do d=1,dim
+            dx(d) =  x(d,i) -  x(d,j)
+            rr = rr + dx(d)*dx(d)
+          enddo  
+          rr = sqrt(rr)
+          if(rr.lt.rr0) then
+            f = ((rr0/rr)**p1-(rr0/rr)**p2)/rr**2
+            do d = 1, dim
+              dvxdt(d, i) = dvxdt(d, i) + dd*dx(d)*f
+            enddo
+          endif
+        endif        
+      enddo   
+       
+      end         
+      subroutine grid_geom(i,x,ngridx,maxgridx,mingridx,dgeomx,xgcell)
+
+c----------------------------------------------------------------------
+c   Subroutine to calculate the coordinates (xgcell) of the cell of 
+c   the sorting  grid, in which the particle with coordinates (x) lies.
+
+c     x        : Coordinates of particle                            [in]    
+c     ngridx   : Number of sorting grid cells in x, y, z-direction  [in]
+c     maxgridx : Maximum x-, y- and z-coordinate of grid range      [in]
+c     mingridx : Minimum x-, y- and z-coordinate of grid range      [in]
+c     dgeomx   : x-, y- and z-expansion of grid range               [in]
+c     xgcell   : x-, y- and z-coordinte of sorting grid cell       [out]
+
+      use param
+      implicit none
+C      include 'param.inc'
+
+      integer i, ngridx(dim),xgcell(3)
+      double precision x(dim), maxgridx(dim), mingridx(dim), dgeomx(dim)
+      integer d
+
+      do d=1,3
+        xgcell(d) = 1
+      enddo
+
+      do d=1,dim
+        if ((x(d).gt.maxgridx(d)).or.(x(d).lt.mingridx(d))) then
+          print *,' >>> ERROR <<< : Particle out of range'
+          print *,'    Particle position: x(',i,d,') = ',x(d)
+          print *,'    Range: [xmin,xmax](',D,') = 
+     &         [',mingridx(d),',',maxgridx(d),']'
+          stop
+        else
+          xgcell(d) = int(real(ngridx(d))/dgeomx(d)*
+     &         (x(d)-mingridx(d)) + 1.e0)
+        endif
+      enddo
+
+      end
+      subroutine h_upgrade(parts)
+
+c-----------------------------------------------------------------------
+c     Subroutine to evolve smoothing length
+
+c     dt     : time step                                            [in]
+c     ntotal : Number of particles                                  [in]
+c     mass   : Particle masses                                      [in]
+c     vx     : Velocities of all particles                          [in]
+c     rho    : Density                                              [in]
+c     niac   : Number of interaction pairs                          [in]
+c     pair_i : List of first partner of interaction pair            [in]
+c     pair_j : List of second partner of interaction pair           [in]
+c     dwdx   : Derivative of kernel with respect to x, y and z      [in]
+c     hsml   : Smoothing Length                                 [in/out]
+  
+      use param 
+      use declarations_sph, only: dt
+      use m_particles 
+      implicit none
+
+      type(particles) parts
+
+      integer ntotal, niac
+      integer, pointer,dimension(:) :: pair_i, pair_j
+      double precision, pointer, dimension(:) :: mass, hsml, rho
+      double precision, pointer, dimension(:,:) :: dwdx, vx
+     
+      integer i,j,k,d
+      double precision fac, dvx(dim), hvcc, vcc(maxn), dhsml(maxn)     
+
+      ntotal   = parts%ntotal
+      niac     = parts%niac
+
+      pair_i   => parts%pair_i
+      pair_j   => parts%pair_j 
+      mass     => parts%mass
+      dwdx     => parts%dwdx
+      hsml     => parts%hsml
+      vx       => parts%vx
+      rho      => parts%rho
+
+      if (sle.eq.0 ) then     
+
+c---  Keep smoothing length unchanged. 
+     
+        return
+      
+      else if (sle.eq.2) then
+      
+c---  dh/dt = (-1/dim)*(h/rho)*(drho/dt).
+
+        do i=1,ntotal
+          vcc(i) = 0.e0
+        enddo
+      
+        do k=1,niac
+          i = pair_i(k)
+          j = pair_j(k)
+          do d=1,dim
+            dvx(d) = vx(d,j) - vx(d,i) 
+          enddo
+          hvcc = dvx(1)*dwdx(1,k)
+          do d=2,dim
+            hvcc = hvcc + dvx(d)*dwdx(d,k)
+          enddo    
+          vcc(i) = vcc(i) + mass(j)*hvcc/rho(j)
+          vcc(j) = vcc(j) + mass(i)*hvcc/rho(i)         
+        enddo  
+        
+        do i = 1, ntotal
+          dhsml(i) = (hsml(i)/dim)*vcc(i)
+          hsml(i) = hsml(i) + dt*dhsml(i)      
+          if (hsml(i).le.0) hsml(i) = hsml(i) - dt*dhsml(i) 
+        enddo
+    
+      else if(sle.eq.1) then
+            
+        fac = 2.0
+        do i = 1, ntotal          
+          hsml(i) = fac * (mass(i)/rho(i))**(1./dim)
+        enddo
+       
+      endif 
+       
+      return
+      end subroutine 
+      subroutine init_grid(ntotal,hsml,grid,ngridx,ghsmlx,
+     &           maxgridx,mingridx,dgeomx)
+
+c----------------------------------------------------------------------      
+c   Subroutine to established a pair linked list by sorting grid cell.
+c   It is suitable for a homogeneous particle distribution with the 
+c   same smoothing length in an instant. A fixed number of particles
+c   lie in each cell. 
+
+c     ntotal   : Number of particles                                [in]
+c     hsml     : Smoothing Length                                   [in]
+c     grid     : array of grid cells                               [out]
+c     ngridx   : Number of sorting grid cells in x, y, z-direction [out]
+c     ghsmlx   : Smoothing length measured in cells of the grid    [out]
+c     maxgridx : Maximum x-, y- and z-coordinate of grid range     [out]
+c     mingridx : Minimum x-, y- and z-coordinate of grid range     [out]
+c     dgeomx   : x-, y- and z-expansion of grid range              [out]
+
+      use param
+      implicit none
+C      include 'param.inc'
+
+c     Parameter used for sorting grid cells in the link list algorithm
+c     maxngx  : Maximum number of sorting grid cells in x-direction
+c     maxngy  : Maximum number of sorting grid cells in y-direction
+c     maxngz  : Maximum number of sorting grid cells in z-direction
+c     Determining maximum number of sorting grid cells:
+c     (For an homogeneous particle distribution:)
+c     1-dim. problem: maxngx = maxn ,  maxngy = maxngz = 1
+c     2-dim. problem: maxngx = maxngy ~ sqrt(maxn) ,  maxngz = 1
+c     3-dim. problem: maxngx = maxngy = maxngz ~ maxn^(1/3)
+      integer maxngx,maxngy,maxngz
+      parameter ( maxngx  = 100        ,
+     &            maxngy  = 100        ,
+     &            maxngz  = 1          )
+      integer ntotal, grid(maxngx,maxngy,maxngz), ngridx(dim), 
+     &        ghsmlx(dim)
+      double precision hsml, maxgridx(dim), mingridx(dim), dgeomx(dim)
+      integer i, j, k, d, maxng(dim), ngrid(3)
+      double precision nppg
+
+c     Averaged number of particles per grid cell
+
+      parameter( nppg = 3.e0 )
+
+c     Initialize parameters: Maximum number of grid cells
+
+      maxng(1) = maxngx
+      if (dim.ge.2) then
+        maxng(2) = maxngy
+        if (dim.eq.3) then
+          maxng(3) = maxngz
+        endif
+      endif
+      
+      do d=1,3
+        ngrid(d) = 1
+      enddo
+      
+c     Range of sorting grid
+
+      maxgridx(1) = x_maxgeom
+      mingridx(1) = x_mingeom
+      if (dim.ge.2) then
+        maxgridx(2) = y_maxgeom
+        mingridx(2) = y_mingeom
+        if (dim.eq.3) then
+          maxgridx(3) = z_maxgeom
+          mingridx(3) = z_mingeom
+        endif
+      endif
+
+      do d=1,dim
+         dgeomx(d) = maxgridx(d) - mingridx(d)
+      enddo
+
+c     Number of grid cells in x-, y- and z-direction:
+
+      if (dim.eq.1) then
+        ngridx(1) = min(int(ntotal/nppg) + 1,maxng(1))
+      else if (dim.eq.2) then
+        ngridx(1) = min(
+     &  int(sqrt(ntotal*dgeomx(1)/(dgeomx(2)*nppg))) + 1,maxng(1))
+        ngridx(2) = min(
+     &  int(ngridx(1)*dgeomx(2)/dgeomx(1)) + 1,maxng(2))
+      else if (dim.eq.3) then
+        ngridx(1) = min(int((ntotal*dgeomx(1)*dgeomx(1)/
+     &      (dgeomx(2)*dgeomx(3)*nppg))**(1.e0/3.e0)) + 1,maxng(1))
+        ngridx(2) = min(
+     &      int(ngridx(1)*dgeomx(2)/dgeomx(1)) + 1,maxng(2))
+        ngridx(3) = min(
+     &  int(ngridx(1)*dgeomx(3)/dgeomx(1)) + 1,maxng(3))
+      endif
+
+c     Smoothing Length measured in grid cells:
+
+      do d=1,dim
+         ghsmlx(d) = int(real(ngridx(d))*hsml/dgeomx(d)) + 1
+      enddo
+
+      do d=1,dim
+        ngrid(d) = ngridx(d)
+      enddo
+
+c     Initialize grid
+
+      do i=1,ngrid(1)
+        do j=1,ngrid(2)
+          do k=1,ngrid(3)
+            grid(i,j,k) = 0
+          enddo
+        enddo
+      enddo
+
+      end
+      subroutine input
+      
+c----------------------------------------------------------------------
+c     Subroutine for loading or generating initial particle information
+
+c     x-- coordinates of particles                                 [out]
+c     vx-- velocities of particles                                 [out]
+c     mass-- mass of particles                                     [out]
+c     rho-- dnesities of particles                                 [out]
+c     p-- pressure  of particles                                   [out]
+c     u-- internal energy of particles                             [out]
+c     itype-- types of particles                                   [out]
+c     hsml-- smoothing lengths of particles                        [out]
+c     ntotal-- total particle number                               [out]
+      
+      use param
+      use declarations_sph
+      implicit none     
+
+      integer i, d, im       
+
+c     load initial particle information from external disk file
+
+      if(config_input) then    
+                        
+c        open(1,file="../f_xv.dat")
+c        open(2,file="../f_state.dat")
+c        open(3,file="../f_other.dat")        
+      
+c        write(*,*)'  **************************************************'
+c        write(*,*)'      Loading initial particle configuration...   '       
+c        read (1,*) ntotal 
+c        write(*,*)'      Total number of particles   ', ntotal    	
+c        write(*,*)'  **************************************************'	
+c        do i = 1, ntotal         
+c          read(1,*)im, (x(d, i),d = 1, dim), (vx(d, i),d = 1, dim)                     
+c          read(2,*)im, mass(i), rho(i), p(i), u(i)        
+c          read(3,*)im, itype(i), hsml(i)                                        
+c        enddo
+       
+c        close(1)
+c        close(2)
+c        close(3)         
+          
+      else 
+          
+c     generate particle configuration
+       
+c        if (shocktube) call shock_tube(x, vx, mass, rho, p, u, 
+c     &                      itype, hsml, ntotal)                
+
+c        if (shearcavity) call shear_cavity(x, vx, mass, rho, p, u, 
+c     &                        itype, hsml, ntotal)
+
+        if (waterjet) call water_jet
+
+        write(*,*)'  **************************************************'
+        write(*,*)'      Initial particle configuration generated   '       
+        write(*,*)'      Total number of particles   ', parts%ntotal    	
+        write(*,*)'  **************************************************' 
+
+      endif
+   
+      return
+      end subroutine           
+       
+       
+      subroutine shock_tube(x, vx, mass, rho, p, u, 
+     &                        itype, hsml, ntotal)
+
+c----------------------------------------------------------------------     
+c     This subroutine is used to generate initial data for the 
+c     1 d noh shock tube problem
+c     x-- coordinates of particles                                 [out]
+c     vx-- velocities of particles                                 [out]
+c     mass-- mass of particles                                     [out]
+c     rho-- dnesities of particles                                 [out]
+c     p-- pressure  of particles                                   [out]
+c     u-- internal energy of particles                             [out]
+c     itype-- types of particles                                   [out]
+c          =1   ideal gas
+c     hsml-- smoothing lengths of particles                        [out]
+c     ntotal-- total particle number                               [out]
+
+      use param
+      implicit none     
+      
+      integer itype(maxn), ntotal
+      double precision x(dim, maxn), vx(dim, maxn), mass(maxn),
+     &     rho(maxn), p(maxn), u(maxn), hsml(maxn)
+      integer i, d
+      double precision space_x     
+
+      ntotal=400
+      space_x=0.6/80.      
+      
+      do i=1,ntotal
+        mass(i)=0.75/400.
+        hsml(i)=0.015
+        itype(i)=1
+        do d = 1, dim
+          x(d,i) = 0. 
+          vx(d,i) = 0.
+        enddo        
+      enddo                
+                
+      do i=1,320
+        x(1,i)=-0.6+space_x/4.*(i-1)
+      enddo
+      
+      do i=320+1,ntotal
+        x(1,i)=0.+space_x*(i-320)
+      enddo               
+                           
+      do i=1,ntotal
+        if (x(1,i).le.1.e-8) then
+          u(i)=2.5
+          rho(i)=1.
+          p(i)=1.
+        endif 
+        if (x(1,i).gt.1.e-8)  then
+          u(i)=1.795
+          rho(i)=0.25
+          p(i)=0.1795
+        endif        
+      enddo        
+	               
+      end
+      
+      subroutine shear_cavity(x, vx, mass, rho, p, u, 
+     &                        itype, hsml, ntotal)
+
+c----------------------------------------------------------------------     
+c     This subroutine is used to generate initial data for the 
+c     2 d shear driven cavity probem with Re = 1
+c     x-- coordinates of particles                                 [out]
+c     vx-- velocities of particles                                 [out]
+c     mass-- mass of particles                                     [out]
+c     rho-- dnesities of particles                                 [out]
+c     p-- pressure  of particles                                   [out]
+c     u-- internal energy of particles                             [out]
+c     itype-- types of particles                                   [out]
+c          =2   water
+c     h-- smoothing lengths of particles                           [out]
+c     ntotal-- total particle number                               [out]
+
+      use param
+      implicit none     
+C      include 'param.inc'
+      
+      integer itype(maxn), ntotal
+      double precision x(dim, maxn), vx(dim, maxn), mass(maxn),
+     &     rho(maxn), p(maxn), u(maxn), hsml(maxn)
+      integer i, j, d, m, n, mp, np, k
+      double precision xl, yl, dx, dy
+
+c     Giving mass and smoothing length as well as other data.
+
+      m = 41
+      n = 41
+      mp = m-1
+      np = n-1
+      ntotal = mp * np
+      xl = 1.e-3
+      yl = 1.e-3
+      dx = xl/mp
+      dy = yl/np
+
+      do i = 1, mp
+         do j = 1, np
+             k = j + (i-1)*np
+             x(1, k) = (i-1)*dx + dx/2.
+             x(2, k) = (j-1)*dy + dy/2.
+        enddo
+      enddo
+
+      do i = 1, mp*np
+         vx(1, i) = 0.
+         vx(2, i) = 0.      
+        rho (i) = 1000.   
+        mass(i) = dx*dy*rho(i)  
+        p(i)= 0.   
+        u(i)=357.1
+        itype(i) = 2
+        hsml(i) = dx
+      enddo  
+
+      end	 
+
+      subroutine water_jet
+
+c----------------------------------------------------------------------     
+c     This subroutine is used to generate initial data for the 
+c     2 d water jet impacting probem with Re = ?
+c     x-- coordinates of particles                                 [out]
+c     vx-- velocities of particles                                 [out]
+c     mass-- mass of particles                                     [out]
+c     rho-- dnesities of particles                                 [out]
+c     p-- pressure  of particles                                   [out]
+c     u-- internal energy of particles                             [out]
+c     itype-- types of particles                                   [out]
+c          =2   water
+c     h-- smoothing lengths of particles                           [out]
+c     ntotal-- total particle number                               [out]
+
+      use param
+      use declarations_sph
+      implicit none     
+      
+      integer  ntotal, bntotal
+
+c     For interior particles (real particles) 
+      integer, pointer, dimension(:) :: itype
+      double precision, pointer, dimension(:) :: mass, vol, hsml
+      double precision, pointer, dimension(:) :: rho, p, u
+      double precision, pointer, dimension(:,:) :: x, vx
+
+c     For boundary particles 
+      integer, pointer, dimension(:) :: bitype
+      double precision, pointer, dimension(:) :: bmass,bvol, bhsml
+      double precision, pointer, dimension(:,:) :: bx
+c
+      integer i, j, d, m, n, mp, np, k
+      double precision xl, yl, dx, dy, x1, x2
+      double precision, external :: rho_initial, rho_soil_initial
+      logical :: dbg = .false.
+
+      if(dbg) write(*,*) 'In water_jet...'      
+
+      itype  => parts%itype
+      vol    => parts%vol
+      hsml   => parts%hsml
+      x      => parts%x
+      mass   => parts%mass
+      vx     => parts%vx
+      rho    => parts%rho
+      p      => parts%p
+      u      => parts%u
+
+      bx     => parts%bor%x
+      bvol   => parts%bor%vol
+      bhsml  => parts%bor%hsml
+      bitype => parts%bor%itype
+      bmass  => parts%bor%mass
+
+      ntotal = 0
+      bntotal= 0
+
+c     Set nozzle and tank geometry parameters
+
+      call wasserjet%set(dr=0.2d0,L=2.d0,H=0.6d0,mdr=10,dj=10.d0,
+     &                   mdj=500,ds=0.4d0, mL=100,mH=30)
+     
+C     Nozzle particle entrance
+
+!!DEC$IF(.FALSE.)
+      m = wasserjet%mdr+1
+      n = wasserjet%mdj+1
+      mp = m-1
+      np = n-1
+      xl = wasserjet%dr     ! Nozzle diameter = 0.2
+      yl = wasserjet%dj     ! intial jet length
+      dx = xl/mp
+      dy = yl/np
+
+      do i = 1, mp
+         do j = 1, np
+            ntotal = ntotal + 1     
+            x(1, ntotal) = -xl/2.+(i-1)*dx + dx/2.
+!            x(2, ntotal) = -wasserjet%ds+(+1.)*((j-1)*dy + dy/2.)  !(-1)
+            x(2, ntotal) = (+1.)*((j-1)*dy + dy/2.)  !(-1)
+!            x(2, ntotal) = (+1.)*((j-1)*dy + dy/2.)+5.  !(-1)
+            vol(ntotal)  = dx*dy
+            hsml(ntotal) = dx
+            itype(ntotal) = 2       
+         enddo
+      enddo      
+!!DEC$ENDIF
+
+C     Paticles in tank 
+
+      m = wasserjet%mL+1
+      n = wasserjet%mH+1
+      mp = m-1 
+      np = n-1 
+      xl = wasserjet%L
+      yl = wasserjet%H
+      dx = xl/mp
+      dy = yl/np
+      
+      do i = 1, mp
+         do j = 1, np
+            x1 = -xl/2. + (i-1)*dx + dx/2.
+            x2 = (-1.0)*(wasserjet%ds + (j-1)*dy + dy/2.)
+
+            if(x1<-0.9.or.x1>0.9.or.x2<-0.9)then    ! 0.5,-0.81
+               bntotal = bntotal + 1
+               bx(1,bntotal) = x1
+               bx(2,bntotal) = x2
+               bvol(bntotal) = dx*dy
+               bhsml(bntotal)= dx
+               bitype(bntotal) = -2
+            else
+               ntotal = ntotal + 1
+               x(1,ntotal) = x1
+               x(2,ntotal) = x2
+
+               !if(abs(x1)<0.1.and.abs(x2+0.6)<0.1)then
+               !   write(*,*) x1,x2, ntotal
+               !   stop
+               !endif
+ 
+               vol(ntotal) = dx*dy
+               hsml(ntotal) = dx
+               itype(ntotal) = 2 
+            endif
+
+         enddo
+      enddo
+      parts%ntotal = ntotal
+
+!DEC$IF(.FALSE.)
+! Left side wall
+      do j = 1, 2*np+1
+         bntotal = bntotal + 1
+         x1 = -xl/2.
+         x2=(-1.)*(wasserjet%ds+(j-1)*dy/2.)
+         bx(1,bntotal) = x1
+         bx(2,bntotal) = x2
+      enddo
+! Right side wall
+      do j = 1,2*np+1
+         bntotal = bntotal + 1
+         x1 = xl/2.
+         x2=(-1.)*(wasserjet%ds+(j-1)*dy/2.)
+         bx(1,bntotal) = x1
+         bx(2,bntotal) = x2
+      enddo
+! Bottom wall
+      do i = 1,2*mp - 1
+         bntotal = bntotal + 1
+         x1 = -xl/2.+i*dx/2.
+         x2 = (-1.)*(wasserjet%ds+yl)
+         bx(1,bntotal) = x1
+         bx(2,bntotal) = x2
+      enddo
+      bvol(1:bntotal) = dx*dy
+      bhsml(1:bntotal)= dx
+      bitype(1:bntotal) = -2
+
+!DEC$ENDIF
+      parts%bor%ntotal= bntotal
+      
+c     Set initial conditions of particles
+
+      do i = 1,ntotal
+         vx(1,i) = 0.
+         vx(2,i) = 0.
+         rho(i) = 1000.*0.3
+
+         if(x(2,i)>-wasserjet%ds)then
+            vx(2,i) = -1.
+            p(i) = 0
+         else  
+         p(i) = rho(i)*gravity*(x(2,i)+wasserjet%ds)  !0.
+         rho(i) = rho_initial(p(i))
+         endif
+
+         mass(i) = vol(i)*rho(i)
+         u(i) = 357.1
+      enddo
+
+!------------------soil input-------------------------------
+      if(single_phase) return
+
+      k = 0
+      do i = 1, parts%ntotal
+         if(parts%x(2,i)>-wasserjet%ds)cycle
+         k = k + 1
+         soil%x(:,k)   = parts%x(:,i)
+         soil%vol(k)   = parts%vol(i)
+         soil%hsml(k)  = parts%hsml(i) 
+         soil%itype(k) = 3
+
+         soil%p(k)     = parts%p(i)
+      enddo
+      soil%ntotal = k
+
+      k = 0
+      do i = 1, parts%bor%ntotal
+         if(parts%bor%x(2,i)>-wasserjet%ds)cycle
+         k = k + 1
+         soil%bor%x(:,k) = parts%bor%x(:,i)
+         soil%bor%vol(k) = parts%bor%vol(i)
+         soil%bor%hsml(k) = parts%bor%hsml(i)
+         soil%bor%itype(k) = -3
+      enddo
+      soil%bor%ntotal = k
+
+c set initial conditions for soil particles
+
+      do i = 1, soil%ntotal
+         soil%vx(:,i) = 0.
+         soil%rho(i)  = 2560.*0.7
+         !soil%p(i) = soil%rho(i)*gravity*(soil%x(2,i)+wasserjet%ds)
+         soil%p(i) = soil%p(i)+soil%rho(i)*gravity*(soil%x(2,i)
+     &                                             +wasserjet%ds)
+         soil%rho(i) = rho_soil_initial(soil%p(i))
+         soil%mass(i) = soil%vol(i)*soil%rho(i)
+         soil%u(i) = 357.1
+      enddo
+
+      return
+      end subroutine
+
+
+      subroutine int_force(parts)
+
+c----------------------------------------------------------------------
+c   Subroutine to calculate the internal forces on the right hand side 
+c   of the Navier-Stokes equations, i.e. the pressure gradient and the
+c   gradient of the viscous stress tensor, used by the time integration. 
+c   Moreover the entropy production due to viscous dissipation, tds/dt, 
+c   and the change of internal energy per mass, de/dt, are calculated. 
+ 
+c     itimestep: Current timestep number                            [in]
+c     dt     :   Time step                                          [in]
+c     ntotal : Number of particles                                  [in]
+c     hsml   : Smoothing Length                                     [in]
+c     mass   : Particle masses                                      [in]
+c     vx     : Velocities of all particles                          [in]
+c     niac   : Number of interaction pairs                          [in]
+c     rho    : Density                                              [in]
+c     eta    : Dynamic viscosity                                    [in]
+c     pair_i : List of first partner of interaction pair            [in]
+c     pair_j : List of second partner of interaction pair           [in]
+c     dwdx   : Derivative of kernel with respect to x, y and z      [in]
+c     itype  : Type of particle (material types)                    [in]
+c     u      : Particle internal energy                             [in]
+c     x      : Particle coordinates                                 [in]
+c     itype  : Particle type                                        [in]
+c     t      : Particle temperature                             [in/out]
+c     c      : Particle sound speed                                [out]
+c     p      : Particle pressure                                   [out]
+c     dvxdt  : Acceleration with respect to x, y and z             [out] 
+c     tdsdt  : Production of viscous entropy                       [out]
+c     dedt   : Change of specific internal energy                  [out]
+
+      use param
+      !use declarations_sph, ex_dvx=>dvx
+      use m_particles
+      implicit none
+
+      !type(array) indvxdt, indudt
+      type(particles) parts
+      
+      integer ntotal,niac
+      integer, pointer, dimension(:) :: pair_i, pair_j, itype 
+      double precision, pointer, dimension(:) :: hsml, mass, rho
+      double precision, pointer, dimension(:) :: p,eta,c,u 
+      double precision, pointer, dimension(:,:) :: dwdx, x, vx
+      double precision, pointer, dimension(:,:) :: dvxdt,dedt(:)
+      type(tensor), pointer, dimension(:) :: st, dstdt
+
+      double precision  tdsdt(maxn), dvx(dim), txx(maxn), tyy(maxn),
+     &       tzz(maxn), txy(maxn), txz(maxn), tyz(maxn), vcc(maxn),
+     &       hxx, hyy, hzz, hxy, hxz, hyz, h, hvcc, he, rhoij,
+     &       wxy(maxn)
+      integer i, j, k, d
+
+      ntotal = parts%ntotal + parts%nvirt
+      niac = parts%niac
+
+      pair_i   => parts%pair_i
+      pair_j   => parts%pair_j
+      itype    => parts%itype
+      hsml     => parts%hsml
+      mass     => parts%mass
+      dwdx     => parts%dwdx
+      x        => parts%x
+      vx       => parts%vx
+      rho      => parts%rho
+      p        => parts%p
+      eta      => parts%eta
+      c        => parts%c
+      u        => parts%u
+      dvxdt    => parts%dvx
+      dedt     => parts%du
+      st       => parts%st
+      dstdt    => parts%dst
+
+c     Initialization of shear tensor, velocity divergence, 
+c     viscous energy, internal energy, acceleration 
+
+      do i=1,ntotal      
+        txx(i) = 0.e0
+        tyy(i) = 0.e0
+        tzz(i) = 0.e0
+        txy(i) = 0.e0
+        txz(i) = 0.e0
+        tyz(i) = 0.e0
+        vcc(i) = 0.e0
+        tdsdt(i) = 0.e0
+        !dedt(i) = 0.e0
+        !do d=1,dim
+        !  dvxdt(d,i) = 0.e0
+        !enddo 
+      enddo
+
+c     Calculate SPH sum for shear tensor Tab = va,b + vb,a - 2/3 delta_ab vc,c
+
+      if (visc) then 
+        do k=1,niac
+          i = pair_i(k)
+          j = pair_j(k)
+          do d=1,dim
+            dvx(d) = vx(d,j) - vx(d,i)
+          enddo
+          if (dim.eq.1) then 
+            hxx = 2.e0*dvx(1)*dwdx(1,k)        
+          else if (dim.eq.2) then           
+            hxx = 2.e0*dvx(1)*dwdx(1,k) -  dvx(2)*dwdx(2,k) 
+            hxy = dvx(1)*dwdx(2,k) + dvx(2)*dwdx(1,k)
+            hyy = 2.e0*dvx(2)*dwdx(2,k) - dvx(1)*dwdx(1,k)
+          else if (dim.eq.3) then
+            hxx = 2.e0*dvx(1)*dwdx(1,k) - dvx(2)*dwdx(2,k) 
+     &                                  - dvx(3)*dwdx(3,k) 
+            hxy = dvx(1)*dwdx(2,k) + dvx(2)*dwdx(1,k)
+            hxz = dvx(1)*dwdx(3,k) + dvx(3)*dwdx(1,k)          
+            hyy = 2.e0*dvx(2)*dwdx(2,k) - dvx(1)*dwdx(1,k)        
+     &                                  - dvx(3)*dwdx(3,k)
+            hyz = dvx(2)*dwdx(3,k) + dvx(3)*dwdx(2,k)
+            hzz = 2.e0*dvx(3)*dwdx(3,k) - dvx(1)*dwdx(1,k)
+     &                                  - dvx(2)*dwdx(2,k)
+          endif                              
+          hxx = 2.e0/3.e0*hxx
+          hyy = 2.e0/3.e0*hyy
+          hzz = 2.e0/3.e0*hzz
+          if (dim.eq.1) then 
+            txx(i) = txx(i) + mass(j)*hxx/rho(j)
+            txx(j) = txx(j) + mass(i)*hxx/rho(i)                 
+          else if (dim.eq.2) then           
+            txx(i) = txx(i) + mass(j)*hxx/rho(j)
+            txx(j) = txx(j) + mass(i)*hxx/rho(i)   
+            txy(i) = txy(i) + mass(j)*hxy/rho(j)
+            txy(j) = txy(j) + mass(i)*hxy/rho(i)            
+            tyy(i) = tyy(i) + mass(j)*hyy/rho(j)
+            tyy(j) = tyy(j) + mass(i)*hyy/rho(i)          
+          else if (dim.eq.3) then
+            txx(i) = txx(i) + mass(j)*hxx/rho(j)
+            txx(j) = txx(j) + mass(i)*hxx/rho(i)   
+            txy(i) = txy(i) + mass(j)*hxy/rho(j)
+            txy(j) = txy(j) + mass(i)*hxy/rho(i) 
+            txz(i) = txz(i) + mass(j)*hxz/rho(j)
+            txz(j) = txz(j) + mass(i)*hxz/rho(i)                     
+            tyy(i) = tyy(i) + mass(j)*hyy/rho(j)
+            tyy(j) = tyy(j) + mass(i)*hyy/rho(i)
+            tyz(i) = tyz(i) + mass(j)*hyz/rho(j)
+            tyz(j) = tyz(j) + mass(i)*hyz/rho(i)   
+            tzz(i) = tzz(i) + mass(j)*hzz/rho(j)
+            tzz(j) = tzz(j) + mass(i)*hzz/rho(i)                 
+          endif                              
+
+c     Calculate SPH sum for vc,c = dvx/dx + dvy/dy + dvz/dz:
+
+         hvcc = 0.
+         do d=1,dim
+           hvcc = hvcc + dvx(d)*dwdx(d,k)
+         enddo
+         vcc(i) = vcc(i) + mass(j)*hvcc/rho(j)
+         vcc(j) = vcc(j) + mass(i)*hvcc/rho(i)
+        enddo
+      endif   
+
+      do i=1,ntotal
+      
+c     Viscous entropy Tds/dt = 1/2 eta/rho Tab Tab
+
+        if (visc) then 
+          if (dim.eq.1) then 
+            tdsdt(i) = txx(i)*txx(i)                             
+          else if (dim.eq.2) then           
+            tdsdt(i) = txx(i)*txx(i) + 2.e0*txy(i)*txy(i)  
+     &                               + tyy(i)*tyy(i) 
+          else if (dim.eq.3) then
+            tdsdt(i) = txx(i)*txx(i) + 2.e0*txy(i)*txy(i)  
+     &                               + 2.e0*txz(i)*txz(i)
+     &               + tyy(i)*tyy(i) + 2.e0*tyz(i)*tyz(i) 
+     &                               + tzz(i)*tzz(i)
+          endif   
+          tdsdt(i) = 0.5e0*eta(i)/rho(i)*tdsdt(i)
+        endif  
+
+c     Pressure from equation of state
+
+        if (abs(itype(i)).eq.1) then
+          call p_gas(rho(i), u(i), p(i),c(i))  
+	else if (abs(itype(i)).eq.2) then	     
+	  call p_art_water(rho(i), p(i), c(i))
+        else if (abs(itype(i)).eq.3) then
+          call p_art_soil(rho(i),p(i))
+        endif  
+  
+      enddo
+
+c      Calculate SPH sum for pressure force -p,a/rho
+c      and viscous force (eta Tab),b/rho
+c      and the internal energy change de/dt due to -p/rho vc,c
+
+      do k=1,niac
+        i = pair_i(k)
+        j = pair_j(k)
+        he = 0.e0
+        
+c     For SPH algorithm 1
+
+        rhoij = 1.e0/(rho(i)*rho(j))        
+        if(pa_sph.eq.1) then  
+          do d=1,dim
+        
+c     Pressure part
+                    
+            h = -(p(i) + p(j))*dwdx(d,k)
+            he = he + (vx(d,j) - vx(d,i))*h
+
+c     Viscous force
+
+            if (visc) then 
+            
+             if (d.eq.1) then
+            
+c     x-coordinate of acceleration
+
+               h = h + (eta(i)*txx(i) + eta(j)*txx(j))*dwdx(1,k)
+               if (dim.ge.2) then
+                 h = h + (eta(i)*txy(i) + eta(j)*txy(j))*dwdx(2,k)
+                 if (dim.eq.3) then
+                   h = h + (eta(i)*txz(i) + eta(j)*txz(j))*dwdx(3,k)
+                 endif
+               endif            
+             elseif (d.eq.2) then
+            
+c     y-coordinate of acceleration
+
+               h = h + (eta(i)*txy(i) + eta(j)*txy(j))*dwdx(1,k)
+     &               + (eta(i)*tyy(i) + eta(j)*tyy(j))*dwdx(2,k)
+               if (dim.eq.3) then
+                 h = h + (eta(i)*tyz(i) + eta(j)*tyz(j))*dwdx(3,k)
+               endif             
+             elseif (d.eq.3) then
+            
+c     z-coordinate of acceleration
+
+               h = h + (eta(i)*txz(i) + eta(j)*txz(j))*dwdx(1,k)
+     &               + (eta(i)*tyz(i) + eta(j)*tyz(j))*dwdx(2,k)
+     &               + (eta(i)*tzz(i) + eta(j)*tzz(j))*dwdx(3,k)            
+             endif
+           endif             
+           h = h*rhoij
+           dvxdt(d,i) = dvxdt(d,i) + mass(j)*h
+           dvxdt(d,j) = dvxdt(d,j) - mass(i)*h
+          enddo
+          he = he*rhoij
+          dedt(i) = dedt(i) + mass(j)*he
+          dedt(j) = dedt(j) + mass(i)*he        
+          
+c     For SPH algorithm 2
+          
+        else if (pa_sph.eq.2) then 
+          do d=1,dim                
+            h = -(p(i)/rho(i)**2 + p(j)/rho(j)**2)*dwdx(d,k) 
+            he = he + (vx(d,j) - vx(d,i))*h
+
+c     Viscous force
+
+            if (visc) then             
+             if (d.eq.1) then
+                       
+c     x-coordinate of acceleration
+
+               h = h + (eta(i)*txx(i)/rho(i)**2 +
+     &                  eta(j)*txx(j)/rho(j)**2)*dwdx(1,k)
+               if (dim.ge.2) then
+                 h = h + (eta(i)*txy(i)/rho(i)**2 + 
+     &                    eta(j)*txy(j)/rho(j)**2)*dwdx(2,k)
+                 if (dim.eq.3) then
+                   h = h + (eta(i)*txz(i)/rho(i)**2 + 
+     &                      eta(j)*txz(j)/rho(j)**2)*dwdx(3,k)
+                 endif
+               endif            
+             elseif (d.eq.2) then
+            
+c     y-coordinate of acceleration
+
+               h = h + (eta(i)*txy(i)/rho(i)**2  
+     &               +  eta(j)*txy(j)/rho(j)**2)*dwdx(1,k)
+     &               + (eta(i)*tyy(i)/rho(i)**2  
+     &               +  eta(j)*tyy(j)/rho(j)**2)*dwdx(2,k)
+               if (dim.eq.3) then
+                 h = h + (eta(i)*tyz(i)/rho(i)**2  
+     &                 +  eta(j)*tyz(j)/rho(j)**2)*dwdx(3,k)
+               endif              
+             elseif (d.eq.3) then
+            
+c     z-coordinate of acceleration
+
+               h = h + (eta(i)*txz(i)/rho(i)**2 + 
+     &                  eta(j)*txz(j)/rho(j)**2)*dwdx(1,k)
+     &               + (eta(i)*tyz(i)/rho(i)**2 + 
+     &                  eta(j)*tyz(j)/rho(j)**2)*dwdx(2,k)
+     &               + (eta(i)*tzz(i)/rho(i)**2 + 
+     &                  eta(j)*tzz(j)/rho(j)**2)*dwdx(3,k)            
+             endif            
+           endif              
+           dvxdt(d,i) = dvxdt(d,i) + mass(j)*h
+           dvxdt(d,j) = dvxdt(d,j) - mass(i)*h
+          enddo
+          dedt(i) = dedt(i) + mass(j)*he
+          dedt(j) = dedt(j) + mass(i)*he       
+        endif        
+      enddo
+
+c     Change of specific internal energy de/dt = T ds/dt - p/rho vc,c:
+
+      do i=1,ntotal
+         dedt(i) = tdsdt(i) + 0.5e0*dedt(i)
+      enddo
+
+      return
+      end subroutine
+
+      subroutine int_force_Jaumann(parts)
+
+c----------------------------------------------------------------------
+c   Subroutine to calculate the internal forces on the right hand side 
+c   of the Navier-Stokes equations, i.e. the pressure gradient and the
+c   gradient of the viscous stress tensor, used by the time integration. 
+c   Moreover the entropy production due to viscous dissipation, tds/dt, 
+c   and the change of internal energy per mass, de/dt, are calculated. 
+ 
+c     itimestep: Current timestep number                            [in]
+c     dt     :   Time step                                          [in]
+c     ntotal : Number of particles                                  [in]
+c     hsml   : Smoothing Length                                     [in]
+c     mass   : Particle masses                                      [in]
+c     vx     : Velocities of all particles                          [in]
+c     niac   : Number of interaction pairs                          [in]
+c     rho    : Density                                              [in]
+c     eta    : Dynamic viscosity                                    [in]
+c     pair_i : List of first partner of interaction pair            [in]
+c     pair_j : List of second partner of interaction pair           [in]
+c     dwdx   : Derivative of kernel with respect to x, y and z      [in]
+c     itype  : Type of particle (material types)                    [in]
+c     u      : Particle internal energy                             [in]
+c     x      : Particle coordinates                                 [in]
+c     itype  : Particle type                                        [in]
+c     t      : Particle temperature                             [in/out]
+c     c      : Particle sound speed                                [out]
+c     p      : Particle pressure                                   [out]
+c     dvxdt  : Acceleration with respect to x, y and z             [out] 
+c     tdsdt  : Production of viscous entropy                       [out]
+c     dedt   : Change of specific internal energy                  [out]
+
+      use param
+      !use declarations_sph, ex_dvx=>dvx
+      use m_particles
+      implicit none
+
+      type(particles) parts
+      
+      integer ntotal,niac
+      integer, pointer, dimension(:) :: pair_i, pair_j, itype 
+      double precision, pointer, dimension(:) :: hsml, mass, rho
+      double precision, pointer, dimension(:) :: p,eta,c,u 
+      double precision, pointer, dimension(:,:) :: dwdx, x, vx
+      double precision, pointer, dimension(:,:) :: dvxdt,dedt(:)
+      type(tensor), pointer, dimension(:) :: st, dstdt
+
+      double precision  tdsdt(maxn), dvx(dim), txx(maxn), tyy(maxn),
+     &       tzz(maxn), txy(maxn), txz(maxn), tyz(maxn), vcc(maxn),
+     &       hxx, hyy, hzz, hxy, hxz, hyz, h, hvcc, he, rhoij,
+     &       wxy(maxn)
+      integer i, j, k, d
+
+      ntotal = parts%ntotal + parts%nvirt
+      niac = parts%niac
+
+      pair_i   => parts%pair_i
+      pair_j   => parts%pair_j
+      itype    => parts%itype
+      hsml     => parts%hsml
+      mass     => parts%mass
+      dwdx     => parts%dwdx
+      x        => parts%x
+      vx       => parts%vx
+      rho      => parts%rho
+      p        => parts%p
+      eta      => parts%eta
+      c        => parts%c
+      u        => parts%u
+      dvxdt    => parts%dvx
+      dedt     => parts%du
+      st       => parts%st
+      dstdt    => parts%dst
+
+c     Initialization of shear tensor, velocity divergence, 
+c     viscous energy, internal energy, acceleration 
+
+      do i=1,ntotal      
+        txx(i) = 0.e0
+        tyy(i) = 0.e0
+        tzz(i) = 0.e0
+        txy(i) = 0.e0
+        txz(i) = 0.e0
+        tyz(i) = 0.e0
+        vcc(i) = 0.e0
+        tdsdt(i) = 0.e0
+        dedt(i) = 0.e0
+        !do d=1,dim
+        !  dvxdt(d,i) = 0.e0
+        !enddo 
+      enddo
+
+c     Calculate SPH sum for shear tensor Tab = va,b + vb,a - 2/3 delta_ab vc,c
+
+      if (visc) then 
+        do k=1,niac
+          i = pair_i(k)
+          j = pair_j(k)
+          do d=1,dim
+            dvx(d) = vx(d,j) - vx(d,i)
+          enddo
+          if (dim.eq.1) then 
+            hxx = 2.e0*dvx(1)*dwdx(1,k)        
+          else if (dim.eq.2) then           
+            hxx = 2.e0*dvx(1)*dwdx(1,k) -  dvx(2)*dwdx(2,k) 
+            hxy = dvx(1)*dwdx(2,k) + dvx(2)*dwdx(1,k)
+            hyy = 2.e0*dvx(2)*dwdx(2,k) - dvx(1)*dwdx(1,k)
+          else if (dim.eq.3) then
+            hxx = 2.e0*dvx(1)*dwdx(1,k) - dvx(2)*dwdx(2,k) 
+     &                                  - dvx(3)*dwdx(3,k) 
+            hxy = dvx(1)*dwdx(2,k) + dvx(2)*dwdx(1,k)
+            hxz = dvx(1)*dwdx(3,k) + dvx(3)*dwdx(1,k)          
+            hyy = 2.e0*dvx(2)*dwdx(2,k) - dvx(1)*dwdx(1,k)        
+     &                                  - dvx(3)*dwdx(3,k)
+            hyz = dvx(2)*dwdx(3,k) + dvx(3)*dwdx(2,k)
+            hzz = 2.e0*dvx(3)*dwdx(3,k) - dvx(1)*dwdx(1,k)
+     &                                  - dvx(2)*dwdx(2,k)
+          endif                              
+          hxx = 2.e0/3.e0*hxx
+          hyy = 2.e0/3.e0*hyy
+          hzz = 2.e0/3.e0*hzz
+          if (dim.eq.1) then 
+            txx(i) = txx(i) + mass(j)*hxx/rho(j)
+            txx(j) = txx(j) + mass(i)*hxx/rho(i)                 
+          else if (dim.eq.2) then           
+            txx(i) = txx(i) + mass(j)*hxx/rho(j)
+            txx(j) = txx(j) + mass(i)*hxx/rho(i)   
+            txy(i) = txy(i) + mass(j)*hxy/rho(j)
+            txy(j) = txy(j) + mass(i)*hxy/rho(i)            
+            tyy(i) = tyy(i) + mass(j)*hyy/rho(j)
+            tyy(j) = tyy(j) + mass(i)*hyy/rho(i)          
+          else if (dim.eq.3) then
+            txx(i) = txx(i) + mass(j)*hxx/rho(j)
+            txx(j) = txx(j) + mass(i)*hxx/rho(i)   
+            txy(i) = txy(i) + mass(j)*hxy/rho(j)
+            txy(j) = txy(j) + mass(i)*hxy/rho(i) 
+            txz(i) = txz(i) + mass(j)*hxz/rho(j)
+            txz(j) = txz(j) + mass(i)*hxz/rho(i)                     
+            tyy(i) = tyy(i) + mass(j)*hyy/rho(j)
+            tyy(j) = tyy(j) + mass(i)*hyy/rho(i)
+            tyz(i) = tyz(i) + mass(j)*hyz/rho(j)
+            tyz(j) = tyz(j) + mass(i)*hyz/rho(i)   
+            tzz(i) = tzz(i) + mass(j)*hzz/rho(j)
+            tzz(j) = tzz(j) + mass(i)*hzz/rho(i)                 
+          endif                              
+
+c     Calculate SPH sum for vc,c = dvx/dx + dvy/dy + dvz/dz:
+
+         hvcc = 0.
+         do d=1,dim
+           hvcc = hvcc + dvx(d)*dwdx(d,k)
+         enddo
+         vcc(i) = vcc(i) + mass(j)*hvcc/rho(j)
+         vcc(j) = vcc(j) + mass(i)*hvcc/rho(i)
+        enddo
+      endif   
+
+      do i=1,ntotal
+      
+c     Viscous entropy Tds/dt = 1/2 eta/rho Tab Tab
+
+        if (visc) then 
+          if (dim.eq.1) then 
+            tdsdt(i) = txx(i)*txx(i)                             
+          else if (dim.eq.2) then           
+            tdsdt(i) = txx(i)*txx(i) + 2.e0*txy(i)*txy(i)  
+     &                               + tyy(i)*tyy(i) 
+          else if (dim.eq.3) then
+            tdsdt(i) = txx(i)*txx(i) + 2.e0*txy(i)*txy(i)  
+     &                               + 2.e0*txz(i)*txz(i)
+     &               + tyy(i)*tyy(i) + 2.e0*tyz(i)*tyz(i) 
+     &                               + tzz(i)*tzz(i)
+          endif   
+          tdsdt(i) = 0.5e0*eta(i)/rho(i)*tdsdt(i)
+        endif  
+
+c     Pressure from equation of state
+
+        if (abs(itype(i)).eq.1) then
+          call p_gas(rho(i), u(i), p(i),c(i))  
+	else if (abs(itype(i)).eq.2) then	     
+	  call p_art_water(rho(i), p(i), c(i))
+        else if (abs(itype(i)).eq.3) then
+          call p_art_soil(rho(i),p(i))
+        endif  
+  
+      enddo
+
+!------------------------Yield criterion------------------------------
+
+      call mohr_coulomb_failure_criterion(parts)
+!---------------------------------------------------------------------
+
+c      Calculate SPH sum for pressure force -p,a/rho
+c      and viscous force (eta Tab),b/rho
+c      and the internal energy change de/dt due to -p/rho vc,c
+
+      do k=1,niac
+        i = pair_i(k)
+        j = pair_j(k)
+        he = 0.e0
+        
+c     For SPH algorithm 1
+
+        rhoij = 1.e0/(rho(i)*rho(j))        
+        if(pa_sph.eq.1) then  
+          do d=1,dim
+        
+c     Pressure part
+                    
+            h = -(p(i) + p(j))*dwdx(d,k)
+            he = he + (vx(d,j) - vx(d,i))*h
+
+c     Viscous force
+
+            if (visc) then 
+            
+             if (d.eq.1) then
+            
+c     x-coordinate of acceleration
+
+               h = h + (st(i)%xx + st(j)%xx)*dwdx(1,k)
+               if (dim.ge.2) then
+                 h = h + (st(i)%xy + st(j)%xy)*dwdx(2,k)
+                 if (dim.eq.3) then
+                   h = h + (st(i)%xz + st(j)%xz)*dwdx(3,k)
+                 endif
+               endif            
+             elseif (d.eq.2) then
+            
+c     y-coordinate of acceleration
+
+               h = h + (st(i)%xy + st(j)%xy)*dwdx(1,k)
+     &               + (st(i)%yy + st(j)%yy)*dwdx(2,k)
+               if (dim.eq.3) then
+                 h = h + (st(i)%yz + st(j)%yz)*dwdx(3,k)
+               endif             
+             elseif (d.eq.3) then
+            
+c     z-coordinate of acceleration
+
+               h = h + (st(i)%xz + st(j)%xz)*dwdx(1,k)
+     &               + (st(i)%yz + st(j)%yz)*dwdx(2,k)
+     &               + (st(i)%zz + st(j)%zz)*dwdx(3,k)            
+             endif
+           endif             
+           h = h*rhoij
+           dvxdt(d,i) = dvxdt(d,i) + mass(j)*h
+           dvxdt(d,j) = dvxdt(d,j) - mass(i)*h
+          enddo
+          he = he*rhoij
+          dedt(i) = dedt(i) + mass(j)*he
+          dedt(j) = dedt(j) + mass(i)*he        
+          
+c     For SPH algorithm 2
+          
+        else if (pa_sph.eq.2) then 
+          do d=1,dim                
+            h = -(p(i)/rho(i)**2 + p(j)/rho(j)**2)*dwdx(d,k) 
+            he = he + (vx(d,j) - vx(d,i))*h
+
+c     Viscous force
+
+            if (visc) then             
+             if (d.eq.1) then
+                       
+c     x-coordinate of acceleration
+
+               h = h + (st(i)%xx/rho(i)**2 +
+     &                  st(j)%xx/rho(j)**2)*dwdx(1,k)
+               if (dim.ge.2) then
+                 h = h + (st(i)%xy/rho(i)**2 + 
+     &                    st(j)%xy/rho(j)**2)*dwdx(2,k)
+                 if (dim.eq.3) then
+                   h = h + (st(i)%xz/rho(i)**2 + 
+     &                      st(j)%xz/rho(j)**2)*dwdx(3,k)
+                 endif
+               endif            
+             elseif (d.eq.2) then
+            
+c     y-coordinate of acceleration
+
+               h = h + (st(i)%xy/rho(i)**2  
+     &               +  st(j)%xy/rho(j)**2)*dwdx(1,k)
+     &               + (st(i)%yy/rho(i)**2  
+     &               +  st(j)%yy/rho(j)**2)*dwdx(2,k)
+               if (dim.eq.3) then
+                 h = h + (st(i)%yz/rho(i)**2  
+     &                 +  st(j)%yz/rho(j)**2)*dwdx(3,k)
+               endif              
+             elseif (d.eq.3) then
+            
+c     z-coordinate of acceleration
+
+               h = h + (st(i)%xz/rho(i)**2 + 
+     &                  st(j)%xz/rho(j)**2)*dwdx(1,k)
+     &               + (st(i)%yz/rho(i)**2 + 
+     &                  st(j)%yz/rho(j)**2)*dwdx(2,k)
+     &               + (st(i)%zz/rho(i)**2 + 
+     &                  st(j)%zz/rho(j)**2)*dwdx(3,k)            
+             endif            
+           endif              
+           dvxdt(d,i) = dvxdt(d,i) + mass(j)*h
+           dvxdt(d,j) = dvxdt(d,j) - mass(i)*h
+          enddo
+          dedt(i) = dedt(i) + mass(j)*he
+          dedt(j) = dedt(j) + mass(i)*he       
+        endif        
+      enddo
+
+c     Change of specific internal energy de/dt = T ds/dt - p/rho vc,c:
+
+      do i=1,ntotal
+         dedt(i) = tdsdt(i) + 0.5e0*dedt(i)
+      enddo
+
+c----------------------soil part, Jaumann rate-------------------------
+c     spin tensor
+
+       if (visc) then 
+        do k=1,niac
+          i = pair_i(k)
+          j = pair_j(k)
+          do d=1,dim
+            dvx(d) = vx(d,j) - vx(d,i)
+          enddo
+          if (dim.eq.1) then 
+            !hxx = 0.5e0*dvx(1)*dwdx(1,k)        
+          else if (dim.eq.2) then           
+            !hxx = 0.5e0*(dvx(1)*dwdx(1,k) -  dvx(2)*dwdx(2,k)) 
+            hxy = 0.5e0*(dvx(1)*dwdx(2,k) - dvx(2)*dwdx(1,k))
+            !hyy = 2.e0*dvx(2)*dwdx(2,k) - dvx(1)*dwdx(1,k)
+          else if (dim.eq.3) then
+!            hxx = 2.e0*dvx(1)*dwdx(1,k) - dvx(2)*dwdx(2,k) 
+!     &                                  - dvx(3)*dwdx(3,k) 
+!            hxy = dvx(1)*dwdx(2,k) + dvx(2)*dwdx(1,k)
+!            hxz = dvx(1)*dwdx(3,k) + dvx(3)*dwdx(1,k)          
+!            hyy = 2.e0*dvx(2)*dwdx(2,k) - dvx(1)*dwdx(1,k)        
+!     &                                  - dvx(3)*dwdx(3,k)
+!            hyz = dvx(2)*dwdx(3,k) + dvx(3)*dwdx(2,k)
+!            hzz = 2.e0*dvx(3)*dwdx(3,k) - dvx(1)*dwdx(1,k)
+!     &                                  - dvx(2)*dwdx(2,k)
+          endif                              
+!          hxx = 2.e0/3.e0*hxx
+!          hyy = 2.e0/3.e0*hyy
+!          hzz = 2.e0/3.e0*hzz
+          if (dim.eq.1) then 
+!            txx(i) = txx(i) + mass(j)*hxx/rho(j)
+!            txx(j) = txx(j) + mass(i)*hxx/rho(i)                 
+          else if (dim.eq.2) then           
+!            txx(i) = txx(i) + mass(j)*hxx/rho(j)
+!            txx(j) = txx(j) + mass(i)*hxx/rho(i)   
+            wxy(i) = wxy(i) + mass(j)*hxy/rho(j)
+            wxy(j) = wxy(j) + mass(i)*hxy/rho(i)            
+!            tyy(i) = tyy(i) + mass(j)*hyy/rho(j)
+!            tyy(j) = tyy(j) + mass(i)*hyy/rho(i)          
+          else if (dim.eq.3) then
+!            txx(i) = txx(i) + mass(j)*hxx/rho(j)
+!            txx(j) = txx(j) + mass(i)*hxx/rho(i)   
+!            txy(i) = txy(i) + mass(j)*hxy/rho(j)
+!            txy(j) = txy(j) + mass(i)*hxy/rho(i) 
+!            txz(i) = txz(i) + mass(j)*hxz/rho(j)
+!            txz(j) = txz(j) + mass(i)*hxz/rho(i)                     
+!            tyy(i) = tyy(i) + mass(j)*hyy/rho(j)
+!            tyy(j) = tyy(j) + mass(i)*hyy/rho(i)
+!            tyz(i) = tyz(i) + mass(j)*hyz/rho(j)
+!            tyz(j) = tyz(j) + mass(i)*hyz/rho(i)   
+!            tzz(i) = tzz(i) + mass(j)*hzz/rho(j)
+!            tzz(j) = tzz(j) + mass(i)*hzz/rho(i)                 
+          endif                              
+       enddo
+      endif
+   
+c   Jaumann rate
+      do i = 1, ntotal
+         dstdt(i)%xx = eta(i)*txx(i)+2.0*st(i)%xy*wxy(i)
+         dstdt(i)%xy = eta(i)*txy(i)+(st(i)%xx+st(i)%yy)*wxy(i)
+         dstdt(i)%yy = eta(i)*tyy(i)+2.0*st(i)%xy*wxy(i)
+      enddo         
+
+      return
+      end subroutine
+
+
+      subroutine mohr_coulomb_failure_criterion(soil)
+!------------------------Yield criterion------------------------------
+      use m_particles
+      implicit none
+
+      type(particles) soil
+
+      type(tensor), pointer, dimension(:) :: st
+      double precision, pointer, dimension(:) :: p
+      double precision yield, tanphi, maxst, skale, cohesion
+      integer i, ntotal
+
+      cohesion = 0.
+      tanphi = tan(3.14/3)
+
+      ntotal = soil%ntotal+soil%nvirt
+      st => soil%st
+      p  => soil%p
+    
+      do i = 1, ntotal
+         !maxst = max(st(i)%xx,st(i)%xy,st(i)%yy)
+         yield = cohesion+p(i)*tanphi
+         if(st(i)%xy>yield)then
+            skale = (st(i)%xy - yield)/st(i)%xy
+            st(i)%xx = (1.-skale)*st(i)%xx
+            st(i)%xy = (1.-skale)*st(i)%xy
+            st(i)%yy = (1.-skale)*st(i)%yy
+         endif
+      enddo
+
+      return
+      end subroutine
+        subroutine kernel(r,dx,hsml,w,dwdx)   
+
+c----------------------------------------------------------------------
+c   Subroutine to calculate the smoothing kernel wij and its 
+c   derivatives dwdxij.
+c     if skf = 1, cubic spline kernel by W4 - Spline (Monaghan 1985)
+c            = 2, Gauss kernel   (Gingold and Monaghan 1981) 
+c            = 3, Quintic kernel (Morris 1997)
+
+c     r    : Distance between particles i and j                     [in]
+c     dx   : x-, y- and z-distance between i and j                  [in]  
+c     hsml : Smoothing length                                       [in]
+c     w    : Kernel for all interaction pairs                      [out]
+c     dwdx : Derivative of kernel with respect to x, y and z       [out]
+
+      use param
+      implicit none
+      
+      double precision r, dx(dim), hsml, w, dwdx(dim)
+      integer i, j, d      
+      double precision q, dw, factor
+      logical :: dbg = .false.
+
+      if(dbg) write(*,*) 'In kernel...'
+
+      q = r/hsml 
+      w = 0.e0
+      do d=1,dim         
+        dwdx(d) = 0.e0
+      enddo   
+
+      if (skf.eq.1) then     
+        if (dim.eq.1) then
+          factor = 1.e0/hsml
+        elseif (dim.eq.2) then
+          factor = 15.e0/(7.e0*pi*hsml*hsml)
+        elseif (dim.eq.3) then
+          factor = 3.e0/(2.e0*pi*hsml*hsml*hsml)
+        else
+         print *,' >>> Error <<< : Wrong dimension: Dim =',dim
+         stop
+        endif                                           
+        if (q.ge.0.and.q.le.1.e0) then          
+          w = factor * (2./3. - q*q + q**3 / 2.)
+          do d = 1, dim
+            dwdx(d) = factor * (-2.+3./2.*q)/hsml**2 * dx(d)       
+          enddo   
+        else if (q.gt.1.e0.and.q.le.2) then          
+          w = factor * 1.e0/6.e0 * (2.-q)**3 
+          do d = 1, dim
+            dwdx(d) =-factor * 1.e0/6.e0 * 3.*(2.-q)**2/hsml * (dx(d)/r)        
+          enddo              
+	else
+	  w=0.
+          do d= 1, dim
+            dwdx(d) = 0.
+          enddo             
+        endif     
+                                    
+      else if (skf.eq.2) then
+      
+        factor = 1.e0 / (hsml**dim * pi**(dim/2.))      
+	if(q.ge.0.and.q.le.3) then
+	  w = factor * exp(-q*q)
+          do d = 1, dim
+            dwdx(d) = w * ( -2.* dx(d)/hsml/hsml)
+          enddo 
+	else
+	  w = 0.
+          do d = 1, dim
+            dwdx(d) = 0.
+          enddo 	   
+	endif	       
+	
+      else if (skf.eq.3) then	
+      
+        if (dim.eq.1) then
+          factor = 1.e0 / (120.e0*hsml)
+        elseif (dim.eq.2) then
+          factor = 7.e0 / (478.e0*pi*hsml*hsml)
+        elseif (dim.eq.3) then
+          factor = 1.e0 / (120.e0*pi*hsml*hsml*hsml)
+        else
+         print *,' >>> Error <<< : Wrong dimension: Dim =',dim
+         stop
+        endif              
+	if(q.ge.0.and.q.le.1) then
+          w = factor * ( (3-q)**5 - 6*(2-q)**5 + 15*(1-q)**5 )
+          do d= 1, dim
+            dwdx(d) = factor * ( (-120 + 120*q - 50*q**2) 
+     &                        / hsml**2 * dx(d) )
+          enddo 
+	else if(q.gt.1.and.q.le.2) then
+          w = factor * ( (3-q)**5 - 6*(2-q)**5 )
+          do d= 1, dim
+            dwdx(d) = factor * (-5*(3-q)**4 + 30*(2-q)**4)  
+     &                       / hsml * (dx(d)/r) 
+          enddo 
+        else if(q.gt.2.and.q.le.3) then
+          w = factor * (3-q)**5 
+          do d= 1, dim
+            dwdx(d) = factor * (-5*(3-q)**4) / hsml * (dx(d)/r) 
+          enddo 
+        else   
+	  w = 0.
+          do d = 1, dim
+            dwdx(d) = 0.
+          enddo  
+        endif                      
+                
+      endif 
+		
+      end
+      subroutine link_list(itimestep, ntotal,hsml,x,niac,pair_i,
+     &           pair_j,w,dwdx,countiac)
+     
+c----------------------------------------------------------------------
+c   Subroutine to calculate the smoothing funciton for each particle and
+c   the interaction parameters used by the SPH algorithm. Interaction 
+c   pairs are determined by using a sorting grid linked list  
+
+c     itimestep : Current time step                                 [in]
+c     ntotal    : Number of particles                               [in]
+c     hsml      : Smoothing Length, same for all particles          [in]
+c     x         : Coordinates of all particles                      [in]
+c     niac      : Number of interaction pairs                      [out]
+c     pair_i    : List of first partner of interaction pair        [out]
+c     pair_j    : List of second partner of interaction pair       [out]
+c     w         : Kernel for all interaction pairs                 [out]
+c     dwdx      : Derivative of kernel with respect to x, y and z  [out]
+c     countiac  : Number of neighboring particles                  [out]
+
+      use param
+      implicit none
+C      include 'param.inc'
+
+c     Parameter used for sorting grid cells in the link list algorithm
+c     maxngx  : Maximum number of sorting grid cells in x-direction
+c     maxngy  : Maximum number of sorting grid cells in y-direction
+c     maxngz  : Maximum number of sorting grid cells in z-direction
+c     Determining maximum number of sorting grid cells:
+c     (For an homogeneous particle distribution:)
+c     1-dim. problem: maxngx = maxn ,  maxngy = maxngz = 1
+c     2-dim. problem: maxngx = maxngy ~ sqrt(maxn) ,  maxngz = 1
+c     3-dim. problem: maxngx = maxngy = maxngz ~ maxn^(1/3)
+      integer maxngx,maxngy,maxngz
+      parameter ( maxngx  = 100        ,
+     &            maxngy  = 100        ,
+     &            maxngz  = 1          )      
+      integer itimestep, ntotal, niac, pair_i(max_interaction),
+     &        pair_j(max_interaction), countiac(maxn)
+      double precision hsml, x(dim,maxn),w(max_interaction),
+     &       dwdx(dim,max_interaction)
+      integer i, j, d, scale_k, sumiac, maxiac, noiac, miniac, maxp,minp    
+      integer grid(maxngx,maxngy,maxngz),xgcell(3,maxn),gcell(3),
+     &     xcell,ycell,zcell,celldata(maxn),minxcell(3),maxxcell(3),
+     &     dnxgcell(dim),dpxgcell(dim),ngridx(dim),ghsmlx(dim)
+      double precision hsml2,dr,r,dx(dim),mingridx(dim),maxgridx(dim),
+     &       tdwdx(dim), dgeomx(dim)
+
+      if (skf.eq.1) then 
+        scale_k = 2 
+      else if (skf.eq.2) then 
+        scale_k = 3 
+      else if (skf.eq.3) then 
+         scale_k = 3 
+      endif 
+     
+      do i=1,ntotal
+        countiac(i) = 0
+      enddo
+
+c     Initialize grid:  
+
+      call init_grid(ntotal,hsml,grid,ngridx,ghsmlx,
+     &     maxgridx,mingridx,dgeomx)
+      
+c     Position particles on grid and create linked list:
+      
+      do i=1,ntotal
+        call grid_geom(i,x(1,i),ngridx,maxgridx,mingridx,dgeomx,gcell)
+        do d=1,dim
+          xgcell(d,i) = gcell(d)
+        enddo
+        celldata(i) = grid(gcell(1),gcell(2),gcell(3))
+        grid(gcell(1),gcell(2),gcell(3)) = i
+      enddo
+
+c     Determine interaction parameters:
+
+      niac = 0
+      do i=1,ntotal-1
+
+c     Determine range of grid to go through:
+         
+        do d=1,3
+          minxcell(d) = 1
+          maxxcell(d) = 1
+        enddo
+        do d=1,dim
+          dnxgcell(d) = xgcell(d,i) - ghsmlx(d)
+          dpxgcell(d) = xgcell(d,i) + ghsmlx(d)
+          minxcell(d) = max(dnxgcell(d),1)
+          maxxcell(d) = min(dpxgcell(d),ngridx(d))
+        enddo
+
+c     Search grid:
+      
+        do zcell=minxcell(3),maxxcell(3)
+          do ycell=minxcell(2),maxxcell(2)
+            do xcell=minxcell(1),maxxcell(1)
+              j = grid(xcell,ycell,zcell)
+ 1            if (j.gt.i) then
+                dx(1) = x(1,i) - x(1,j)
+                dr    = dx(1)*dx(1)
+                do d=2,dim
+                  dx(d) = x(d,i) - x(d,j)
+                  dr    = dr + dx(d)*dx(d)
+                enddo
+                if (sqrt(dr).lt.scale_k*hsml) then
+                  if (niac.lt.max_interaction) then
+
+c     Neighboring pair list, and totalinteraction number and
+c     the interaction number for each particle 
+
+                    niac = niac + 1
+                    pair_i(niac) = i
+                    pair_j(niac) = j
+                    r = sqrt(dr)
+                    countiac(i) = countiac(i) + 1
+                    countiac(j) = countiac(j) + 1
+                           
+C--- Kernel and derivations of kernel
+
+                    call kernel(r,dx,hsml,w(niac),tdwdx)
+	            do d = 1, dim
+	              dwdx(d,niac)=tdwdx(d)
+                    enddo                  
+                  else
+                    print *,
+     &              ' >>> Error <<< : too many interactions'
+                    stop
+                  endif
+                endif
+                j = celldata(j)
+                goto 1
+              endif
+            enddo
+          enddo
+        enddo
+      enddo
+
+c     Statistics for the interaction
+
+      sumiac = 0
+      maxiac = 0
+      miniac = 1000
+      noiac  = 0
+      do i=1,ntotal
+        sumiac = sumiac + countiac(i)
+        if (countiac(i).gt.maxiac) then
+	  maxiac = countiac(i)
+	  maxp = i
+	endif
+	if (countiac(i).lt.miniac) then 
+	  miniac = countiac(i)
+          minp = i
+	endif
+        if (countiac(i).eq.0)      noiac  = noiac + 1
+      enddo
+ 
+      if (mod(itimestep,print_step).eq.0) then
+        if (int_stat) then
+          print *,' >> Statistics: interactions per particle:'
+          print *,'**** Particle:',maxp, ' maximal interactions:',maxiac
+          print *,'**** Particle:',minp, ' minimal interactions:',miniac
+          print *,'**** Average :',real(sumiac)/real(ntotal)
+          print *,'**** Total pairs : ',niac
+          print *,'**** Particles with no interactions:',noiac
+        endif     
+      endif
+
+      end
+      subroutine output
+      
+c----------------------------------------------------------------------           
+c     Subroutine for saving particle information to external disk file
+
+c     x-- coordinates of particles                                  [in]
+c     vx-- velocities of particles                                  [in]
+c     mass-- mass of particles                                      [in]
+c     rho-- dnesities of particles                                  [in]
+c     p-- pressure  of particles                                    [in]
+c     u-- internal energy of particles                              [in]
+c     c-- sound velocity of particles                               [in]
+c     itype-- types of particles                                    [in]
+c     hsml-- smoothing lengths of particles                         [in]
+c     ntotal-- total particle number                                [in]
+
+      use param
+      use declarations_sph
+      implicit none     
+      
+      integer, pointer, dimension(:) :: itype
+      double precision, pointer, dimension(:,:) :: x
+      double precision, pointer, dimension(:) :: mass,hsml,p
+
+      integer ntotal
+      integer i, d, npart, i1, i2, f1, f2, f3     
+
+      ntotal =  parts%ntotal+parts%nvirt
+     
+      itype  => parts%itype
+      x      => parts%x
+      mass   => parts%mass
+      hsml   => parts%hsml
+      p      => parts%p
+
+      write(f_xv,*) 'VARIABLES="X","Y"' !,"indvxdt","indvydt",
+!     & "Pressure","ardvxdt","ardvydt","exdvxdt","exdvydt"'
+      write(f_xv,*) 'ZONE I=', ntotal, ' F=BLOCK'
+ 
+      write(f_xv,*) x(1,1:ntotal)
+      write(f_xv,*) x(2,1:ntotal)
+c      write(f_xv,*) vx(1,1:ntotal)
+c      write(f_xv,*) vx(2,1:ntotal)
+!      write(f_xv,*) parts%dvx(1,1:ntotal)
+!      write(f_xv,*) parts%dvx(2,1:ntotal)
+c      write(f_xv,*) mass(1:ntotal)
+c      write(f_xv,*) rho(1:ntotal)
+!      write(f_xv,*) p(1:ntotal)
+c      write(f_xv,*) u(1:ntotal)
+c      write(f_xv,*) itype(1:ntotal)
+c      write(f_xv,*) hsml(1:ntotal)                                        
+c      write(f_xv,*) dvx(1,1:ntotal)
+c      write(f_xv,*) dvx(2,1:ntotal)
+!      write(f_xv,*) ardvxdt%rr(1,1:ntotal)
+!      write(f_xv,*) ardvxdt%rr(2,1:ntotal)
+!      write(f_xv,*) exdvxdt%rr(1,1:ntotal)
+!      write(f_xv,*) exdvxdt%rr(2,1:ntotal)
+
+      return
+      end subroutine
+
+c---------------------------------------------------------
+c     Including file for parameters and constants used 
+c     in the entire SPH software packages.
+c---------------------------------------------------------
+      module param
+c---------------------------------------------------------
+      implicit none
+
+c     dim : Dimension of the problem (1, 2 or 3)
+      integer dim
+      parameter ( dim = 2)
+
+c     maxn    : Maximum number of particles
+c     max_interation : Maximum number of interaction pairs
+      integer maxn,max_interaction
+      parameter ( maxn    = 12000    ,
+     &            max_interaction = 100 * maxn )
+
+c     Parameters for the computational geometry,  
+c     x_maxgeom : Upper limit of allowed x-regime 
+c     x_mingeom : Lower limit of allowed x-regime 
+c     y_maxgeom : Upper limit of allowed y-regime 
+c     y_mingeom : Lower limit of allowed y-regime 
+c     z_maxgeom : Upper limit of allowed z-regime 
+c     z_mingeom : Lower limit of allowed z-regime 
+      double precision x_maxgeom,x_mingeom,y_maxgeom,
+     &                 y_mingeom,z_maxgeom,z_mingeom
+      parameter ( x_maxgeom =  10.e0     ,
+     &            x_mingeom = -10.e0     ,
+     &            y_maxgeom =  10.e0     ,
+     &            y_mingeom = -10.e0     ,
+     &            z_maxgeom =  10.e0     ,
+     &            z_mingeom = -10.e0     )
+    
+c     SPH algorithm for particle approximation (pa_sph)
+c     pa_sph = 1 : (e.g. (p(i)+p(j))/(rho(i)*rho(j))
+c              2 : (e.g. (p(i)/rho(i)**2+p(j)/rho(j)**2)
+      integer pa_sph 
+      parameter(pa_sph = 1)
+
+c     Nearest neighbor particle searching (nnps) method
+c     nnps = 1 : Simplest and direct searching
+c            2 : Sorting grid linked list
+c            3 : Tree algorithm
+      integer nnps 
+      parameter(nnps = 1 )
+
+c     Smoothing length evolution (sle) algorithm
+c     sle = 0 : Keep unchanged,
+c           1 : h = fac * (m/rho)^(1/dim)
+c           2 : dh/dt = (-1/dim)*(h/rho)*(drho/dt)
+c           3 : Other approaches (e.g. h = h_0 * (rho_0/rho)**(1/dim) ) 
+
+      integer sle 
+      parameter(sle = 0)
+
+c     Smoothing kernel function 
+c     skf = 1, cubic spline kernel by W4 - Spline (Monaghan 1985)
+c         = 2, Gauss kernel   (Gingold and Monaghan 1981) 
+c         = 3, Quintic kernel (Morris 1997)
+      integer skf 
+      parameter(skf = 1)
+
+c     Switches for different senarios
+
+c     summation_density = .TRUE. : Use density summation model in the code, 
+c                        .FALSE.: Use continuiity equation
+c     average_velocity = .TRUE. : Monaghan treatment on average velocity,
+c                       .FALSE.: No average treatment.
+c     config_input = .TRUE. : Load initial configuration data,
+c                   .FALSE.: Generate initial configuration.
+c     virtual_part = .TRUE. : Use vritual particle,
+c                   .FALSE.: No use of vritual particle.
+c     vp_input = .TRUE. : Load virtual particle information,
+c               .FALSE.: Generate virtual particle information.
+c     visc = .true. : Consider viscosity,
+c           .false.: No viscosity.
+c     ex_force =.true. : Consider external force,
+c               .false.: No external force.
+c     visc_artificial = .true. : Consider artificial viscosity,
+c                      .false.: No considering of artificial viscosity.
+c     heat_artificial = .true. : Consider artificial heating,
+c                      .false.: No considering of artificial heating.
+c     self_gravity = .true. : Considering self_gravity,
+c                    .false.: No considering of self_gravity
+c     nor_density =  .true. : Density normalization by using CSPM,
+c                    .false.: No normalization.
+      logical summation_density, average_velocity, config_input,
+     &        virtual_part, vp_input, visc, ex_force, heat_artificial,
+     &        visc_artificial, self_gravity, nor_density
+      parameter ( summation_density  = .false. )
+      parameter ( average_velocity  = .true. )
+      parameter ( config_input  = .false. )
+      parameter ( virtual_part  = .true. )
+      parameter ( vp_input  = .false.  )
+      parameter ( visc  = .true.  )
+      parameter ( ex_force  = .true.)
+      parameter ( visc_artificial  = .false. )
+      parameter ( heat_artificial  = .false. )
+      parameter ( self_gravity  = .true. )      
+      parameter ( nor_density  = .true. )      
+
+c     Symmetry of the problem
+c     nsym = 0 : no symmetry,
+c          = 1 : axis symmetry,
+c          = 2 : center symmetry.     
+      integer    nsym
+      parameter ( nsym = 0)
+
+c     Control parameters for output 
+c     int_stat = .true. : Print statistics about SPH particle interactions.
+c                        including virtual particle information.
+c     print_step: Print Timestep (On Screen)
+c     save_step : Save Timestep    (To Disk File)
+c     moni_particle: The particle number for information monitoring.
+      logical int_stat
+      parameter ( int_stat = .true. )
+      integer print_step, save_step, moni_particle
+      parameter ( print_step = 100,
+     &            save_step = 100,
+     &            moni_particle = 319   )
+           
+      double precision pi,gravity
+      parameter ( pi = 3.14159265358979323846 )
+      parameter ( gravity = -9.8 )
+      
+c     Simulation cases
+c     shocktube = .true. : carry out shock tube simulation
+c     shearcavity = .true. : carry out shear cavity simulation
+      logical shocktube, shearcavity, waterjet
+      parameter ( shocktube  = .false. )
+      parameter ( shearcavity  = .false. )
+      parameter ( waterjet = .true.)
+
+      logical single_phase
+      parameter( single_phase = .false.)
+
+!     Recorde time interval
+      integer save_step_from, save_step_to
+      parameter (save_step_from = 0, save_step_to = 100)
+
+      end module
+      subroutine single_step
+c----------------------------------------------------------------------
+c   Subroutine to determine the right hand side of a differential 
+c   equation in a single step for performing time integration 
+
+c   In this routine and its subroutines the SPH algorithms are performed.
+c     itimestep: Current timestep number                            [in]
+c     dt       : Timestep                                           [in]
+c     ntotal   :  Number of particles                               [in]
+c     hsml     :  Smoothing Length                                  [in]
+c     mass     :  Particle masses                                   [in]
+c     x        :  Particle position                                 [in]
+c     vx       :  Particle velocity                                 [in]
+c     u        :  Particle internal energy                          [in]
+c     s        :  Particle entropy (not used here)                  [in]
+c     rho      :  Density                                       [in/out]
+c     p        :  Pressure                                         [out]
+c     t        :  Temperature                                   [in/out]
+c     tdsdt    :  Production of viscous entropy t*ds/dt            [out]
+c     dx       :  dx = vx = dx/dt                                  [out]
+c     dvx      :  dvx = dvx/dt, force per unit mass                [out]
+c     du       :  du  = du/dt                                      [out]
+c     ds       :  ds  = ds/dt                                      [out]     
+c     drho     :  drho =  drho/dt                                  [out]
+c     itype    :  Type of particle                                 [in]
+c     av       :  Monaghan average velocity                        [out]
+
+      use param
+      use declarations_sph
+      implicit none
+
+      integer  ntotal, nvirt, niac, i, d
+      logical :: dbg = .false.
+                 
+      if(dbg) write(*,*) 'In single_step...'
+
+      ntotal   =  parts%ntotal
+      
+      do i=1,ntotal
+         parts%du(i) = 0.
+         do d=1,dim
+            parts%dvx(d,i) = 0.
+         enddo
+      enddo  
+ 
+c---  Positions of virtual (boundary) particles: 
+
+      if (virtual_part) call virt_part
+      
+c---  Interaction parameters, calculating neighboring particles
+c     and optimzing smoothing length
+  
+      if (nnps.eq.1) then 
+        call direct_find(parts)
+      else if (nnps.eq.2) then
+c        call link_list(itimestep, ntotal+nvirt,hsml(1),x,niac,pair_i,
+c     &       pair_j,w,dwdx,ns)
+      else if (nnps.eq.3) then 
+c        call tree_search(itimestep, ntotal+nvirt,hsml,x,niac,pair_i,
+c     &       pair_j,w,dwdx,ns)
+      endif         
+
+      if (mod(itimestep,print_step).eq.0) then
+        if (int_stat) then
+          print *,' >> Statistics: interactions per particle:'
+          print *,'**** Particle:',parts%maxp, 
+     &            ' maximal interactions:', parts%maxiac
+          print *,'**** Particle:',parts%minp, 
+     &            ' minimal interactions:', parts%miniac
+          print *,'**** Average :',real(parts%sumiac)/
+     &                       real(parts%ntotal+parts%nvirt)
+          print *,'**** Total pairs : ',parts%niac
+          print *,'**** Particles with no interactions:',parts%noiac
+        endif     
+      endif    
+
+c---  Density approximation or change rate
+     
+      if (summation_density) then      
+         call sum_density(parts)
+      else             
+        call con_density(parts)         
+      endif
+
+c---  Dynamic viscosity:
+
+      if (visc) call viscosity(parts)
+       
+c---  Internal forces:
+ 
+      call int_force(parts) 
+
+c---  Artificial viscosity:
+
+      if (visc_artificial) call art_visc(parts)
+     
+c---  External forces:
+
+      if (ex_force) call ext_force(parts)
+
+c     Calculating the neighboring particles and undating HSML
+      
+      if (sle.ne.0) call h_upgrade(parts)
+
+c      if (heat_artificial) call art_heat(ntotal+nvirt,hsml,
+c     &         mass,x,vx,niac,rho,u, c,pair_i,pair_j,w,dwdx,ahdudt)
+     
+c     Calculating average velocity of each partile for avoiding penetration
+
+      if (average_velocity) call av_vel(parts) 
+
+c---  Convert velocity, force, and energy to f and dfdt  
+      
+!      do i=1,ntotal
+!        do d=1,dim
+!           parts%dvx(d,i) = indvxdt%rr(d,i) + exdvxdt%rr(d,i) 
+!     &                    + ardvxdt%rr(d,i)
+!        enddo
+!        parts%du(i) = indudt%r(i) + avdudt%r(i) + ahdudt%r(i)
+!      enddo
+
+!      if (mod(itimestep,print_step).eq.0) then      
+!          write(*,*)
+!          write(*,*) '**** Information for particle ****', 
+!     &        		moni_particle         
+!          write(*,101)'internal a ','artifical a=',
+!     &         		'external a ','total a '   
+!          write(*,100)indvxdt%rr(1,moni_particle),
+!     &                ardvxdt%rr(1,moni_particle),
+!     &                exdvxdt%rr(1,moni_particle),
+!     &                parts%dvx(1,moni_particle)          
+!      endif
+!101   format(1x,4(2x,a12))      
+!100   format(1x,4(2x,e13.6))      
+
+      if(single_phase) return
+
+!--------------------Soil parts---------------------------------------------
+
+      do i=1,soil%ntotal
+         soil%du(i) = 0.
+         soil%dst(i)%xx = 0.
+         soil%dst(i)%xy = 0.
+         soil%dst(i)%yy = 0.
+         do d=1,dim
+            soil%dvx(d,i) = 0.
+         enddo
+      enddo  
+     
+c---  Interaction parameters, calculating neighboring particles
+c     and optimzing smoothing length
+  
+      if (nnps.eq.1) then 
+        call direct_find(soil)
+      else if (nnps.eq.2) then
+c        call link_list(itimestep, ntotal+nvirt,hsml(1),x,niac,pair_i,
+c     &       pair_j,w,dwdx,ns)
+      else if (nnps.eq.3) then 
+c        call tree_search(itimestep, ntotal+nvirt,hsml,x,niac,pair_i,
+c     &       pair_j,w,dwdx,ns)
+      endif         
+
+      if (mod(itimestep,print_step).eq.0) then
+        if (int_stat) then
+          print *,' >> Statistics: interactions per particle:'
+          print *,'**** Particle:',soil%maxp, 
+     &            ' maximal interactions:', soil%maxiac
+          print *,'**** Particle:',soil%minp, 
+     &            ' minimal interactions:', soil%miniac
+          print *,'**** Average :',real(soil%sumiac)/
+     &                       real(soil%ntotal+soil%nvirt)
+          print *,'**** Total pairs : ',soil%niac
+          print *,'**** Particles with no interactions:', soil%noiac
+        endif     
+      endif    
+
+c---  Density approximation or change rate
+     
+      if (summation_density) then      
+         call sum_density(soil)
+      else             
+        call con_density(soil)         
+      endif
+
+c---  Dynamic viscosity:
+
+      !if (visc) call viscosity
+      call shear_modulus(soil)
+       
+c---  Internal forces:
+ 
+      call int_force_Jaumann(soil) 
+
+c---  Artificial viscosity:
+
+       if (visc_artificial) call art_visc(soil)
+     
+c---  External forces:
+
+      if (ex_force) call ext_force(soil)
+
+c     Calculating the neighboring particles and undating HSML
+      
+      if (sle.ne.0) call h_upgrade(soil)
+
+c      if (heat_artificial) call art_heat(ntotal+nvirt,hsml,
+c     &         mass,x,vx,niac,rho,u, c,pair_i,pair_j,w,dwdx,ahdudt)
+     
+c     Calculating average velocity of each partile for avoiding penetration
+
+      if (average_velocity) call av_vel(soil) 
+
+c---  Convert velocity, force, and energy to f and dfdt  
+      
+!      do i=1,ntotal
+!        do d=1,dim
+!           soil%dvx(d,i) = indvxdt%rr(d,i) + exdvxdt%rr(d,i) 
+!     &                   + ardvxdt%rr(d,i)
+!        enddo
+!        soil%du(i) = indudt%r(i) + avdudt%r(i) + ahdudt%r(i)
+!      enddo
+
+!      if (mod(itimestep,print_step).eq.0) then      
+!          write(*,*)
+!          write(*,*) '**** Information for particle ****', 
+!     &        		moni_particle         
+!          write(*,101)'internal a ','artifical a=',
+!     &         		'external a ','total a '   
+!          write(*,100) indvxdt%rr(1,moni_particle),
+!     &                 ardvxdt%rr(1,moni_particle),
+!     &                 exdvxdt%rr(1,moni_particle),
+!     &                 soil%dvx(1,moni_particle)          
+!      endif
+!101   format(1x,4(2x,a12))      
+!100   format(1x,4(2x,e13.6))      
+
+!-------------------Water/soil interaction-------------------------------
+
+c---  Interaction parameters, calculating neighboring particles
+c     and optimzing smoothing length
+  
+      if (nnps.eq.1) then 
+        call direct_find_2(parts,soil)
+      else if (nnps.eq.2) then
+c        call link_list(itimestep, ntotal+nvirt,hsml(1),x,niac,pair_i,
+c     &       pair_j,w,dwdx,ns)
+      else if (nnps.eq.3) then 
+c        call tree_search(itimestep, ntotal+nvirt,hsml,x,niac,pair_i,
+c     &       pair_j,w,dwdx,ns)
+      endif         
+
+      if (mod(itimestep,print_step).eq.0) then
+        if (int_stat) then
+          print *,' >> Statistics: interactions per particle:'
+          print *,'**** Particle:',parts%maxp, 
+     &            ' maximal interactions:', parts%maxiac
+          print *,'**** Particle:',parts%minp, 
+     &            ' minimal interactions:', parts%miniac
+          print *,'**** Average :',real(parts%sumiac)/
+     &                       real(parts%ntotal+parts%nvirt)
+          print *,'**** Total pairs : ', parts%niac
+          print *,'**** Particles with no interactions:', parts%noiac
+        endif     
+      endif    
+
+      call darcy_law(parts,soil)
+      call pore_water_pressure(parts,soil) 
+     
+      return
+      end subroutine
+	      program SPH
+
+c----------------------------------------------------------------------
+c     This is a three dimensional SPH code. the followings are the 
+c     basic parameters needed in this codeor calculated by this code
+
+c     mass-- mass of particles                                      [in]
+c     ntotal-- total particle number ues                            [in]
+c     dt--- Time step used in the time integration                  [in]
+c     itype-- types of particles                                    [in]
+c     x-- coordinates of particles                              [in/out]
+c     vx-- velocities of particles                              [in/out]
+c     rho-- dnesities of particles                              [in/out]
+c     p-- pressure  of particles                                [in/out]
+c     u-- internal energy of particles                          [in/out]
+c     hsml-- smoothing lengths of particles                     [in/out]
+c     c-- sound velocity of particles                              [out]
+c     s-- entropy of particles                                     [out]
+c     e-- total energy of particles                                [out]
+
+      use param
+      use declarations_sph
+      implicit none     
+c
+      integer d, m, i, yesorno
+      double precision s1, s2
+c
+      call open_files      
+
+      call allocate_sph
+
+      if (shocktube)   dt = 0.005
+      if (shearcavity) dt = 5.e-5
+      if (waterjet)    dt = 0.0001
+
+      call input
+
+ 1    write(*,*)'  ***************************************************' 
+      write(*,*)'          Please input the maximal time steps '
+      write(*,*)'  ***************************************************'
+      read(*,*) maxtimestep      
+
+      call time_integration
+
+      write(*,*)'  ***************************************************'
+      write(*,*) 'Are you going to run more time steps ? (0=No, 1=yes)'
+      write(*,*)'  ***************************************************'
+      read (*,*) yesorno     
+      if (yesorno.ne.0) go to 1
+
+      call close_files 
+
+      write (*,*)'        Elapsed CPU time = ', s2-s1
+                           
+      end
+      subroutine time_integration
+    
+c----------------------------------------------------------------------
+c      x-- coordinates of particles                       [input/output]
+c      vx-- velocities of particles                       [input/output]
+c      mass-- mass of particles                                  [input]
+c      rho-- dnesities of particles                       [input/output]
+c      p-- pressure  of particles                         [input/output]
+c      u-- internal energy of particles                   [input/output]
+c      c-- sound velocity of particles                          [output]
+c      s-- entropy of particles, not used here                  [output]
+c      e-- total energy of particles                            [output]
+c      itype-- types of particles                               [input]
+c           =1   ideal gas
+c           =2   water
+c           =3   tnt
+c      hsml-- smoothing lengths of particles              [input/output]
+c      ntotal-- total particle number                            [input]  
+c      maxtimestep-- maximum timesteps                           [input]
+c      dt-- timestep                                             [input]
+
+      use param
+      use declarations_sph
+      implicit none     
+c  
+      double precision, pointer, dimension(:) :: rho, p, u, drho, du
+      double precision, pointer, dimension(:,:) :: x,vx,av,dvx 
+c
+      integer :: i, j, k, d, ntotal, it
+      double precision, save :: x_min(dim, maxn), v_min(dim, maxn),
+     &       u_min(maxn), rho_min(maxn)
+
+      double precision :: temp_rho, temp_u
+
+      ntotal = parts%ntotal
+      x     => parts%x
+      vx    => parts%vx
+      rho   => parts%rho
+      p     => parts%p
+      u     => parts%u
+      drho  => parts%drho
+      dvx   => parts%dvx
+      du    => parts%du
+      av    => parts%av
+              
+      !do i = 1, ntotal
+      !  do d = 1, dim
+      !    av(d, i) = 0.
+      !  enddo
+      !enddo  
+
+      do it = 1, maxtimestep   
+  
+        itimestep = itimestep+1
+
+        if (mod(itimestep,print_step).eq.0) then
+         write(*,*)'______________________________________________'
+         write(*,*)'  current number of time step =',
+     &           itimestep,'     current time=', real(time+dt)
+         write(*,*)'______________________________________________'
+        endif  
+    
+!--------------For water--------------------------------------------------
+      
+c     If not first time step, then update thermal energy, density and 
+c     velocity half a time step  
+
+        if (itimestep .ne. 1) then
+
+          do i = 1, ntotal        
+            u_min(i) = u(i)
+            temp_u=0.
+            if (dim.eq.1) temp_u=-nsym*p(i)*vx(1,i)/x(1,i)/rho(i)
+            u(i) = u(i) + (dt/2.)* (du(i)+temp_u)
+            if(u(i).lt.0)  u(i) = 0.                 
+            
+            if (.not.summation_density) then    
+              rho_min(i) = rho(i)
+              temp_rho=0.
+              if (dim.eq.1) temp_rho=-nsym*rho(i)*vx(1,i)/x(1,i)
+              rho(i) = rho(i) +(dt/2.)*( drho(i)+ temp_rho)
+            endif 
+           
+            do d = 1, dim
+              v_min(d, i) = vx(d, i)
+              vx(d, i) = vx(d, i) + (dt/2.)*dvx(d, i)
+            enddo
+          enddo 
+        
+! For soil
+                                  if(.not.single_phase)then
+           do i = 1, soil%ntotal        
+            soil%u_min(i) = soil%u(i)
+            temp_u=0.
+            if (dim.eq.1) temp_u=-nsym*p(i)*vx(1,i)/x(1,i)/rho(i)
+            soil%u(i) = soil%u(i) + (dt/2.)* (soil%du(i)+temp_u)
+            if(soil%u(i).lt.0)  soil%u(i) = 0.                 
+            
+            if (.not.summation_density) then    
+              soil%rho_min(i) = soil%rho(i)
+              temp_rho=0.
+              if (dim.eq.1) temp_rho=-nsym*rho(i)*vx(1,i)/x(1,i)
+            soil%rho(i) = soil%rho(i) +(dt/2.)*( soil%drho(i)+ temp_rho)
+            endif 
+
+            !soil%st_min(i)%xx = soil%st(i)%xx
+            !soil%st_min(i)%xy = soil%st(i)%xy
+            !soil%st_min(i)%yy = soil%st(i)%yy
+            !soil%st(i)%xx = soil%st(i)%xx + (dt/2.)*soil%dst(i)%xx
+            !soil%st(i)%xy = soil%st(i)%xy + (dt/2.)*soil%dst(i)%xy
+            !soil%st(i)%yy = soil%st(i)%yy + (dt/2.)*soil%dst(i)%yy
+          
+            do d = 1, dim
+              soil%v_min(d, i) = soil%vx(d, i)
+              soil%vx(d, i) = soil%vx(d, i) + (dt/2.)*soil%dvx(d, i)
+            enddo
+          enddo 
+                                  endif
+  
+        endif
+
+c---  Definition of variables out of the function vector:    
+
+        call single_step
+
+        do i = 1, ntotal
+          ! if(x(2,i)>5.)then
+           if(x(2,i)>0.)then
+              drho(i) = 0.
+              du(i)   = 0.
+              dvx(:,i)  = 0.
+           endif
+        enddo
+
+        if (itimestep .eq. 1) then
+       
+          do i=1,ntotal
+            temp_u=0.
+   	    if (dim.eq.1) temp_u=-nsym*p(i)*vx(1,i)/x(1,i)/rho(i)        
+            u(i) = u(i) + (dt/2.)*(du(i) + temp_u)
+            if(u(i).lt.0)  u(i) = 0.             
+         
+            if (.not.summation_density ) then
+	      temp_rho=0.
+	      if (dim.eq.1) temp_rho=-nsym*rho(i)*vx(1,i)/x(1,i)
+              rho(i) = rho(i) + (dt/2.)* (drho(i)+temp_rho)
+            endif
+         
+            do d = 1, dim        
+              vx(d, i) = vx(d, i) + (dt/2.) * dvx(d, i) + av(d, i)
+              x(d, i) = x(d, i) + dt * vx(d, i)		  
+            enddo  	            
+          enddo 
+
+                                if(.not.single_phase)then
+          do i=1,soil%ntotal
+            temp_u=0.
+   	    if (dim.eq.1) temp_u=-nsym*p(i)*vx(1,i)/x(1,i)/rho(i)        
+            soil%u(i) = soil%u(i) + (dt/2.)*(soil%du(i) + temp_u)
+            if(soil%u(i).lt.0)  soil%u(i) = 0.             
+         
+            if (.not.summation_density ) then
+	      temp_rho=0.
+	      if (dim.eq.1) temp_rho=-nsym*rho(i)*vx(1,i)/x(1,i)
+            soil%rho(i) = soil%rho(i) + (dt/2.)* (soil%drho(i)+temp_rho)
+            endif
+
+            soil%st(i)%xx = soil%st(i)%xx + dt*soil%dst(i)%xx
+            soil%st(i)%xy = soil%st(i)%xy + dt*soil%dst(i)%xy
+            soil%st(i)%yy = soil%st(i)%yy + dt*soil%dst(i)%yy
+        
+            do d = 1, dim        
+              soil%vx(d, i) = soil%vx(d, i) + (dt/2.) * soil%dvx(d, i) 
+     &                      + soil%av(d, i)
+              soil%x(d, i) = soil%x(d, i) + dt * soil%vx(d, i)		  
+            enddo  	            
+          enddo 
+
+                                endif
+                 
+        else   
+                    
+          do i=1,ntotal            
+            temp_u=0.
+	    if (dim.eq.1) temp_u=-nsym*p(i)*vx(1,i)/x(1,i)/rho(i)                       
+            u(i) = u_min(i) + dt*(du(i)+temp_u)
+            if(u(i).lt.0)  u(i) = 0.          
+            
+            if (.not.summation_density ) then 
+              temp_rho=0.
+	      if (dim.eq.1) temp_rho=-nsym*rho(i)*vx(1,i)/x(1,i)        	           
+              rho(i) = rho_min(i) + dt*(drho(i)+temp_rho)
+            endif
+                  
+            do d = 1, dim                   
+              vx(d, i) = v_min(d, i) + dt * dvx(d, i) + av(d, i)
+              x(d, i) = x(d, i) + dt * vx(d, i)                  
+            enddo
+          enddo
+
+                                if(.not.single_phase)then
+          do i=1,soil%ntotal            
+            temp_u=0.
+	    if (dim.eq.1) temp_u=-nsym*p(i)*vx(1,i)/x(1,i)/rho(i)                       
+            soil%u(i) = soil%u_min(i) + dt*(soil%du(i)+temp_u)
+            if(soil%u(i).lt.0)  soil%u(i) = 0.          
+            
+            if (.not.summation_density ) then 
+              temp_rho=0.
+	      if (dim.eq.1) temp_rho=-nsym*rho(i)*vx(1,i)/x(1,i)        	           
+              soil%rho(i) = soil%rho_min(i) + dt*(soil%drho(i)+temp_rho)
+            endif
+                  
+            soil%st(i)%xx = soil%st(i)%xx + dt*soil%dst(i)%xx
+            soil%st(i)%xy = soil%st(i)%xy + dt*soil%dst(i)%xy
+            soil%st(i)%yy = soil%st(i)%yy + dt*soil%dst(i)%yy
+
+            do d = 1, dim                   
+              soil%vx(d, i) = soil%v_min(d, i) + dt * soil%dvx(d, i) 
+     &                      + soil%av(d, i)
+              soil%x(d, i) = soil%x(d, i) + dt * soil%vx(d, i)                  
+            enddo
+          enddo
+
+                                endif
+
+        endif 
+
+        time = time + dt
+
+	if (itimestep>=save_step_from.and.mod(itimestep,save_step).eq.0) then
+          call output
+	endif 
+
+        if (mod(itimestep,print_step).eq.0) then
+          write(*,*)
+          write(*,101)'x','velocity', 'dvx'    
+          write(*,100)x(1,moni_particle), vx(1,moni_particle), 
+     &                dvx(1,moni_particle)    
+        endif
+        
+101     format(1x,3(2x,a12))	 
+100     format(1x,3(2x,e13.6))
+
+      !write(*,*) 'pppppppppppppppppp'
+      !write(*,*) x(1,6006),x(2,6006)
+ 
+      enddo
+
+      return
+      end subroutine
+       subroutine virt_part
+
+c----------------------------------------------------------------------
+c   Subroutine to determine the information of virtual particles
+c   Here only the Monaghan type virtual particles for the 2D shear
+c   cavity driven problem are generated.
+c     itimestep : Current time step                                 [in]
+c     ntotal : Number of particles                                  [in]
+c     nvirt  : Number of virtual particles                         [out]
+c     hsml   : Smoothing Length                                 [in|out]
+c     mass   : Particle masses                                  [in|out]
+c     x      : Coordinates of all particles                     [in|out]
+c     vx     : Velocities of all particles                      [in|out]
+c     rho    : Density                                          [in|out]
+c     u      : internal energy                                  [in|out]
+c     itype   : type of particles                               [in|out]
+
+      use param
+      use declarations_sph
+      implicit none
+
+      double precision, pointer, dimension(:) :: mass, vol, rho, p, u
+      double precision, pointer, dimension(:,:) :: x, vx
+
+      integer i, j, d, im, mp, n1, n2
+      double precision xl, dx, v_inf, pore_water_pressure
+      double precision, external :: rho_initial, rho_soil_initial
+
+      x    => parts%x
+      vol  => parts%vol
+      mass => parts%mass
+      vx   => parts%vx
+      rho  => parts%rho
+      p    => parts%p
+      u    => parts%u
+
+      if (vp_input) then          
+                        
+c        open(xv_vp,file="../../data/xv_vp.dat")
+c        open(state_vp,file="../../data/state_vp.dat")
+c        open(other_vp,file="../../data/other_vp.dat")            
+c        read(xv_vp,*) nvirt
+c        do j = 1, nvirt   
+c          i = ntotal + j      
+c          read(xv_vp,*)im, (x(d, i),d = 1, dim), (vx(d, i),d = 1, dim)                     
+c          read(state_vp,*)im, mass(i), rho(i), p(i), u(i)        
+c          read(other_vp,*)im, itype(i), hsml(i)                            
+c        enddo  
+c        close(xv_vp)
+c        close(state_vp) 
+c        close(other_vp) 
+      
+      else 
+       
+        call parts%append_virtual_particles 
+    
+        n1 = parts%ntotal+1
+        n2 = parts%ntotal+parts%nvirt
+
+        vx(1:2,n1:n2) = 0.
+        rho(n1:n2) = 1000.*0.3
+        p(n1:n2) = rho(n1:n2)*gravity*(x(2,n1:n2)+wasserjet%ds) !0.
+        u(n1:n2) = 357.1
+
+        do i = n1, n2
+           rho(i) = rho_initial(p(i))
+        enddo
+        mass(n1:n2) = vol(n1:n2)*rho(n1:n2)
+
+      endif   
+
+c      if (mod(itimestep,save_step).eq.0) then
+cc        open(1,file="../../data/xv_vp.dat")
+cc        open(2,file="../../data/state_vp.dat")
+cc        open(3,file="../../data/other_vp.dat")            
+cc        write(1,*) nvirt
+c        do i = ntotal + 1, ntotal + nvirt         
+c         write(xv_vp,1001) i, (x(d, i), d=1,dim), (vx(d, i), d = 1, dim)              
+c         write(state_vp,1002) i, mass(i), rho(i), p(i), u(i)
+c         write(other_vp,1003) i, itype(i), hsml(i)                               
+c        enddo       
+c1001    format(1x, I6, 6(2x, e15.8))
+c1002    format(1x, I6, 7(2x, e15.8)) 
+c1003    format(1x, I6, 2x, I4, 2x, e15.8)
+cc        close(1)
+cc        close(2) 
+cc        close(3) 
+c      endif 
+
+      if (mod(itimestep,print_step).eq.0) then
+        if (int_stat) then
+         print *,' >> Statistics: Virtual boundary particles:'
+         print *,'          Number of virtual particles:',parts%NVIRT
+        endif     
+      endif
+
+c
+c For soil
+c
+        if (single_phase)return
+
+        call soil%append_virtual_particles 
+    
+        n1 = soil%ntotal+1
+        n2 = soil%ntotal+soil%nvirt
+
+        soil%vx(1:2,n1:n2) = 0.
+        soil%rho(n1:n2) = 2560.*0.7
+     
+        do i = n1,n2
+          pore_water_pressure = 1000.*0.3*gravity*
+     &                    (soil%x(2,i)+wasserjet%ds)
+          soil%p(n1:n2) = pore_water_pressure+soil%rho(n1:n2)*gravity*
+     &                    (soil%x(2,n1:n2)+wasserjet%ds) !0.
+        enddo
+
+        soil%u(n1:n2) = 357.1
+
+        do i = n1, n2
+           soil%rho(i) = rho_soil_initial(soil%p(i))
+        enddo
+        soil%mass(n1:n2) = soil%vol(n1:n2)*soil%rho(n1:n2)
+
+      return
+      end subroutine
+      subroutine viscosity(parts)
+c----------------------------------------------------------------------
+c   Subroutine to define the fluid particle viscosity
+ 
+c     ntotal  : Number of particles                                 [in]
+c     itype    : Type of particle                                   [in]
+c     x       : Coordinates of all particles                        [in]
+c     rho     : Density                                             [in]
+c     eta     : Dynamic viscosity                                  [out]
+
+      use param
+      use m_particles
+      implicit none
+
+      type(particles) parts
+
+      integer ntotal,i
+      integer, pointer, dimension(:) :: itype
+      double precision, pointer, dimension(:) :: eta
+
+      ntotal = parts%ntotal + parts%nvirt
+      itype => parts%itype
+      eta   => parts%eta
+
+      do i=1,ntotal
+        if (abs(itype(i)).eq.1) then
+          eta(i)=0.
+        else if (abs(itype(i)).eq.2) then
+          eta(i)=1.0e-3
+        endif  
+      enddo  
+ 
+      return
+      end subroutine
+
+      subroutine shear_modulus(soil)
+c-------------------------------------------------------------
+      use m_particles
+      implicit none
+
+      type(particles) soil
+      double precision e,k,v
+      integer i
+
+      e = 150.*10.e6
+      v = 0.3
+
+      do i = 1, soil%ntotal+soil%nvirt
+         if(abs(soil%itype(i))==3)then
+            soil%eta(i) = e/(2.0*(1+v)) 
+         endif
+      enddo
+
+      return
+      end subroutine
+
+!-------------------------------
+     subroutine allocate_sph
+!-------------------------------
+use param
+use declarations_sph
+implicit none
+
+!---------------------Real particles (water)---------------------
+parts%dim  = dim
+parts%maxn = maxn
+parts%max_interaction = max_interaction
+
+call allocate_particles(parts)
+allocate(parts%w(max_interaction));             parts%w   = 0.d0
+allocate(parts%dwdx(dim,max_interaction));      parts%dwdx= 0.d0
+allocate(parts%pair_i(max_interaction));        parts%pair_i = 0
+allocate(parts%pair_j(max_interaction));        parts%pair_j = 0
+allocate(parts%countiac(maxn));                 parts%countiac=0
+
+! Boundary virtual particles
+
+allocate(parts%bor)
+parts%bor%dim  = dim
+parts%bor%maxn = 10000
+
+call allocate_particles(parts%bor)
+
+! Fields variables
+
+allocate(parts%vx(dim,maxn));  parts%vx  = 0.d0
+allocate(parts%rho(maxn));     parts%rho = 0.d0
+allocate(parts%p(maxn));       parts%p   = 0.d0
+allocate(parts%u(maxn));       parts%u   = 0.d0
+allocate(parts%c(maxn));       parts%c   = 0.d0
+allocate(parts%eta(maxn));     parts%eta = 0.d0 
+
+! Accelerations
+allocate(parts%drho(maxn));    parts%drho= 0.d0  
+allocate(parts%dvx(dim,maxn)); parts%dvx = 0.d0  
+allocate(parts%du(maxn));      parts%du  = 0.d0  
+allocate(parts%av(dim,maxn));  parts%av  = 0.d0
+
+!----------------Temporal variables---------------------------- 
+
+!allocate(drho(maxn));     drho = 0.d0
+!allocate(du(maxn));         du = 0.d0
+!allocate(dvx(dim,maxn));   dvx = 0.d0
+!allocate(av(dim,maxn));     av = 0.d0
+
+!allocate(indvxdt%rr(dim,maxn));   indvxdt%rr = 0.d0
+!allocate(ardvxdt%rr(dim,maxn));   ardvxdt%rr = 0.d0
+!allocate(exdvxdt%rr(dim,maxn));   exdvxdt%rr = 0.d0
+!allocate(indudt%r(maxn));         indudt%r = 0.d0 
+!allocate(avdudt%r(maxn));         avdudt%r = 0.d0 
+!allocate(ahdudt%r(maxn));         ahdudt%r = 0.d0
+
+
+!--------------- Soil particles --------------------------------
+
+if(single_phase) return
+
+soil%dim = dim
+soil%maxn= maxn
+soil%max_interaction = max_interaction
+
+call allocate_particles(soil)
+!allocate(soil%w(max_interaction));             soil%w   = 0.d0
+!allocate(soil%dwdx(dim,max_interaction));      soil%dwdx= 0.d0
+!allocate(soil%pair_i(max_interaction));        soil%pair_i = 0
+!allocate(soil%pair_j(max_interaction));        soil%pair_j = 0
+!allocate(soil%countiac(maxn));                 soil%countiac=0
+
+soil%w      => parts%w
+soil%dwdx   => parts%dwdx
+soil%pair_i => parts%pair_i
+soil%pair_j => parts%pair_j
+soil%countiac => parts%countiac
+
+! Boundary virtual particles
+
+allocate(soil%bor)
+soil%bor%dim  = dim
+soil%bor%maxn = 10000
+
+call allocate_particles(soil%bor)
+
+! Fields variables
+
+allocate(soil%vx(dim,maxn));  soil%vx  = 0.d0
+allocate(soil%rho(maxn));     soil%rho = 0.d0
+allocate(soil%p(maxn));       soil%p   = 0.d0
+allocate(soil%u(maxn));       soil%u   = 0.d0
+allocate(soil%c(maxn));       soil%c   = 0.d0
+allocate(soil%eta(maxn));     soil%eta = 0.d0  ! Shear modulus G 
+allocate(soil%st(maxn));      soil%st%xx = 0.d0; soil%st%xy = 0.d0; soil%st%yy = 0.d0   
+
+! Old value
+allocate(soil%v_min(dim,maxn));   soil%v_min   = 0.d0
+allocate(soil%rho_min(maxn));     soil%rho_min = 0.d0
+allocate(soil%u_min(maxn));       soil%u_min   = 0.d0
+allocate(soil%st_min(maxn))
+soil%st_min%xx = 0.d0; soil%st_min%xy = 0.d0; soil%st_min%yy = 0.d0   
+
+! Accelerations
+allocate(soil%drho(maxn));    soil%drho= 0.d0  
+allocate(soil%dvx(dim,maxn)); soil%dvx = 0.d0  
+allocate(soil%du(maxn));      soil%du  = 0.d0
+allocate(soil%dst(maxn));     soil%dst%xx = 0.d0; soil%dst%xy = 0.d0; soil%dst%yy = 0.d0
+allocate(soil%av(dim,maxn));  soil%av  = 0.d0
+
+return
+end subroutine
+
+!-------------------------------------------
+     subroutine allocate_particles(parts)
+!-------------------------------------------
+use m_particles
+implicit none
+
+type(particles) parts
+integer dim,maxn,max_interaction
+
+dim  = parts%dim
+maxn = parts%maxn
+max_interaction = parts%max_interaction 
+
+if(.not.associated(parts%itype)) allocate(parts%itype(maxn))
+if(.not.associated(parts%x))     allocate(parts%x(dim,maxn))
+if(.not.associated(parts%vol))   allocate(parts%vol(maxn))
+if(.not.associated(parts%mass))  allocate(parts%mass(maxn))
+if(.not.associated(parts%hsml))  allocate(parts%hsml(maxn))
+
+return
+end subroutine
+!---_------------------------
+    subroutine close_files
+!----_-----------------------
+use declarations_sph
+
+implicit none
+
+close(f_xv)
+close(f_state)
+close(f_other)
+
+return
+end subroutine
+!-----------------------------
+    module declarations_sph
+!-----------------------------
+use m_particles
+implicit none
+
+! Logic unit of files
+
+integer f_xv,f_state,f_other
+integer xv_vp,state_vp,other_vp
+
+! Geometry object
+type(geo) wasserjet
+
+! Particles 
+type(particles), target :: parts, soil
+
+! Physical variables carried by the particles
+!double precision, pointer, dimension(:)   ::  rho => null()
+!double precision, pointer, dimension(:,:) ::   vx => null()
+!double precision, pointer, dimension(:)   ::    p => null()
+!double precision, pointer, dimension(:)   ::    c => null()
+!double precision, pointer, dimension(:)   ::    t => null()
+!double precision, pointer, dimension(:)   ::    u => null()
+!double precision, pointer, dimension(:)   ::    s => null()
+!double precision, pointer, dimension(:)   ::    e => null()
+!double precision, pointer, dimension(:)   ::  eta => null()
+
+! Temporal variables
+!double precision, pointer, dimension(:)   ::  drho => null()
+!double precision, pointer, dimension(:,:) ::   dvx => null()
+!double precision, pointer, dimension(:)   ::    du => null()
+!double precision, pointer, dimension(:,:) ::    av => null()
+
+!double precision, pointer, dimension(:,:) :: indvxdt=>null()
+!double precision, pointer, dimension(:,:) :: ardvxdt=>null()
+!double precision, pointer, dimension(:,:) :: exdvxdt=>null()
+!double precision, pointer, dimension(:)   ::  avdudt=>null()
+!double precision, pointer, dimension(:)   ::  ahdudt=>null()
+
+!type(array) indvxdt, ardvxdt, exdvxdt, indudt, avdudt, ahdudt
+
+!Numerical paramters
+double precision :: dt, time = 0.d0
+integer :: maxtimestep = 0 , itimestep = 0
+
+end module
+      subroutine darcy_law(water, soil)
+
+!--------------------------------------------------------------------------
+!     Subroutine to calculate the external forces, e.g. gravitational forces.      
+!     The forces from the interactions with boundary virtual particles 
+!     are also calculated here as external forces.
+
+!     here as the external force. 
+!     ntotal  : Number of particles                                 [in]
+!     mass    : Particle masses                                     [in]
+!     x       : Coordinates of all particles                        [in]
+!     pair_i : List of first partner of interaction pair            [in]
+!     pair_j : List of second partner of interaction pair           [in]
+!     itype   : type of particles                                   [in]
+!     hsml   : Smoothing Length                                     [in]
+!     dvxdt   : Acceleration with respect to x, y and z            [out] 
+
+      use param
+      use m_particles
+      implicit none
+
+      type(particles) water, soil
+      double precision dx(dim), ks, ns, gw, cf, sp, rrw     
+      integer i, j, k, d
+
+      gw = 1000.; ns = 0.3; ks = 0.0005
+      cf = gw*ns/ks
+       
+      do  k=1,water%niac
+          i = water%pair_i(k)
+          j = water%pair_j(k)  
+          rrw = water%w(k)/(water%rho(i)*soil%rho(j))
+          do d=1,dim
+             sp = cf*(water%vx(d,i)-soil%vx(d,j))*rrw
+             water%dvx(d,i) = water%dvx(d,i) - soil%mass(j)*sp
+             soil%dvx(d,j)  = soil%dvx(d,j) + water%mass(i)*sp
+          enddo
+      enddo   
+       
+      return
+      end subroutine 
+
+!-----------------------------------------------------
+      subroutine pore_water_pressure(water,soil)
+!-----------------------------------------------------
+      use param
+      use m_particles
+      implicit none
+      
+      type(particles) water, soil
+      double precision mprr
+      integer i, j, k, d
+      
+      do k = 1, water%niac
+         i = water%pair_i(k)
+         j = water%pair_j(k)
+         mprr = water%mass(i)*water%p(i)/(water%rho(i)*soil%rho(j))
+         do d = 1, dim
+            soil%dvx(d,i) = soil%dvx(d,i) + mprr*water%dwdx(d,k)
+         enddo
+      enddo
+
+      return
+      end subroutine       
+ 
+!---------------------------
+    module m_particles
+!---------------------------
+use constants, ex_pi=>pi
+implicit none
+
+! Configuration of the water-jet problem; Problem specific
+type geo
+
+! size of each dimension
+  double precision dl,dr,dh,ds,dj,D,L,H
+! descrete intervals
+  integer  mdl,mdr,mdh,mds,mdj,mD,mL,mH
+  contains
+    procedure :: set => set_geo_sub
+
+end type
+
+type particle
+   integer itype
+   real(dp) x, y, vol, hsml, mass
+   contains
+      procedure :: copy => copy_particle_sub
+end type
+
+type enumerator
+   integer :: inside = 0, inlet = 1, boundary = 2
+end type
+
+type tensor
+   real(dp) xx,xy,xz,yy,yz,zz
+end type
+
+type material
+
+! For soil
+
+   real(dp) k,n,G,E,niu,cohesion,phi
+
+end type
+
+type array
+   real(dp), pointer, dimension(:)   :: r  => null()
+   real(dp), pointer, dimension(:,:) :: rr => null()
+end type
+
+! Particles in SPH method
+type particles
+
+   integer :: dim   = 0
+   integer :: maxn  = 0
+   integer :: niac  = 0
+   integer :: max_interaction = 0
+   integer :: ntotal = 0, nvirt = 0
+
+! Particle fundamental data
+   integer,  pointer, dimension(:)   :: itype=> null()
+   real(dp), pointer, dimension(:,:) :: x    => null()
+   real(dp), pointer, dimension(:)   :: vol  => null()
+   real(dp), pointer, dimension(:)   :: mass => null()
+   real(dp), pointer, dimension(:)   :: hsml => null()
+
+! Field variables
+   real(dp), pointer, dimension(:)   :: rho  => null()
+   real(dp), pointer, dimension(:,:) :: vx   => null()   
+   real(dp), pointer, dimension(:)   :: p    => null()
+   real(dp), pointer, dimension(:)   :: eta  => null()   
+   real(dp), pointer, dimension(:)   :: c    => null()   
+   real(dp), pointer, dimension(:)   :: u    => null()
+   ! Stress tensor 
+   type(tensor), pointer, dimension(:)   :: st   => null()  
+
+! Old values
+   real(dp), pointer, dimension(:)   :: rho_min => null()
+   real(dp), pointer, dimension(:,:) :: v_min   => null()
+   real(dp), pointer, dimension(:)   :: u_min   => null()
+   type(tensor), pointer, dimension(:) :: st_min=> null()
+
+! Acceleration
+   real(dp), pointer, dimension(:)     :: drho => null()
+   real(dp), pointer, dimension(:,:)   :: dvx  => null()
+   real(dp), pointer, dimension(:)     :: du   => null()
+   real(dp), pointer, dimension(:,:)   :: av   => null()
+   type(tensor), pointer, dimension(:) :: dst  => null()
+
+! Kernel and its derivative
+   real(dp), pointer, dimension(:)   :: w    => null()
+   real(dp), pointer, dimension(:,:) :: dwdx => null()
+
+! Particle interaction pair
+   integer :: maxp = 0, minp = 0
+   integer :: maxiac = 0, miniac = 0
+   integer :: sumiac = 0, noiac  = 0
+   integer, pointer, dimension(:)  :: pair_i => null()
+   integer, pointer, dimension(:)  :: pair_j => null()
+   integer, pointer, dimension(:)  :: countiac=>null()
+
+! Boundry particles defined as type particles
+   type(particles), pointer :: bor
+
+! Multiphase flow
+!   type(particles), pointer :: water => null(), soil => null()
+
+   contains
+
+       procedure :: write_particles
+       procedure :: write_component 
+       procedure :: append_virtual_particles
+       procedure :: depend_virtual_particles
+ 
+end type 
+
+interface write_field
+   module procedure :: write_scalar_field
+   module procedure :: write_vector2d_field
+end interface
+
+!=======
+contains
+!=======
+
+!---------------------------------------------------------------------------------
+   subroutine set_geo_sub(this,dl,dr,dh,ds,dj,D,L,H,mdl,mdr,mdh,mds,mdj,mD,mL,mH)
+!---------------------------------------------------------------------------------
+   implicit none
+   class(geo) this
+   real(dp), optional :: dl,dr,dh,ds,dj,D,L,H
+   integer,  optional :: mdl,mdr,mdh,mds,mdj,mD,mL,mH
+
+   if(present(dl)) this%dl = dl  
+   if(present(dr)) this%dr = dr  
+   if(present(dh)) this%dh = dh  
+   if(present(ds)) this%ds = ds  
+   if(present(dj)) this%dj = dj  
+   if(present(D)) this%D = D  
+   if(present(L)) this%L = L  
+   if(present(H)) this%H = H  
+
+   if(present(mdl)) this%mdl = mdl  
+   if(present(mdr)) this%mdr = mdr  
+   if(present(mdh)) this%mdh = mdh  
+   if(present(mds)) this%mds = mds  
+   if(present(mdj)) this%mdj = mdj  
+   if(present(mD)) this%mD = mD  
+   if(present(mL)) this%mL = mL  
+   if(present(mH)) this%mH = mH  
+  
+   return
+   end subroutine
+
+!-------------------------------------------
+   subroutine copy_particle_sub(this,that)
+!-------------------------------------------
+implicit none
+class(particle) this
+class(particle)  that
+
+this%x = that%x
+
+return
+end subroutine
+
+!----------------------------------------
+   subroutine write_particles(this) 
+!----------------------------------------
+implicit none
+class(particles) this
+integer i
+
+write(*,*) 'Real particles:'
+write(*,*) 'Num.  itype  x   y   vol  hsml'
+do i = 1, this%ntotal
+   write(*,*) i,  this%itype(i), this%x(1,i), this%x(2,i), this%vol(i), this%hsml(i) 
+end do
+
+write(*,*) 'Virtual particles:'
+write(*,*) 'Num.  itype  x   y   vol  hsml'
+do i = this%ntotal+1, this%ntotal+this%nvirt
+   write(*,*) i,  this%itype(i), this%x(1,i), this%x(2,i), this%vol(i), this%hsml(i) 
+end do
+
+return
+end subroutine
+
+!---------------------------------------------
+   subroutine write_component(this,vars) 
+!---------------------------------------------
+implicit none
+class(particles) this
+character(len=*) vars
+integer ntotal, nvirt, i
+
+ntotal = this%ntotal
+nvirt  = this%nvirt
+
+select case (trim(vars))
+   case ('x')
+      write(*,*) 'Particle position:'
+      do i = 1, ntotal+nvirt
+         write(*,*) i,this%x(1,i),this%x(2,i)
+      enddo
+   case ('mass')
+      write(*,*) 'Particle mass:'
+      do i = 1, ntotal+nvirt
+         write(*,*) i, this%mass(i)
+      enddo
+   case('w')
+      write(*,*) 'Kernels:'
+      write(*,*) (i,this%w(i), i = 1, this%niac)
+   case('dwdx')
+      write(*,*) 'Derivatives of Kernels:'
+      write(*,*) (i,this%dwdx(1,i),this%dwdx(2,i),i = 1, this%niac)
+   case ('pairs')
+      write(*,*) 'Interaction pairs:'
+      write(*,*) (i, this%pair_i(i), this%pair_j(i),'|',i=1,this%niac)
+   case default
+      write(*,*) 'Write this compoent is not implemented yet!'
+end select
+
+return
+end subroutine
+
+!-------------------------------------------------
+   subroutine write_scalar_field(field,parts)
+!-------------------------------------------------
+implicit none
+double precision, dimension(:) :: field
+type(particles) parts
+integer i,ntotal
+
+ntotal = parts%ntotal+parts%nvirt
+
+write(*,*) (i, field(i),i=1,ntotal)
+
+return
+end subroutine
+
+!-------------------------------------------------
+   subroutine write_vector2d_field(field,parts)
+!-------------------------------------------------
+implicit none
+double precision, dimension(:,:) :: field
+type(particles) parts
+integer i,ntotal
+
+ntotal = parts%ntotal+parts%nvirt
+
+write(*,*) (i, field(1,i),field(2,i),i=1,ntotal)
+
+return
+end subroutine
+
+!---------------------------------------------------
+    subroutine append_virtual_particles(this)
+!---------------------------------------------------
+implicit none
+class(particles) this
+
+type(particles), pointer :: bor
+integer ntotal, i, k
+
+bor    =>this%bor
+
+! First, assembly all the real particles
+
+!ntotal = this%ntotal
+!k = 0 
+!do i = 1, bor%ntotal
+!   if(bor%itype(i)<0) cycle   ! real particles
+!   k = k + 1
+!   this%x(:,ntotal+k)  = bor%x(:,i)
+!   this%hsml(ntotal+k) = bor%hsml(i)
+!   this%vol(ntotal+k)  = bor%vol(i)
+!   this%itype(ntotal+k)= bor%itype(i)
+!   this%mass(ntotal+k) = bor%mass(i)
+!enddo
+!this%ntotal = this%ntotal + k
+
+! Then assembly all the virtual particles
+
+ntotal = this%ntotal
+k = 0
+do i = 1, bor%ntotal
+   if(bor%itype(i)>0) cycle  ! virtual particles
+   k = k + 1
+   this%x(:,ntotal+k)  = bor%x(:,i)
+   this%hsml(ntotal+k) = bor%hsml(i)
+   this%itype(ntotal+k)= bor%itype(i)
+   this%vol(ntotal+k)  = bor%vol(i)
+   this%mass(ntotal+k) = bor%mass(i)
+enddo
+this%nvirt = k
+!write(*,*) 'Appended virtual particle number: ', this%nvirt
+
+return
+end subroutine
+
+!---------------------------------------------------
+    subroutine depend_virtual_particles(this)
+!---------------------------------------------------
+implicit none
+class(particles) this
+
+!type(particles), pointer :: bor
+!integer ntotal,nvirt, i,j,k
+
+!ntotal = this%ntotal
+!nvirt  = this%nvirt
+
+!bor => this%bor
+
+!k = 0
+!do i = ntotal+1, ntotal+nvirt
+
+!!   if(this%zone(i)==?) cycle      ! Symetery boundary virtural particles is skipped! 
+
+!   j = i - ntotal
+!   k = k + 1
+!   bor%x(:,j)  = this%x(:,i)
+!   bor%hsml(j) = this%hsml(i)
+!   bor%vol(j)  = this%vol(i)
+!   bor%zone(j) = this%zone(i)
+!enddo
+!this%nbor = k 
+
+return
+end subroutine
+
+end module
+
+
+!---------------------------
+    subroutine open_files
+!---------------------------
+
+use declarations_sph
+implicit none
+
+call get_unit(f_xv)
+open(f_xv,file="../f_xv.dat")
+call get_unit(f_state)
+open(f_state,file="../f_state.dat")
+call get_unit(f_other)
+open(f_other,file="../f_other.dat") 
+
+call get_unit(xv_vp)
+open(xv_vp,file="../xv_vp.dat")
+call get_unit(state_vp)
+open(state_vp,file="../state_vp.dat")
+call get_unit(other_vp)
+open(other_vp,file="../other_vp.dat")
+
+return
+end subroutine
+!--------------------------------
+       subroutine set_bc
+!--------------------------------
+use declarations_sph
+implicit none
+
+
+
+return
+end subroutine
+   subroutine time_elapsed(s)
+
+!===============================================================================
+!   The standard Fortran 90 routine RTC is used to calculate the elapsed CPU
+!===============================================================================
+
+    use dfport
+    implicit none
+
+    integer, parameter :: output = 6
+    real(8) :: s
+
+   s = rtc()
+
+   end subroutine time_elapsed
+   subroutine time_print
+
+!===============================================================================
+!   TIME_PRINT                     Print out the current date and time.
+!
+!   Notes:
+!
+!   The standard Fortran 90 routine DATE_AND_TIME is used to get the current
+!   date and time strings.
+!
+!===============================================================================
+
+    implicit none
+    integer, parameter :: output = 6
+
+   ! . local scalars.
+   character ( len =  8 ) :: datstr
+   character ( len = 10 ) :: timstr
+
+   ! . Get the current date and time.
+   call date_and_time ( datstr, timstr )
+
+   ! . Write out the date and time.
+   write ( output, "(/A)"  ) "                  Date = " // datstr(7:8) // "/" // &
+                                          datstr(5:6) // "/" // &
+                                          datstr(1:4)
+   write ( output, "(A)"   ) "                  Time = " // timstr(1:2) // ":" // &
+                                          timstr(3:4) // ":" // &
+                                          timstr(5:10)
+   write ( output, *)
+
+   end subroutine time_print
+
