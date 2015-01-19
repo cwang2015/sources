@@ -1,24 +1,10 @@
-	      program SPH
-!              subroutine beham
+      program SPH
+!     subroutine beham
 
 c----------------------------------------------------------------------
 c     This is a three dimensional SPH code. the followings are the 
 c     basic parameters needed in this codeor calculated by this code
-
-c     mass-- mass of particles                                      [in]
-c     ntotal-- total particle number ues                            [in]
-c     dt--- Time step used in the time integration                  [in]
-c     itype-- types of particles                                    [in]
-c     x-- coordinates of particles                              [in/out]
-c     vx-- velocities of particles                              [in/out]
-c     rho-- dnesities of particles                              [in/out]
-c     p-- pressure  of particles                                [in/out]
-c     u-- internal energy of particles                          [in/out]
-c     hsml-- smoothing lengths of particles                     [in/out]
-c     c-- sound velocity of particles                              [out]
-c     s-- entropy of particles                                     [out]
-c     e-- total energy of particles                                [out]
-
+c----------------------------------------------------------------------
       use constants
       use param
       use declarations
@@ -29,7 +15,6 @@ c
       double precision s1, s2
 c      character(len=32) casefileeee
 c
-      write(*,*) 'dfjoajfoajfiopappppp'
       call time_print
       call time_elapsed(s1)
 
@@ -40,11 +25,6 @@ c
       call open_files      
 
       call allocate_sph
-
-      if (shocktube)   dt = 0.005
-      if (shearcavity) dt = 5.e-5
-      !if (waterjet)    dt = 0.0001    !single_phase
-      !if (waterjet)    dt = 0.00001   !two_phase
 
       call input
       call output
