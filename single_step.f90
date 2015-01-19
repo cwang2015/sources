@@ -4,7 +4,7 @@
 !   Subroutine to determine the right hand side of a differential 
 !   equation in a single step for performing time integration 
 !----------------------------------------------------------------------
-use param, ex_self_gravity => self_gravity
+use param 
 use declarations_sph
 implicit none
 
@@ -197,12 +197,14 @@ endif
         call volume_fraction_soil(soil)
         call volume_fraction_water2(parts,soil)
         call volume_fraction_water(parts,soil)  ! phi_f = 1- phi_s
+       if(volume_fraction_renorm)then
         if(mod(itimestep,40).eq.0) then
            ntotal = parts%ntotal+parts%nvirt
            parts%rho(1:ntotal) = parts%rho(1:ntotal)/parts%vof(1:ntotal) 
            parts%vof = parts%vof2
            parts%rho(1:ntotal) = parts%rho(1:ntotal)*parts%vof(1:ntotal) 
         endif
+       endif
       endif
 
 !      call direct_find(parts) 

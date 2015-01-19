@@ -88,7 +88,7 @@ c     nor_density =  .true. : Density normalization by using CSPM,
 c                    .false.: No normalization.
       logical summation_density, average_velocity, config_input,
      &        virtual_part, vp_input, visc, ex_force, heat_artificial,
-     &        visc_artificial, self_gravity, nor_density
+     &        visc_artificial, nor_density
       parameter ( summation_density  = .false. )       !
       parameter ( average_velocity  = .false. )       !
       parameter ( config_input  = .false. )
@@ -118,6 +118,7 @@ c                    .false.: No normalization.
       parameter(volume_fraction=.true.)
       logical water_artificial_volume
       parameter (water_artificial_volume = .true.)
+      logical, parameter :: volume_fraction_renorm = .false.
 
 ! 0 ignor; 1 negative pressure to zero; 2 artficial stress
       integer water_tension_instability
