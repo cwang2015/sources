@@ -15,6 +15,8 @@ c
       double precision s1, s2
 c      character(len=32) casefileeee
 c
+      call test
+      stop 'test'
       call time_print
       call time_elapsed(s1)
 

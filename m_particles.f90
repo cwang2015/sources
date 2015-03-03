@@ -78,8 +78,25 @@ type numerical
 end type
 
 type array
+   integer :: ndim1
+!   integer :: dim = 2, rank = 0 
    real(dp), pointer, dimension(:)   :: r  => null()
-   real(dp), pointer, dimension(:,:) :: rr => null()
+!   real(dp), pointer, dimension(:,:) :: rr => null()
+!   real(dp), pointer, dimension(:) :: x,y,z,xy,xz,yz
+!   type(array), pointer :: x => null(), y => null(), z => null()
+!   type(array), pointer :: xy => null(), xz => null(), yz => null()
+   contains
+       procedure :: dealloc => array_dealloc
+       procedure :: array_sum
+       procedure :: array_sub
+       procedure :: array_minus  ! reverse sign
+       procedure :: array_mul 
+       procedure :: array_equal
+       generic :: operator(+) => array_sum
+       generic :: operator(-) => array_sub, array_minus
+       generic :: operator(*) => array_mul
+       generic :: assignment(=) => array_equal
+       final :: array_final
 end type
 
 ! Particles in SPH method
@@ -205,6 +222,9 @@ type particles
        procedure :: take_real_points
        procedure :: take_virtual_points
        procedure :: setup_itype
+!       procedure :: grad_scalar
+!       procedure :: grad_tensor
+!       generic :: grad => grad_scalar, grad_tensor
  
 end type 
 
@@ -216,6 +236,11 @@ end interface
 !interface p2m
 !   module procedure :: point_to_water
 !end interface
+
+interface operator(+)
+   module procedure :: any_add 
+   module procedure :: add_any 
+end interface
 
 !=======
 contains
@@ -632,5 +657,143 @@ endif
 
 return
 end subroutine
+
+!--------------------------------------------
+    recursive subroutine array_equal(a,b)
+!--------------------------------------------        
+implicit none
+class(array),intent(INOUT) :: a
+class(array),intent(IN)    :: b
+integer ndim1
+
+if(a%ndim1/=b%ndim1)stop 'Error: inequal length arrays!'
+
+ndim1 = a%ndim1
+a%r(1:ndim1) = b%r(1:ndim1)
+
+return
+end subroutine
+
+!--------------------------------------------
+       subroutine array_dealloc(this)
+!--------------------------------------------
+implicit none
+class(array) this
+
+if(associated(this%r))deallocate(this%r)
+
+return
+end subroutine
+
+!--------------------------------------------
+       subroutine array_final(this)
+!--------------------------------------------
+implicit none
+type(array) this
+
+call this%dealloc
+
+return
+end subroutine
+
+!--------------------------------------------
+           function array_sum(a,b)
+!--------------------------------------------
+implicit none
+class(array), intent(in) :: a, b
+class(array), allocatable:: array_sum
+integer ndim1
+
+if(a%ndim1/=b%ndim1)stop 'Cannot add arrays!'
+ndim1 = a%ndim1
+allocate(array_sum)
+allocate(array_sum%r(ndim1))
+array_sum%ndim1 = ndim1
+
+array_sum%r(1:ndim1) = a%r(1:ndim1) + b%r(1:ndim1)
+
+end function
+
+!--------------------------------------------
+           function array_sub(a,b)
+!--------------------------------------------
+implicit none
+class(array), intent(in) :: a, b
+class(array), allocatable:: array_sub
+integer ndim1
+
+if(a%ndim1/=b%ndim1)stop 'Cannot add arrays!'
+ndim1 = a%ndim1
+allocate(array_sub)
+allocate(array_sub%r(ndim1))
+array_sub%ndim1 = ndim1
+
+array_sub%r(1:ndim1) = a%r(1:ndim1) - b%r(1:ndim1)
+
+end function
+
+!--------------------------------------------
+           function array_minus(a)
+!--------------------------------------------
+implicit none
+class(array), intent(in) :: a
+class(array), allocatable:: array_minus
+integer ndim1
+
+ndim1 = a%ndim1
+allocate(array_minus)
+allocate(array_minus%r(ndim1))
+array_minus%ndim1 = ndim1
+
+array_minus%r(1:ndim1) = -a%r(1:ndim1)
+
+end function
+
+!--------------------------------------------
+           function array_mul(a,c)
+!--------------------------------------------
+implicit none
+class(array), intent(in) :: a
+class(array), allocatable:: array_mul
+class(*),intent(in) :: c
+integer ndim1
+
+ndim1 = a%ndim1
+allocate(array_mul)
+allocate(array_mul%r(ndim1))
+array_mul%ndim1 = ndim1
+
+select type(c)
+   type is (real(8))
+      array_mul%r(1:ndim1) = c*a%r(1:ndim1)
+   class default
+      stop 'Errorwang: binary operation has not been defined!'
+end select
+
+end function
+
+!------------------------------------------
+!      subroutine grad_scalar(this,scalar)
+!------------------------------------------
+!implicit none
+!class(particles) this
+!type(array) scalar
+
+
+
+!return
+!end subroutine
+
+!------------------------------------------
+!      subroutine grad_tensor(this,scalar)
+!------------------------------------------
+!implicit none
+!class(particles) this
+!integer scalar
+
+
+
+!return
+!end subroutine
 
 end module

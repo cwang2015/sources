@@ -843,3 +843,311 @@ c----------------------------------------------------------------------
 
       return
       end subroutine
+
+!DEC$IF(.FALSE.)
+      subroutine grad(gradf,op,f,parts)
+
+c----------------------------------------------------------------------
+c   Subroutine to calculate the internal forces on the right hand side 
+c   of the Navier-Stokes equations, i.e. the pressure gradient and the
+c   gradient of the viscous stress tensor, used by the time integration. 
+ 
+      use m_particles
+      implicit none
+
+      type(array) gradf, f
+      type(particles) parts
+      character(len=*) op
+      
+      integer ntotal,niac
+      integer, pointer, dimension(:) :: pair_i, pair_j 
+      double precision, pointer, dimension(:) :: hsml, mass, rho
+      double precision, pointer, dimension(:,:) :: dwdx, vx, dvxdt
+      double precision h, hvcc, rhoij
+      integer i, j, k, d, dim
+
+      niac = parts%niac
+      dim  = parts%dim
+
+      pair_i   => parts%pair_i
+      pair_j   => parts%pair_j
+      mass     => parts%mass
+      dwdx     => parts%dwdx
+      rho      => parts%rho
+      dvxdt    => parts%dvx
+
+      do k=1,niac
+         i = pair_i(k)
+         j = pair_j(k)
+         rhoij = -(f%r(i)+f%r(j))/(rho(i)*rho(j))
+         h = rhoij*dwdx(1,k)                       ! x direction
+         gradf%x%r(i) = gradf%x%r(i) + mass(j)*h
+         gradf%x%r(j) = gradf%x%r(j) - mass(i)*h
+         if(dim.ge.2)then
+
+
+         do d=1,dim
+            h = rhoij*dwdx(d,k)
+            gradf%rr(d,i) = gradf%rr(d,i) + mass(j)*h
+            gradf%rr(d,j) = gradf%rr(d,j) - mass(i)*h
+         enddo
+          
+c     For SPH algorithm 2
+          
+!        else if (pa_sph.eq.2) then 
+!          do d=1,dim                
+!            h = -(p(i)*vof(i)/rho(i)**2 + 
+!     &            p(j)*vof(j)/rho(j)**2)*dwdx(d,k) 
+!           dvxdt(d,i) = dvxdt(d,i) + mass(j)*h
+!           dvxdt(d,j) = dvxdt(d,j) - mass(i)*h
+!          enddo
+!        endif        
+      enddo
+
+      return
+      end subroutine
+
+      subroutine div(divf,op,f,parts)
+
+c----------------------------------------------------------------------
+c   Subroutine to calculate the internal forces on the right hand side 
+c   of the Navier-Stokes equations, i.e. the pressure gradient and the
+c   gradient of the viscous stress tensor, used by the time integration. 
+c   Moreover the entropy production due to viscous dissipation, tds/dt, 
+c   and the change of internal energy per mass, de/dt, are calculated. 
+ 
+      use param
+      use m_particles
+      implicit none
+
+      type(particles) parts
+      
+      integer ntotal,niac
+      integer, pointer, dimension(:) :: pair_i, pair_j 
+      double precision, pointer, dimension(:) :: hsml, mass, rho, p
+      double precision, pointer, dimension(:,:) :: dwdx, vx, dvxdt
+      double precision, pointer, dimension(:) :: sxx, sxy, syy, 
+     *                                           szz, sxz, syz
+      double precision, pointer, dimension(:) :: vof
+      double precision h, hvcc, he, rhoij
+      integer i, j, k, d
+
+      ntotal = parts%ntotal + parts%nvirt
+      niac = parts%niac
+
+      pair_i   => parts%pair_i
+      pair_j   => parts%pair_j
+      mass     => parts%mass
+      dwdx     => parts%dwdx
+      vx       => parts%vx
+      rho      => parts%rho
+      p        => parts%p
+      dvxdt    => parts%dvx
+      sxx      => parts%sxx
+      syy      => parts%syy
+      sxy      => parts%sxy
+      vof      => parts%vof
+
+c      Calculate SPH sum for pressure force -p,a/rho
+c      and viscous force (eta Tab),b/rho
+c      and the internal energy change de/dt due to -p/rho vc,c
+
+      do k=1,niac
+        i = pair_i(k)
+        j = pair_j(k)
+
+!        he = 0.e0
+        
+c     For SPH algorithm 1
+
+        rhoij = 1.e0/(rho(i)*rho(j))        
+        if(pa_sph.eq.1) then  
+          do d=1,dim
+        
+c     Pressure part
+                    
+            h = -(p(i) + p(j))*dwdx(d,k)
+!            he = he + (vx(d,j) - vx(d,i))*h
+
+c     Viscous force
+
+            if (visc) then 
+            
+             if (d.eq.1) then
+            
+c     x-coordinate of acceleration
+               call df(divf%x,'+',f%x,parts)
+
+               divf%x = dfdx(f%x)
+               divf%x = df(f%x,'x')+df(f%xy,'y')
+               divf%y = df(f%xy,'x')+df(f%y,'y')
+                
+
+               h = h + (sxx(i) + sxx(j))*dwdx(1,k)
+               if (dim.ge.2) then
+                 h = h + (sxy(i) + sxy(j))*dwdx(2,k)
+                 if (dim.eq.3) then
+                   h = h + (sxz(i) + sxz(j))*dwdx(3,k)
+                 endif
+               endif            
+             elseif (d.eq.2) then
+            
+c     y-coordinate of acceleration
+
+               h = h + (sxy(i) + sxy(j))*dwdx(1,k)
+     &               + (syy(i) + syy(j))*dwdx(2,k)
+               if (dim.eq.3) then
+                 h = h + (syz(i) + syz(j))*dwdx(3,k)
+               endif             
+             elseif (d.eq.3) then
+            
+c     z-coordinate of acceleration
+
+               h = h + (sxz(i) + sxz(j))*dwdx(1,k)
+     &               + (syz(i) + syz(j))*dwdx(2,k)
+     &               + (szz(i) + szz(j))*dwdx(3,k)            
+             endif
+           endif             
+           h = h*rhoij
+           dvxdt(d,i) = dvxdt(d,i) + mass(j)*h
+           dvxdt(d,j) = dvxdt(d,j) - mass(i)*h
+          enddo
+          he = he*rhoij
+          
+c     For SPH algorithm 2
+          
+        else if (pa_sph.eq.2) then 
+          do d=1,dim                
+            h = -(p(i)*vof(i)/rho(i)**2 + 
+     &            p(j)*vof(j)/rho(j)**2)*dwdx(d,k) 
+            he = he + (vx(d,j) - vx(d,i))*h
+
+c     Viscous force
+
+            if (visc) then             
+             if (d.eq.1) then
+                       
+c     x-coordinate of acceleration
+
+               h = h + (sxx(i)*vof(i)/rho(i)**2 +
+     &                  sxx(j)*vof(j)/rho(j)**2)*dwdx(1,k)
+               if (dim.ge.2) then
+                 h = h + (sxy(i)*vof(i)/rho(i)**2 + 
+     &                    sxy(j)*vof(j)/rho(j)**2)*dwdx(2,k)
+                 if (dim.eq.3) then
+                   h = h + (sxz(i)/rho(i)**2 + 
+     &                      sxz(j)/rho(j)**2)*dwdx(3,k)
+                 endif
+               endif            
+             elseif (d.eq.2) then
+            
+c     y-coordinate of acceleration
+
+               h = h + (sxy(i)*vof(i)/rho(i)**2  
+     &               +  sxy(j)*vof(j)/rho(j)**2)*dwdx(1,k)
+     &               + (syy(i)*vof(i)/rho(i)**2  
+     &               +  syy(j)*vof(j)/rho(j)**2)*dwdx(2,k)
+               if (dim.eq.3) then
+                 h = h + (syz(i)/rho(i)**2  
+     &                 +  syz(j)/rho(j)**2)*dwdx(3,k)
+               endif              
+             elseif (d.eq.3) then
+            
+c     z-coordinate of acceleration
+
+               h = h + (sxz(i)/rho(i)**2 + 
+     &                  sxz(j)/rho(j)**2)*dwdx(1,k)
+     &               + (syz(i)/rho(i)**2 + 
+     &                  syz(j)/rho(j)**2)*dwdx(2,k)
+     &               + (szz(i)/rho(i)**2 + 
+     &                  szz(j)/rho(j)**2)*dwdx(3,k)            
+             endif            
+           endif              
+           dvxdt(d,i) = dvxdt(d,i) + mass(j)*h
+           dvxdt(d,j) = dvxdt(d,j) - mass(i)*h
+          enddo
+        endif        
+      enddo
+
+      return
+      end subroutine
+
+!DEC$ENDIF
+
+      function diff(f,xy,parts)
+
+c----------------------------------------------------------------------
+c   Subroutine to calculate the partial derivatives of function 
+ 
+      use m_particles
+      implicit none
+
+      type(array) diff, f
+      type(particles) parts
+      character(len=1) xy
+      
+      integer ntotal,niac
+      integer, pointer, dimension(:) :: pair_i, pair_j 
+      double precision, pointer, dimension(:) :: mass, rho, dwdx
+      double precision h, rhoij
+      integer i, j, k
+
+      niac = parts%niac
+
+      pair_i   => parts%pair_i
+      pair_j   => parts%pair_j
+      mass     => parts%mass
+      rho      => parts%rho
+
+      diff%ndim1 = f%ndim1
+      allocate(diff%r(diff%ndim1))
+
+      if(xy=='x')dwdx=>parts%dwdx(1,:)
+
+      do k=1,niac
+         i = pair_i(k)
+         j = pair_j(k)
+         rhoij = -(f%r(i)+f%r(j))/(rho(i)*rho(j))   ! -p
+         h = rhoij*dwdx(k)                       
+         diff%r(i) = diff%r(i) + mass(j)*h
+         diff%r(j) = diff%r(j) - mass(i)*h
+      enddo
+
+      return
+      end function
+
+      subroutine test
+      use m_particles
+      implicit none 
+      type(array) diff
+
+      type(array) dvx,p,txx,txy
+!      dvx = -diff(p,'x')+diff(txx,'x')+diff(txy,'y')*(-1.d0)
+
+      allocate(dvx%r(3),txx%r(3),txy%r(3))
+      dvx%ndim1 = 3; txx%ndim1=3; txy%ndim1 =3
+      dvx%r = 1.0; txx%r = 2.0; txy%r = 3.0
+      dvx = txx + txy
+      write(*,*) dvx%r
+
+      dvx = txx - txy
+      write(*,*) dvx%r
+
+      dvx = - txy
+      write(*,*)  dvx%r
+
+      dvx = txy*3.d0
+      write(*,*) dvx%r
+
+      !dvx = -dvx*3.d0
+      !write(*,*) dvx%r
+ 
+      dvx = txy*txy
+      write(*,*) 'txy*txy', dvx%r
+
+      txy%r=txy%r/dvx%r
+      write(*,*) txy%r
+
+      return
+      end subroutine
+

@@ -81,9 +81,9 @@
 ! saturated soil
          if(volume_fraction)then
          do d = 1, dim
-            water%dvx(d,i) = water%dvx(d,i) -                     & ! Must be -
-            soil%mass(j)*water%p(i)*soil%vof(j)*water%dwdx(d,k)/  &
-            (water%rho(i)*soil%rho(j))
+!            water%dvx(d,i) = water%dvx(d,i) -                     & ! Must be -
+!            soil%mass(j)*water%p(i)*soil%vof(j)*water%dwdx(d,k)/  &
+!            (water%rho(i)*soil%rho(j))
          enddo
          endif
       enddo

@@ -58,7 +58,7 @@ select case(trim(particle_size))
       element_size = 0.005  ! 0.01
    case('koshi')
       call wasserjet%set(dr=0.02d0,L=0.44d0,H=0.22d0,dj=2.d0,ds=0.d0)
-      element_size = 0.005   ! 0.005
+      element_size = 0.01   ! 0.005
    case('bigbox')
       call wasserjet%set(dr=0.02d0,L=1.d0,H=0.2d0,dj=2.d0,ds=0.1d0)
       element_size = 0.01

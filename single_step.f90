@@ -19,6 +19,7 @@ if(dbg) write(*,*) 'In single_step...'
                                       if(single_phase) nphase=1
 
                                       do iphase = 1, nphase
+                                         !if(iphase==2) cycle
                                          if(iphase==1) pl => parts  !!!
                                          if(iphase==2) pl => soil !!!
 
@@ -73,6 +74,10 @@ if(artificial_density)then
    !endif
 endif
 
+if(trim(pl%imaterial)=='soil')then
+!   write(*,*) pl%dsyy(381:400)
+endif
+
 !---  Dynamic viscosity:
 
 if(trim(pl%imaterial)=='water')then
@@ -102,6 +107,11 @@ elseif(trim(pl%imaterial)=='soil')then
             write(*,*) 'Failured points: ', pl%nfail
 endif
 
+if(trim(pl%imaterial)=='soil')then
+!   write(*,*) '-----'
+!   write(*,*) pl%dsyy(381:400)
+endif
+
 call int_force(pl) 
        
 if(trim(pl%imaterial)=='water'.and.water_tension_instability==2) &
@@ -110,21 +120,31 @@ if(trim(pl%imaterial)=='water'.and.water_tension_instability==2) &
 ! --- Plasticity flow rule   ! This was done before Jaummann_rate, because we 
 !     we need txx,tyy,tzz, which was destroyed in Jaumann_rate!
 
+if(trim(pl%imaterial)=='soil')then   !!! Just a test!
+!   if(plasticity==1)then 
+!      call plastic_flow_rule(pl)
+!   elseif(plasticity==2)then     
+!      call plastic_flow_rule2(pl)
+!   elseif(plasticity==3)then
+!      call plastic_or_not(pl)
+!      call plastic_flow_rule3(pl)
+!   endif
+endif
+
 if(trim(pl%imaterial)=='soil')then
-   if(plasticity==1)then 
-      call plastic_flow_rule(pl)
-   elseif(plasticity==2)then     
-      call plastic_flow_rule2(pl)
-   elseif(plasticity==3)then
-      call plastic_or_not(pl)
-      call plastic_flow_rule3(pl)
-   endif
+!   write(*,*) 'after plastic_flow_rule'
+!   write(*,*) pl%dsyy(381:400)
 endif
 
 ! --- Jaumann rate  !When???
 
 if(trim(pl%imaterial)=='soil')then
    call Jaumann_rate(pl)
+endif
+
+if(trim(pl%imaterial)=='soil')then
+!   write(*,*) 'after Jaumann_rate'
+!   write(*,*) pl%dsyy(381:400)
 endif
 
 !---  Artificial viscosity:
@@ -190,19 +210,19 @@ endif
          call parts%interaction_statistics
       endif    
 
-      call darcy_law(parts,soil)          
+      !call darcy_law(parts,soil)          
       call pore_water_pressure(parts,soil) 
 
       if(volume_fraction)then
-        call volume_fraction_soil(soil)
-        call volume_fraction_water2(parts,soil)
-        call volume_fraction_water(parts,soil)  ! phi_f = 1- phi_s
+!        call volume_fraction_soil(soil)
+!        call volume_fraction_water2(parts,soil)
+!        call volume_fraction_water(parts,soil)  ! phi_f = 1- phi_s
        if(volume_fraction_renorm)then
         if(mod(itimestep,40).eq.0) then
-           ntotal = parts%ntotal+parts%nvirt
-           parts%rho(1:ntotal) = parts%rho(1:ntotal)/parts%vof(1:ntotal) 
-           parts%vof = parts%vof2
-           parts%rho(1:ntotal) = parts%rho(1:ntotal)*parts%vof(1:ntotal) 
+!           ntotal = parts%ntotal+parts%nvirt
+!           parts%rho(1:ntotal) = parts%rho(1:ntotal)/parts%vof(1:ntotal) 
+!           parts%vof = parts%vof2
+!           parts%rho(1:ntotal) = parts%rho(1:ntotal)*parts%vof(1:ntotal) 
         endif
        endif
       endif
