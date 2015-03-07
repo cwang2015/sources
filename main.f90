@@ -41,7 +41,7 @@ call input
       write(*,*) 'Total number of real soil particles:', soil%ntotal
       write(*,*) 'Total number of virtual particles:  ', soil%nvirt
    endif
-      
+
 call output
 
 call parts%minimum_time_step

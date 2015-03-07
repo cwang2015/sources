@@ -1024,9 +1024,10 @@ k = this%ntotal+this%nvirt
       if(tank%zone(i)== 1.or.tank%zone(i)==8)then             
          k = k + 1
          this%x(1,k) = tank%x(i)
-!         this%x(2,k) = 1.02 - tank%y(i) block的数据
+!         this%x(2,k) = 1.02 - tank%y(i)! block!和圆形静水的数据
+          this%x(2,k) = 1.05 - tank%y(i)   !和圆形静水的数据
 !         this%x(2,k) = 0.82 - tank%y(i) !wedge的静水 
-         this%x(2,k) = 2.01 - tank%y(i)! wedgedam
+!         this%x(2,k) = 2.01 - tank%y(i)! wedgedam
          this%vol%r(k) = this%vol_nm%r(i)
          this%zone(k) = tank%zone(i)
       endif

@@ -18,6 +18,7 @@ integer,dimension(:) :: b1(20000),b2(20000),b3(20000)
 stat = 0
 ! Set nozzle and tank geometry parameters
 
+
 !call tank%set(xl=3.34d0,yl=1.86d0,m=334,n=186)
 !call tank%set(xl=3.34d0,yl=1.86d0,m=167,n=93)
 !call tank%set(xl=3.32d0,yl=1.86d0,m=166,n=93)
@@ -34,10 +35,8 @@ call tank%set(xl = 2.44d0,yl = 1.52d0,m=122,n=76)
 
 !call tank%set(xl=3.26d0,yl=1.82d0,m=32,n=18)
 
-
-open(unit=9,file='D:\LiuSPH\data\stillwater_wedge.neu',status='old')!文件的名字是a.txt
+open(unit=9,file='D:\LiuSPH\data\stillwatercircle.neu',status='old')!文件的名字是a.txt
 parts%vol = 0.d0
-
 do while(stat == 0)
  read(9,'(A)',iostat=stat) str
         if(index(str,'NUMMP')/=0.or.index(str,'NELEM')/=0)then
@@ -75,14 +74,13 @@ do i =1,ncell
     parts%vol_nm%r(b3(i)) = parts%vol_nm%r(b3(i)) + S(i)/3
 enddo
 
-write(*,*)'ssssssss'
 ! Zoning
 tank%zone = 2
 do i = 1, nvtx
    if(tank%x(i)<0.01) tank%zone(i) = 1
 !   if(tank%zone(i)==1.and.tank%x(i)<0.02.and.tank%y(i)>0.02) tank%zone(i)=3
 !   if(tank%zone(i)==1.and.tank%x(i)>0.02.and.tank%x(i)<2.42) tank%zone(i)=4
-   if(tank%x(i)>2.21) tank%zone(i)=8
+   if(tank%x(i)>1.99) tank%zone(i)=8
    if(tank%y(i)<0.01)  tank%zone(i)=5
 !   if(tank%x(i)>2.42.and.tank%y(i)<0.02)  tank%zone(i)=6
 !   if(tank%zone(i)==2.and.tank%y(i)>0.42)tank%zone(i)= 8
