@@ -104,13 +104,13 @@
 
       type(particles) parts
 
-      integer ntotal,niac
-      double precision,pointer,dimension(:) :: pair_i,pair_j
-      double precision,pointer,dimension(:,:) :: dwdx
-      double precision,pointer,dimension(:) :: sxx, sxy, syy,     &
-                                               szz, sxz, syz
-      double precision h, he 
-      integer d
+!      integer ntotal,niac
+!      double precision,pointer,dimension(:) :: pair_i,pair_j
+!      double precision,pointer,dimension(:,:) :: dwdx
+!      double precision,pointer,dimension(:) :: sxx, sxy, syy,     &
+!                                               szz, sxz, syz
+!      double precision h, he 
+!      integer d
 
       parts%dvx(1,:) = parts%dvx(1,:) - df(parts%p,'x',parts) +       &
                   df(parts%sxx,'x',parts) + df(parts%sxy,'y',parts)
