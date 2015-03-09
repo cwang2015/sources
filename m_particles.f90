@@ -16,7 +16,9 @@ type geo
 
 end type
 
-type block
+! Rectangular area
+
+type block             
      real(dp) xl, yl
      integer  m,  n
      real(dp) dx, dy
@@ -220,7 +222,9 @@ type particles
        procedure :: interaction_statistics
        procedure :: minimum_time_step
        procedure :: take_real_points
+       procedure :: take_real => take_real_points1
        procedure :: take_virtual_points
+       procedure :: take_virtual => take_virtual_points1
        procedure :: setup_itype
 !       procedure :: grad_scalar
 !       procedure :: grad_tensor
@@ -238,8 +242,8 @@ end interface
 !end interface
 
 interface operator(+)
-   module procedure :: any_add 
-   module procedure :: add_any 
+!   module procedure :: any_add 
+!   module procedure :: add_any 
 end interface
 
 !=======
@@ -610,9 +614,38 @@ this%ntotal = k
 return
 end subroutine
 
-!-----------------------------------------------
+!--------------------------------------------------
+      subroutine take_real_points1(this,tank,zone)
+!--------------------------------------------------
+implicit none
+
+class(particles) this
+type(block) tank
+integer zone
+
+integer i,j,k
+
+! Take real particles in tank
+
+k = this%ntotal
+
+   do i = 1, tank%m*tank%n
+      if(tank%zone(i)== zone)then             
+         k = k + 1
+         this%x(1,k) = tank%x(i)
+         this%x(2,k) = tank%y(i)
+         this%zone(k) = tank%zone(i)
+      endif
+   enddo
+
+this%ntotal = k
+
+return
+end subroutine
+
+!-----------------------------------------------------
       subroutine take_virtual_points(this,tank)
-!-----------------------------------------------
+!-----------------------------------------------------
 implicit none
 
 class(particles) this
@@ -633,6 +666,33 @@ do j = 1, this%nvirtual_zone
       endif
    enddo
 enddo
+this%nvirt = k-this%ntotal
+
+return
+end subroutine
+
+!-----------------------------------------------------
+      subroutine take_virtual_points1(this,tank,zone)
+!-----------------------------------------------------
+implicit none
+
+class(particles) this
+type(block) tank
+integer zone
+
+integer i,j,k
+
+! Take virtual particles in tank
+
+k = this%ntotal+this%nvirt
+   do i = 1, tank%m*tank%n
+      if(tank%zone(i)== zone)then             
+         k = k + 1
+         this%x(1,k) = tank%x(i)
+         this%x(2,k) = tank%y(i)
+         this%zone(k) = tank%zone(i)
+      endif
+   enddo
 this%nvirt = k-this%ntotal
 
 return

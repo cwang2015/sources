@@ -112,7 +112,7 @@ if(trim(pl%imaterial)=='soil')then
 !   write(*,*) pl%dsyy(381:400)
 endif
 
-call int_force(pl) 
+call int_force1(pl) 
        
 if(trim(pl%imaterial)=='water'.and.water_tension_instability==2) &
    call tension_instability(pl) 
