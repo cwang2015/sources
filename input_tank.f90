@@ -103,6 +103,7 @@
       use m_sph_fo
       implicit none
 
+      asdfjlsd
       type(particles) parts
 
 !      integer ntotal,niac
