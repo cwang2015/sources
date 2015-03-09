@@ -106,6 +106,7 @@ type particles
 
    integer :: dim   = 2
    integer :: maxn  = 0
+   integer :: nnps  = 1
    integer :: niac  = 0
    integer :: max_interaction = 0
    integer :: ntotal = 0, nvirt = 0
@@ -226,6 +227,7 @@ type particles
        procedure :: take_virtual_points
        procedure :: take_virtual => take_virtual_points1
        procedure :: setup_itype
+       procedure :: find_pairs
 !       procedure :: grad_scalar
 !       procedure :: grad_tensor
 !       generic :: grad => grad_scalar, grad_tensor
@@ -713,6 +715,27 @@ if(trim(parts%imaterial)=='water')then
 elseif(trim(parts%imaterial)=='soil')then
    parts%itype(1:ntotal) = 3
    parts%itype(ntotal+1:ntotal+bntotal) = -3
+endif
+
+return
+end subroutine
+
+!--------------------------------------------
+     subroutine find_pairs(parts)
+!--------------------------------------------
+implicit none
+class(particles) parts
+integer nnps
+
+nnps = parts%nnps
+if(nnps == 1)then
+   call direct_find(parts)
+elseif(nnps == 2)then
+!   call link_list(parts)
+   stop 'find_pairs: link_list method not implemented yet!'
+elseif(nnps == 3)then
+!    call tree_search(parts)
+   stop 'find_pairs: tree_search method not implemented yet!'
 endif
 
 return

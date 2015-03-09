@@ -23,6 +23,9 @@ if(dbg) write(*,*) 'In single_step...'
                                          if(iphase==1) pl => parts  !!!
                                          if(iphase==2) pl => soil !!!
 
+if(trim(pl%imaterial)=='water')call single_step_for_water
+
+!DEC$IF(.FALSE.)
 pl%dvx = 0.d0; pl%drho = 0.d0
 if(trim(pl%imaterial)=='soil')then
    pl%dsxx = 0.d0; pl%dsxy = 0.d0; pl%dsyy = 0.d0
@@ -184,6 +187,8 @@ if(mod(itimestep,print_step).eq.0) then
 !  call pl%particle_monitor
    call pl%minimum_time_step  
 endif
+
+!DEC$ENDIF
                                             enddo ! iphase
 
 !call drag_force(parts,soil)   !!! Porous media
@@ -252,19 +257,8 @@ if(trim(pl%imaterial)=='water') pl%dvof = 0.d0
  
 !---  Interaction parameters, calculating neighboring particles
 !     and optimzing smoothing length
-  
-if (nnps.eq.1) then 
-   call direct_find(pl)
-else if (nnps.eq.2) then
-!        call link_list(itimestep, ntotal+nvirt,hsml(1),x,niac,pair_i,
-!     &       pair_j,w,dwdx,ns)
-!        call link_list(itimestep, parts%ntotal+parts%nvirt,
-!     &       parts%hsml(1),parts%x,parts%niac,parts%pair_i,
-!     &       parts%pair_j,parts%w,parts%dwdx,parts%countiac)
-else if (nnps.eq.3) then 
-!        call tree_search(itimestep, ntotal+nvirt,hsml,x,niac,pair_i,
-!     &       pair_j,w,dwdx,ns)
-endif         
+
+call pl%find_pairs
 
 if(mod(itimestep,print_step).eq.0.and.int_stat) then
    call pl%interaction_statistics
