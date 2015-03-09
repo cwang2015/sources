@@ -118,7 +118,8 @@
       parts%dvx(2,:) = parts%dvx(2,:) - df(parts%p,'x',parts) +       &
                   df(parts%sxx,'x',parts) + df(parts%sxy,'y',parts)
 
-      where (parts%rho.gt.0.0) parts%dvx = parts%dvx/parts%rho
+      where (parts%rho.gt.0.0) parts%dvx(1,:) = parts%dvx(1,:)/parts%rho
+      where (parts%rho.gt.0.0) parts%dvx(2,:) = parts%dvx(2,:)/parts%rho
 
       return
       end subroutine
