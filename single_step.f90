@@ -272,7 +272,8 @@ endif
 if (summation_density) then      
     call sum_density(pl)
 else             
-    call con_density(pl)         
+!    call con_density(pl)
+    pl%drho = -pl%rho*(df2(pl%vx(1,:),'x',pl)+df2(pl%vx(2,:),'y',pl))
 endif
       
 if(artificial_density)then
