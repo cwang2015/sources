@@ -249,7 +249,11 @@ contains
 !---------------------------------------------
       subroutine single_step_for_water
 !---------------------------------------------
+use m_sph_fo
 implicit none
+type(material),pointer :: property
+
+property => pl%material
 
 pl%dvx = 0.d0; pl%drho = 0.d0
 
@@ -285,16 +289,19 @@ endif
 
 !---  Dynamic viscosity:
 
-   if (visc) call viscosity(pl)
+!   if (visc) call viscosity(pl)
 
        
 !---  Internal forces:
 
-call shear_strain_rate(pl)   
+call shear_strain_rate1(pl)   
 
 call pressure(pl)
 
-   call newtonian_fluid(pl)
+!   call newtonian_fluid(pl)
+pl%sxx = property%viscosity*pl%txx
+pl%syy = property%viscosity*pl%tyy
+pl%sxy = property%viscosity*pl%txy
 
 call int_force1(pl) 
        

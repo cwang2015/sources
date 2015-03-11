@@ -561,6 +561,61 @@ c     Calculate SPH sum for shear tensor Tab = va,b + vb,a - 2/3 delta_ab vc,c
       end subroutine
 
 c ---------------------------------------------------------------------
+      subroutine shear_strain_rate1(parts)
+c----------------------------------------------------------------------
+      use param
+      use m_particles
+      use m_sph_fo
+      implicit none
+
+      type(particles) parts
+      
+      integer ntotal,niac
+      integer, pointer, dimension(:) :: pair_i, pair_j 
+      double precision, pointer, dimension(:) ::  mass, rho
+      double precision, pointer, dimension(:,:) :: dwdx, vx
+      double precision, pointer, dimension(:) :: txx, tyy, tzz, 
+     &                                           txy, txz, tyz 
+      double precision dvx(dim), hxx, hyy, hzz, hxy, hxz, hyz
+      integer i, j, k, d
+
+      ntotal = parts%ntotal + parts%nvirt
+      niac = parts%niac
+
+      pair_i   => parts%pair_i
+      pair_j   => parts%pair_j
+      mass     => parts%mass
+      rho      => parts%rho
+      dwdx     => parts%dwdx
+      vx       => parts%vx
+      txx      => parts%txx
+      tyy      => parts%tyy
+      tzz      => parts%tzz
+      txy      => parts%txy
+      txz      => parts%txz
+      tyz      => parts%tyz
+
+      txx(1:ntotal) = 0.e0
+      if(dim>=2)then
+         tyy(1:ntotal) = 0.e0
+         txy(1:ntotal) = 0.e0
+      endif
+      if(dim==3)then
+         tzz(1:ntotal) = 0.e0
+         txz(1:ntotal) = 0.e0
+         tyz(1:ntotal) = 0.e0
+      endif
+      
+c     Calculate SPH sum for shear tensor Tab = va,b + vb,a - 2/3 delta_ab vc,c
+
+      txx = 2./3.*(2.0*df(vx(1,:),'x',parts)-df(vx(2,:),'y',parts))
+      txy = df(vx(1,:),'y',parts))-df(vx(2,:),'x',parts))
+      tyy = 2./3.*(2.0*df(vx(2,:),'y',parts)-df(vx(1,:),'x',parts))
+
+      return
+      end subroutine
+
+c ---------------------------------------------------------------------
       subroutine newtonian_fluid(parts)
 c----------------------------------------------------------------------
       use param
