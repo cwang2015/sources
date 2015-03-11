@@ -609,7 +609,7 @@ c----------------------------------------------------------------------
 c     Calculate SPH sum for shear tensor Tab = va,b + vb,a - 2/3 delta_ab vc,c
 
       txx = 2./3.*(2.0*df(vx(1,:),'x',parts)-df(vx(2,:),'y',parts))
-      txy = df(vx(1,:),'y',parts))-df(vx(2,:),'x',parts))
+      txy = df(vx(1,:),'y',parts)-df(vx(2,:),'x',parts)
       tyy = 2./3.*(2.0*df(vx(2,:),'y',parts)-df(vx(1,:),'x',parts))
 
       return
