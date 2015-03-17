@@ -1,109 +1,57 @@
 !----------------------------------------
              module m_anyArr
 !----------------------------------------
-use constants
-use m_primitives
+use constants, ex_pi => pi
 implicit none
 
 private
 
+type, public :: array
 
-!CONTAINERS
-!==========
+character(len=32) :: name=''
 
-type, extends(dao), public :: array    !everything
+integer :: ndim1
 
-character(len=32) :: nam=' '
-
-!I'm a field or matrix?
-!ima =1 field; =2 matrix
-integer :: ima = 0
-
-!数组参数
-!type=1 int_array; =2 real_array;  
-!=3 anyother array stored in d(:)
-integer :: type = 2
-integer :: ndim1, ndim2 = 1
-integer :: maxdim1, maxdim2 = 1
-
-integer, pointer, dimension(:) :: i => null()    ! 整型
-real(dp), pointer, dimension(:) :: r => null()   ! 实型
-class(dao), pointer, dimension(:) :: d => null() ! 其他类型
-class(*), pointer, dimension(:) :: cmpt => null()
-
-!场的参数
-
-!loc='vol': volum filed; ='face': face field; 
-!   ='vtx': vertex field
-!   ='any': not related with a mesh
-character(len=16) :: loc='any'
-type(discrete_scheme), pointer :: scheme
-
-!dim: 维数，2维还是3维；
-!rank＝0: 标量场；＝1：矢量场；＝2：张量场
-!取决于dim^rank 
 integer :: dim = 2, rank = 0
-type(array), pointer :: x => null(), y => null(), z => null()
 
-!矩阵参数
-!For matrix storage: Element By Element（EBE）or
-!                    Edge Based Storage (EBS)
-!kstor=0, any matrix; =1, EBE; =2, EBS
+!Store method (EBE or EBS)
 integer :: kstor = 1
-!Matrix property: symmetry or not
+
+!Field or Matrix property: symmetry or not
 integer :: ksymm = 0
 
+real(dp), pointer, dimension(:) :: r => null()   
+
+type(array), pointer :: x => null(), y => null(), z => null()
+type(array), pointer :: xy => null(), xz => null(), yz => null()
+type(array), pointer :: yx => null(), zx => null(), zy => null()
+
 !For EBE  
-type(array), pointer :: diag=>null(), skew=>null()
+type(array), pointer :: D => null(), XD => null()
 !For EBS
-type(array), pointer :: owner=>null(), neibor=>null()
+type(array), pointer :: owner => null(), neibor => null()
 
 !Surrogate
-class(dao), pointer :: smesh
-!与本场关联的几何对象
-type(array), pointer :: geo
+class(*), pointer :: mesh => null(), parts => null() 
 
 contains
 
-  !常用方法：
-  procedure :: write => array_write_sub
   procedure :: alloc => xallocate
   procedure :: dealloc => array_deallocate_sub
   procedure :: set => array_set_sub
-  procedure :: info => array_get_information_sub 
 
   procedure :: cpstrc => copy_array_structure
-  !procedure :: cmpts => components
-  !procedure :: p2cmpt
-  !procedure :: xcmpt
-  !procedure :: AA  ! Array Algebra
-  !procedure :: FA  ! Field Algebra
-  procedure :: matvec
 
   procedure :: almat => matrix_allocate_sub
   procedure :: length => array_get_length_fn 
 
-  !procedure :: one
-  !procedure :: done
-  procedure :: zero
-  !procedure :: dzero
-  !procedure :: vzero
-  procedure :: one_to_N
-  !procedure :: one_to_Nd0
-  
-  !procedure :: add_array => add_array_sub
-  !procedure :: add_real  => add_real_sub 
-  !generic,public :: add => add_array
+
 
   FINAL :: clean
 
 end type
 
-type, public :: equation
-  type(array), pointer :: A,X,B
-  contains
-    procedure :: equation => construct_equation
-end type
+
 
 ! Array constructor
 interface array
@@ -153,73 +101,11 @@ public :: assignment(=), operator(*)
 
 contains
 
-! Array constructor
-!-----------------------------------------------------
-           function constructor(this)
-!-----------------------------------------------------
-implicit none
-class(array)this
-type(array) constructor
 
-end function
 
-!-----------------------------------------------------
-     recursive subroutine array_write_sub(this)
-!-----------------------------------------------------
-   implicit none
-   class(array) this
-   integer ndim1, ndim2, i, j, k
-   logical :: debug = .false.
- 
-   if(debug) write(*,*) 'Debug array_write_sub ...'
 
-   ndim1 = this%ndim1; ndim2 = this%ndim2
 
-   if(this%type==1)then
-      if(ndim2==1)then
-         write(*,*) this%i
-      else
-         do i=1,ndim1
-            k = ndim2*(i-1)
-            write(*,*) (this%i(k+j),j=1,ndim2)
-         enddo
-      endif
-   elseif(this%type==2)then
-     write(*,*) this%r
-   elseif(this%type==3)then
-     call write_dao_array(this%d)
-   else
-     write(*,*) 'I dont know its type!'
-   endif
 
-   return
-   end subroutine
-
-!-------------------------------------------------
-            subroutine xallocate(this,src)
-!-------------------------------------------------
-   implicit none
-   class(array) this
-   class(dao), optional :: src
-   integer length
-   logical :: debug = .false.
-
-   if(debug) write(*,*) 'Entry: scalar_array_allocate_sub!'
-
-   length = this%length()
-
-   if(this%type==1)then
-     allocate(this%i(length))
-   elseif(this%type==2)then
-     allocate(this%r(length))
-   else
-     if(.not.present(src)) Stop 'Source should present!'
-     allocate(this%d(length), source=src)
-     !allocate(this%d(length), mold=src)
-   endif
-
-   return
-   end subroutine
 
 !!-----------------------------------------------------------
 !      recursive subroutine allocate_vector_array(this)
@@ -430,25 +316,7 @@ end subroutine
    return
    end function
 
-!--------------------------------------------------------------
-        subroutine array_get_information_sub(this)
-!--------------------------------------------------------------
-implicit none
-class(array) this
 
-write(*,*) 'My name is: ', this%nam
-write(*,*) 'type=', this%type, ' ndim1=', this%ndim1
-write(*,*) 'ndim2=', this%ndim2
-write(*,*) 'ndim=', this%dim, ' rank=', this%rank
-
-if(associated(this%d)) write(*,*) 'd associated!'
-if(associated(this%r)) write(*,*) 'r associated!'
-if(associated(this%x)) write(*,*) 'x associated!'
-if(associated(this%y)) write(*,*) 'y assocated!'
-if(associated(this%i)) write(*,*) 'i assocated!'
-
-return
-end subroutine
 
 !-----------------------------------------------------------
                subroutine components(this)
@@ -469,25 +337,7 @@ this%y%r=>pv%y
 return
 end subroutine
 
-!-----------------------------------------------------------
-               subroutine p2cmpt(this,p,cmpt) 
-!-----------------------------------------------------------
-implicit none
-class(array) this
-type(array)  p
-character(len=*) cmpt
-type(vector2d), pointer, dimension(:) :: pv
 
-call this%cpstrc(p); this%type=2
-call p2m(pv,p%d)
-if(trim(cmpt)=='x')then
-   this%r=>pv%x
-elseif(trim(cmpt)=='y')then
-   this%r=>pv%y
-endif
-
-return
-end subroutine
 
 !Better to use p2cmpt!!
 !-----------------------------------------------------------
@@ -1053,120 +903,19 @@ end subroutine
 
 !DEC$ENDIF
 
-!--------------------------------------------------
-    subroutine matvec(x,op,a,y,c,mesh,lego)
-!--------------------------------------------------
-implicit none
-class(array) x,a,y
-character(len=*) op
-real(dp),optional :: c
-type(array),optional :: mesh
-logical,optional :: lego
 
-real(dp), pointer, dimension(:) :: p
-integer i,length,ndim1
 
-ndim1 = a%ndim1
-length = a%ndim1*a%ndim2
 
-do i = 1, ndim1
-   p => a%r(i:length:ndim1)   !下标三元组
-   x%r(i) = dot_product(p,y%r)
-enddo
 
-return
-end subroutine
 
-!3 one
-!---------------------------
-    subroutine one(this)
-!---------------------------
-implicit none
-class(array) this
-  this%i = 1
-return
-end subroutine
 
-!3 done
-!---------------------------
-    subroutine done(this)
-!---------------------------
-implicit none
-class(array) this
- this%r = 1
-return
-end subroutine
 
-!3 zero
-!---------------------------
-    subroutine zero(this)
-!---------------------------
-implicit none
-class(array) this
-  this%i = 0
-return
-end subroutine
 
-!----------------------------
-   subroutine dzero(this)
-!----------------------------
-implicit none
-class(array) this
-this%r = 0.d0
-return
-end subroutine
 
-!------------------------------------
-    subroutine vzero(this)
-!------------------------------------
-implicit none
-class(array) this
-type(vector2d), pointer, dimension(:) :: cmpt
 
-if(debug==.true.)write(*,*) 'In zero---'
-!this%cmpt%x = 0.d0
-!this%cmpt%y = 0.d0
 
-select type (p=>this%d)
- type is (vector2d)
-  cmpt => p
-end select
 
-cmpt%x = 0.d0
-cmpt%y = 0.d0
 
-return
-end subroutine
-
-!---------------------------------
-    subroutine one_to_N(this)
-!---------------------------------
-implicit none
-class(array) this
-integer i, length
-
-length = this%length()
-forall(i=1:length)
-  this%i(i) = i
-end forall
-
-return
-end subroutine
-
-!3 one_to_Nd0
-!---------------------------------
-    subroutine one_to_Nd0(this)
-!---------------------------------
-implicit none
-class(array) this
-integer i
-
-do i = 1, this%length()
-   this%r(i) = i*1.d0
-enddo
-
-return
-end subroutine
 
 !---------------------------------
     subroutine clean(this)
@@ -1199,19 +948,7 @@ end subroutine
 !return
 !end subroutine
 
-!----------------------------------------------
-     subroutine construct_equation(this,axb)
-!----------------------------------------------
-implicit none
-class(equation) this, axb
 
-!call move_alloc(axb%a%r,this%a%r)
-this%a%r = axb%a%r
-this%b%r = axb%b%r
-this%x%r => axb%x%r
-
-return
-end subroutine
 
 end module
 
