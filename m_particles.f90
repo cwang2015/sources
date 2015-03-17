@@ -81,12 +81,17 @@ end type
 
 type array
    integer :: ndim1
-!   integer :: dim = 2, rank = 0 
-   real(dp), pointer, dimension(:)   :: r  => null()
-!   real(dp), pointer, dimension(:,:) :: rr => null()
-!   real(dp), pointer, dimension(:) :: x,y,z,xy,xz,yz
-!   type(array), pointer :: x => null(), y => null(), z => null()
-!   type(array), pointer :: xy => null(), xz => null(), yz => null()
+   integer :: dim = 2, rank = 0
+
+   !ksymm = 0: Non-symmetric; = 1: symmetric; = -1: antisymmetric   
+   integer :: ksymm = 0     
+
+   real(dp), pointer, dimension(:) :: r  => null()
+   
+   type(array), pointer :: x => null(), y => null(), z => null()
+   type(array), pointer :: xy => null(), xz => null(), yz => null(),    &
+                           yx => null(), zx => null(), zy => null()
+   type(particles), pointer :: parts => null()
    contains
        procedure :: dealloc => array_dealloc
        procedure :: array_sum
