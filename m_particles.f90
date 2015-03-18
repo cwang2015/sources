@@ -81,28 +81,11 @@ end type
 
 type array
    integer :: ndim1
-   integer :: dim = 2, rank = 0
-
-   !ksymm = 0: Non-symmetric; = 1: symmetric; = -1: antisymmetric   
-   integer :: ksymm = 0     
-
    real(dp), pointer, dimension(:) :: r  => null()
-   
    type(array), pointer :: x => null(), y => null(), z => null()
-   type(array), pointer :: xy => null(), xz => null(), yz => null(),    &
-                           yx => null(), zx => null(), zy => null()
+   type(array), pointer :: xy => null(), xz => null(), yz => null()
    type(particles), pointer :: parts => null()
    contains
-       procedure :: dealloc => array_dealloc
-       procedure :: array_sum
-       procedure :: array_sub
-       procedure :: array_minus  ! reverse sign
-       procedure :: array_mul 
-       procedure :: array_equal
-       generic :: operator(+) => array_sum
-       generic :: operator(-) => array_sub, array_minus
-       generic :: operator(*) => array_mul
-       generic :: assignment(=) => array_equal
        final :: array_final
 end type
 
@@ -244,13 +227,19 @@ interface write_field
    module procedure :: write_vector2d_field
 end interface
 
-!interface p2m
-!   module procedure :: point_to_water
-!end interface
-
 interface operator(+)
-!   module procedure :: any_add 
-!   module procedure :: add_any 
+   module procedure :: array_add_array 
+end interface
+
+interface operator(-)
+   module procedure :: array_sub_array
+   module procedure :: array_minus
+end interface
+
+interface operator(*)
+   module procedure :: array_mul_array
+   module procedure :: array_mul_real
+   module procedure :: array_mul_double_real
 end interface
 
 !=======
@@ -747,7 +736,7 @@ return
 end subroutine
 
 !--------------------------------------------
-    recursive subroutine array_equal(a,b)
+    subroutine array_equal_array(a,b)
 !--------------------------------------------        
 implicit none
 class(array),intent(INOUT) :: a
@@ -763,10 +752,10 @@ return
 end subroutine
 
 !--------------------------------------------
-       subroutine array_dealloc(this)
+       subroutine array_final(this)
 !--------------------------------------------
 implicit none
-class(array) this
+type(array) this
 
 if(associated(this%r))deallocate(this%r)
 
@@ -774,114 +763,122 @@ return
 end subroutine
 
 !--------------------------------------------
-       subroutine array_final(this)
+    function array_add_array(a,b) result(c)
 !--------------------------------------------
 implicit none
-type(array) this
-
-call this%dealloc
-
-return
-end subroutine
-
-!--------------------------------------------
-           function array_sum(a,b)
-!--------------------------------------------
-implicit none
-class(array), intent(in) :: a, b
-class(array), allocatable:: array_sum
+type(array), intent(in) :: a, b
+type(array), allocatable:: c
 integer ndim1
 
 if(a%ndim1/=b%ndim1)stop 'Cannot add arrays!'
-ndim1 = a%ndim1
-allocate(array_sum)
-allocate(array_sum%r(ndim1))
-array_sum%ndim1 = ndim1
+if(.not.associated(a%parts,b%parts)) stop 'Cannot add arrays'
 
-array_sum%r(1:ndim1) = a%r(1:ndim1) + b%r(1:ndim1)
+ndim1 = a%ndim1
+allocate(c)
+allocate(c%r(ndim1))
+c%ndim1 = ndim1
+
+c%r(1:ndim1) = a%r(1:ndim1) + b%r(1:ndim1)
+c%parts => a%parts
 
 end function
 
 !--------------------------------------------
-           function array_sub(a,b)
+    function array_sub_array(a,b) result(c)
 !--------------------------------------------
 implicit none
-class(array), intent(in) :: a, b
-class(array), allocatable:: array_sub
+type(array), intent(in) :: a, b
+type(array), allocatable:: c
 integer ndim1
 
-if(a%ndim1/=b%ndim1)stop 'Cannot add arrays!'
-ndim1 = a%ndim1
-allocate(array_sub)
-allocate(array_sub%r(ndim1))
-array_sub%ndim1 = ndim1
+if(a%ndim1/=b%ndim1)stop 'Cannot substract arrays!'
+if(.not.associated(a%parts,b%parts)) stop 'Cannot substract arrays!'
 
-array_sub%r(1:ndim1) = a%r(1:ndim1) - b%r(1:ndim1)
+ndim1 = a%ndim1
+allocate(c)
+allocate(c%r(ndim1))
+c%ndim1 = ndim1
+
+c%r(1:ndim1) = a%r(1:ndim1) - b%r(1:ndim1)
+c%parts => a%parts
 
 end function
 
 !--------------------------------------------
-           function array_minus(a)
+    function array_minus(a) result(c)
 !--------------------------------------------
 implicit none
-class(array), intent(in) :: a
-class(array), allocatable:: array_minus
-integer ndim1
-
-ndim1 = a%ndim1
-allocate(array_minus)
-allocate(array_minus%r(ndim1))
-array_minus%ndim1 = ndim1
-
-array_minus%r(1:ndim1) = -a%r(1:ndim1)
-
-end function
-
-!--------------------------------------------
-           function array_mul(a,c)
-!--------------------------------------------
-implicit none
-class(array), intent(in) :: a
-class(array), allocatable:: array_mul
-class(*),intent(in) :: c
+type(array), intent(in) :: a
+type(array), allocatable:: c
 integer ndim1
 
 ndim1 = a%ndim1
-allocate(array_mul)
-allocate(array_mul%r(ndim1))
-array_mul%ndim1 = ndim1
+allocate(c)
+allocate(c%r(ndim1))
+c%ndim1 = ndim1
 
-select type(c)
-   type is (real(8))
-      array_mul%r(1:ndim1) = c*a%r(1:ndim1)
-   class default
-      stop 'Errorwang: binary operation has not been defined!'
-end select
+c%r(1:ndim1) = -a%r(1:ndim1)
+c%parts => a%parts
 
 end function
 
-!------------------------------------------
-!      subroutine grad_scalar(this,scalar)
-!------------------------------------------
-!implicit none
-!class(particles) this
-!type(array) scalar
+!--------------------------------------------
+    function array_mul_array(a,b) result(c)
+!--------------------------------------------
+implicit none
+type(array), intent(in) :: a,b
+type(array), allocatable:: c
+integer ndim1
 
+if(a%ndim1/=b%ndim1)stop 'Cannot multiply arrays!'
+if(.not.associated(a%parts,b%parts)) stop 'Cannot multiply arrays!'
 
+ndim1 = a%ndim1
+allocate(c)
+allocate(c%r(ndim1))
+c%ndim1 = ndim1
 
-!return
-!end subroutine
+c%r(1:ndim1) = a%r(1:ndim1)*b%r(1:ndim1)
+c%parts => a%parts
 
-!------------------------------------------
-!      subroutine grad_tensor(this,scalar)
-!------------------------------------------
-!implicit none
-!class(particles) this
-!integer scalar
+end function
 
+!--------------------------------------------
+    function array_mul_real(a,r) result(c)
+!--------------------------------------------
+implicit none
+type(array), intent(in) :: a
+real, intent(in) :: r
+type(array), allocatable:: c
+integer ndim1
 
+ndim1 = a%ndim1
+allocate(c)
+allocate(c%r(ndim1))
+c%ndim1 = ndim1
 
-!return
-!end subroutine
+c%r(1:ndim1) = r*a%r(1:ndim1)
+c%parts => a%parts
+
+end function
+
+!--------------------------------------------------
+    function array_mul_double_real(a,r) result(c)
+!--------------------------------------------------
+implicit none
+type(array), intent(in) :: a
+real(dp), intent(in) :: r
+type(array), allocatable :: c
+integer ndim1
+
+ndim1 = a%ndim1
+allocate(c)
+allocate(c%r(ndim1))
+c%ndim1 = ndim1
+
+c%r(1:ndim1) = r*a%r(1:ndim1)
+c%parts => a%parts
+
+end function
 
 end module

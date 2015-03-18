@@ -296,7 +296,8 @@ endif
 
 call shear_strain_rate1(pl)   
 
-call pressure(pl)
+!call pressure(pl)
+where(pl%rho>0.0) pl%p = property%b*((pl%rho/property%rho0)**property%gamma-1)
 
 !   call newtonian_fluid(pl)
 pl%sxx = property%viscosity*pl%txx

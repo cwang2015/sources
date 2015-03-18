@@ -96,7 +96,7 @@ c                    .false.: No normalization.
       parameter ( vp_input  = .false.  )
       parameter ( visc  = .true.  )
       parameter ( ex_force  = .true.)
-      parameter ( visc_artificial  = .true. )         !
+      parameter ( visc_artificial  = .false. )         !
       parameter ( heat_artificial  = .false. )
       !parameter ( self_gravity  = .true. )      
       parameter ( nor_density  = .false. )             !
@@ -110,14 +110,14 @@ c                    .false.: No normalization.
       integer plasticity  ! =0 non; =1 Bui, =2 return mapping =3 Lopez
       parameter ( plasticity = 3 )
       logical artificial_density                  
-      parameter (artificial_density = .true.)
+      parameter (artificial_density = .false.)
       logical soil_artificial_stress
-      parameter (soil_artificial_stress = .true.)
+      parameter (soil_artificial_stress = .false.)
 
       logical volume_fraction
-      parameter(volume_fraction=.true.)
+      parameter(volume_fraction=.false.)
       logical water_artificial_volume
-      parameter (water_artificial_volume = .true.)
+      parameter (water_artificial_volume = .false.)
       logical, parameter :: volume_fraction_renorm = .false.
 
 ! 0 ignor; 1 negative pressure to zero; 2 artficial stress

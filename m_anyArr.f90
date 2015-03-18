@@ -8,31 +8,16 @@ private
 
 type, public :: array
 
-character(len=32) :: name=''
-
 integer :: ndim1
 
 integer :: dim = 2, rank = 0
-
-!Store method (EBE or EBS)
-integer :: kstor = 1
-
-!Field or Matrix property: symmetry or not
-integer :: ksymm = 0
 
 real(dp), pointer, dimension(:) :: r => null()   
 
 type(array), pointer :: x => null(), y => null(), z => null()
 type(array), pointer :: xy => null(), xz => null(), yz => null()
-type(array), pointer :: yx => null(), zx => null(), zy => null()
 
-!For EBE  
-type(array), pointer :: D => null(), XD => null()
-!For EBS
-type(array), pointer :: owner => null(), neibor => null()
-
-!Surrogate
-class(*), pointer :: mesh => null(), parts => null() 
+class(*), pointer :: parts => null() 
 
 contains
 

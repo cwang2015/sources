@@ -27,13 +27,11 @@
       use declarations_sph
       implicit none     
       
-      integer  ntotal, bntotal,npoint
+      integer  ntotal, bntotal, npoint
       integer i, j, d, k, ntotal_nozzle
       type(block) nozzle, tank
       type(material), pointer :: property
       double precision xleft,xright,ybottom,soil_surface,water_surface
-      integer :: fluid_zone(10) = 0, fluid_boundary_zone(10) = 0
-      integer ::  soil_zone(10) = 0,  soil_boundary_zone(10) = 0
       logical :: dbg = .true.
       double precision element_size, soil_submerged_depth    
 
@@ -41,7 +39,7 @@
 
 !     Set nozzle and tank geometry parameters
 
-      call tank%set(xl=0.5d0,yl=0.3d0,m=4,n=3)
+      call tank%set(xl=0.5d0,yl=0.3d0,m=10,n=6)
       npoint = tank%m*tank%n
       allocate(tank%x(npoint),tank%y(npoint),tank%zone(npoint))
       call tank%cell_center
@@ -51,7 +49,7 @@
 ! Zoning
       tank%zone = 2
       do i = 1, tank%m*tank%n
-         if(tank%x(i)<0.125.or.tank%x(i)>0.375.or.tank%y(i)<0.1) tank%zone(i) = 1
+         if(tank%x(i)<0.1.or.tank%x(i)>0.4.or.tank%y(i)<0.1) tank%zone(i) = 1
       enddo
 !      write(*,*) tank%zone
 
@@ -75,7 +73,7 @@
       parts%vx = 0.d0
 
 ! ...Pressure. You must define the water-surface first.
-
+      water_surface = 0.3
       property => parts%material
       do i = 1,parts%ntotal+parts%nvirt
          parts%p(i) = property%rho0*gravity*(parts%x(2,i)-water_surface)
@@ -116,8 +114,8 @@
       parts%dvx(1,:) = parts%dvx(1,:) - df(parts%p,'x',parts) +       &
                   df(parts%sxx,'x',parts) + df(parts%sxy,'y',parts)
 
-      parts%dvx(2,:) = parts%dvx(2,:) - df(parts%p,'x',parts) +       &
-                  df(parts%sxx,'x',parts) + df(parts%sxy,'y',parts)
+      parts%dvx(2,:) = parts%dvx(2,:) - df(parts%p,'y',parts) +       &
+                  df(parts%sxy,'x',parts) + df(parts%syy,'y',parts)
 
       where (parts%rho.gt.0.0) parts%dvx(1,:) = parts%dvx(1,:)/parts%rho
       where (parts%rho.gt.0.0) parts%dvx(2,:) = parts%dvx(2,:)/parts%rho

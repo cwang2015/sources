@@ -29,8 +29,10 @@
       call allocate_sph
 
       call input
+      write(*,*) '1======='
       call output
 
+      write(*,*) '2======='
       call parts%minimum_time_step
 
  1    write(*,*)'  ***************************************************' 
