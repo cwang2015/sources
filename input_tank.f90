@@ -1,39 +1,16 @@
-      subroutine input
+subroutine input
+
+use param
+use declarations_sph
+implicit none     
       
-      use param
-      use declarations_sph
-      implicit none     
-
-      if (waterjet) call water_jet
-
-      write(*,*)'  **************************************************'
-      write(*,*)'  Initial particle configuration generated   '   
-      write(*,*)'  Total number of real particles   ', parts%ntotal    
-      write(*,*)'  Total number of virtual particles  ', parts%nvirt    
-      write(*,*)'  **************************************************'
-
-      if(.not.single_phase)then
-         write(*,*) 'Total number of real soil particles:', soil%ntotal
-         write(*,*) 'Total number of virtual particles:  ', soil%nvirt
-      endif
-   
-      return
-      end subroutine           
-       
-
-      subroutine water_jet
-
-      use param
-      use declarations_sph
-      implicit none     
-      
-      integer  ntotal, bntotal, npoint
-      integer i, j, d, k, ntotal_nozzle
-      type(block) nozzle, tank
-      type(material), pointer :: property
-      double precision xleft,xright,ybottom,soil_surface,water_surface
-      logical :: dbg = .true.
-      double precision element_size, soil_submerged_depth    
+integer  ntotal, bntotal, npoint
+integer i, j, d, k, ntotal_nozzle
+type(block) nozzle, tank
+type(material), pointer :: property
+double precision xleft,xright,ybottom,soil_surface,water_surface
+logical :: dbg = .false.
+double precision element_size, soil_submerged_depth    
 
       if(dbg) write(*,*) 'In water_jet...'      
 
