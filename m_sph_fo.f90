@@ -83,8 +83,6 @@ where (parts%rho>0.d0) df2 = df2/parts%rho
 
 end function
 
-end module              
-
 
 ! Calculate partial derivatives of a field
 !-------------------------------------------
@@ -111,13 +109,10 @@ pair_j   => parts%pair_j
 mass     => parts%mass
 rho      => parts%rho
 
-
 allocate(df3(size(f))); df3 = 0.
-
 
 if(x=='x')dwdx=>parts%dwdx(1,:)
 if(x=='y')dwdx=>parts%dwdx(2,:)
-
 
 do k=1,niac
    i = pair_i(k)

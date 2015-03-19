@@ -26,7 +26,6 @@ call allocate_sph
 
 call input
               
-   write(*,*) '1======='
    write(*,*)'  **************************************************'
    write(*,*)'  Initial particle configuration generated   '   
    write(*,*)'  Total number of real particles   ', parts%ntotal    
@@ -40,7 +39,6 @@ call input
       
 call output
 
-   write(*,*) '2======='
 call parts%minimum_time_step
 
 do while (.true.)

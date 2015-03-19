@@ -27,7 +27,6 @@ c     Subroutine for saving particle information to external disk file
       write(f_xv,*) 'VARIABLES="X","Y","Pressure","VoF",'     
       write(f_xv,*) '"vx","vy","rho","zone","VoF2","mass" '
       write(f_xv,*) 'ZONE I=', ntotal, ' F=BLOCK'
- 
       write(f_xv,*) x(1,1:ntotal) !, soil%x(1,1:ntotal2)
       write(f_xv,*) x(2,1:ntotal) !, soil%x(2,1:ntotal2)
 c      write(f_xv,*) vx(1,1:ntotal)
@@ -105,7 +104,7 @@ c      write(f_state,*)  soil%fail(1:ntotal2)
       write(f_state,*)  soil%mass(1:ntotal2)
       write(f_state,*)  -soil%p(1:ntotal2) + soil%syy(1:ntotal2)
       write(f_state,*)  soil%zone(1:ntotal2)
-      write(f_other,*) time, -soil%p(420)+soil%syy(420)
+      !write(f_other,*) time, -soil%p(420)+soil%syy(420)
       !write(f_other,*) time, -soil%p(395)+soil%syy(395)
       !write(f_other,*) time, -parts%p(420)+parts%syy(420)
 
