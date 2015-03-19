@@ -85,4 +85,50 @@ end function
 
 end module              
 
- 
+
+! Calculate partial derivatives of a field
+!-------------------------------------------
+          function df3(f,x,parts)
+!------------------------------------------- 
+use m_particles
+implicit none
+
+real(dp) f(:)
+character(len=1) x
+type(particles) parts
+real(dp),allocatable :: df3(:)
+
+integer ntotal,niac
+integer, pointer, dimension(:) :: pair_i,pair_j
+double precision, pointer, dimension(:) :: mass, rho, dwdx
+real(dp) fwx
+integer i,j,k
+
+niac = parts%niac
+
+pair_i   => parts%pair_i
+pair_j   => parts%pair_j
+mass     => parts%mass
+rho      => parts%rho
+
+
+allocate(df3(size(f))); df3 = 0.
+
+
+if(x=='x')dwdx=>parts%dwdx(1,:)
+if(x=='y')dwdx=>parts%dwdx(2,:)
+
+
+do k=1,niac
+   i = pair_i(k)
+   j = pair_j(k)
+   fwx = ((f(i)/rho(i)**2)+(f(j)/rho(j)**2))*dwdx(k)
+   df3(i) = df3(i) + mass(j)*fwx
+   df3(j) = df3(j) - mass(i)*fwx
+enddo
+
+where (rho>0.d0) df3 = df3*rho
+
+end function
+
+end module
