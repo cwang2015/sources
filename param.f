@@ -110,7 +110,7 @@ c                    .false.: No normalization.
       integer plasticity  ! =0 non; =1 Bui, =2 return mapping =3 Lopez
       parameter ( plasticity = 3 )
       logical artificial_density                  
-      parameter (artificial_density = .false.)
+      parameter (artificial_density = .true.)
       logical soil_artificial_stress
       parameter (soil_artificial_stress = .false.)
 

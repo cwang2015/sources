@@ -68,38 +68,5 @@ parts%mass = parts%vol * parts%rho
 return
 end subroutine
 
-      subroutine int_force1(parts)
-!---------------------------------------------------------------------
-!   Subroutine to calculate the internal forces on the right hand side 
-!   of the Navier-Stokes equations, i.e. the pressure gradient and the
-!   gradient of the viscous stress tensor, used by the time integration. 
-!   Moreover the entropy production due to viscous dissipation, tds/dt, 
-!   and the change of internal energy per mass, de/dt, are calculated. 
 
-      use param
-      use m_particles
-      use m_sph_fo
-      implicit none
- 
-      type(particles) parts
-
-!      integer ntotal,niac
-!      double precision,pointer,dimension(:) :: pair_i,pair_j
-!      double precision,pointer,dimension(:,:) :: dwdx
-!      double precision,pointer,dimension(:) :: sxx, sxy, syy,     &
-!                                               szz, sxz, syz
-!      double precision h, he 
-!      integer d
-
-      parts%dvx(1,:) = parts%dvx(1,:) - df(parts%p,'x',parts) +       &
-                  df(parts%sxx,'x',parts) + df(parts%sxy,'y',parts)
-
-      parts%dvx(2,:) = parts%dvx(2,:) - df(parts%p,'y',parts) +       &
-                  df(parts%sxy,'x',parts) + df(parts%syy,'y',parts)
-
-      where (parts%rho.gt.0.0) parts%dvx(1,:) = parts%dvx(1,:)/parts%rho
-      where (parts%rho.gt.0.0) parts%dvx(2,:) = parts%dvx(2,:)/parts%rho
-
-      return
-      end subroutine
 
