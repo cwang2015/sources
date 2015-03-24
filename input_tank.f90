@@ -51,13 +51,15 @@ call parts%setup_itype
 
 parts%vx = 0.d0
 
-! ...Pressure. You must define the water-surface first.
+! ...Pressure. You must define the free surface first.
 water_surface = 0.3
 property => parts%material
 do i = 1,parts%ntotal+parts%nvirt
    parts%p(i) = property%rho0*gravity*(parts%x(2,i)-water_surface)
    if(parts%zone(i)==3)parts%p(i)=0.0
 enddo
+
+parts%c = property%c
 
 ! Calulate desity from pressure according to Equation of State (EoS): p = B(rho/rho0-1)^gamma
   
