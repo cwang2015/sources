@@ -42,7 +42,7 @@ c     av     : Average velocityof each particle                    [out]
 c     epsilon --- a small constants chosen by experence, may lead to instability.
 c     for example, for the 1 dimensional shock tube problem, the E <= 0.3
 
-      epsilon = 0.01  !0.5 !0.3
+      epsilon = 0.001  !0.5 !0.3
       
 !      do i = 1, ntotal
 !        do d = 1, dim

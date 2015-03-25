@@ -273,12 +273,12 @@ endif
 
 !---  Density approximation or change rate
      
-if (summation_density) then      
+!if (summation_density) then      
     call sum_density(pl)
-else             
+!else             
 !    call con_density(pl)
     pl%drho = -pl%rho*(df2(pl%vx(1,:),'x',pl)+df2(pl%vx(2,:),'y',pl))
-endif
+!endif
       
 if(artificial_density)then
    !if(trim(pl%imaterial)=='water')then
@@ -313,8 +313,8 @@ pl%dvx(2,:) = - df(pl%p,'y',pl) + df(pl%sxy,'x',pl) + df(pl%syy,'y',pl)
 where (pl%rho.gt.0.0) pl%dvx(1,:) = pl%dvx(1,:)/pl%rho
 where (pl%rho.gt.0.0) pl%dvx(2,:) = pl%dvx(2,:)/pl%rho
        
-if(trim(pl%imaterial)=='water'.and.water_tension_instability==2) &
-   call tension_instability(pl) 
+!if(trim(pl%imaterial)=='water'.and.water_tension_instability==2) &
+!   call tension_instability(pl) 
 
 ! --- Plasticity flow rule   ! This was done before Jaummann_rate, because we 
 !     we need txx,tyy,tzz, which was destroyed in Jaumann_rate!
@@ -326,8 +326,8 @@ if(trim(pl%imaterial)=='water'.and.water_tension_instability==2) &
 if (visc_artificial) call art_visc(pl)
 
 
-if(trim(pl%imaterial)=='water'.and.water_artificial_volume)  &
-        call art_volume_fraction_water2(pl)
+!if(trim(pl%imaterial)=='water'.and.water_artificial_volume)  &
+!        call art_volume_fraction_water2(pl)
 
 !--- Damping
 !       if(trim(pl%imaterial)=='soil') call damping_stress(pl)
@@ -337,7 +337,7 @@ if(trim(pl%imaterial)=='water'.and.water_artificial_volume)  &
       !if (ex_force) call ext_force(pl)
       if (ex_force)then
           if(self_gravity) call gravity_force(pl)
-          call repulsive_force(pl)
+!          call repulsive_force(pl)
       endif
 
 !     Calculating the neighboring particles and undating HSML

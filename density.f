@@ -66,11 +66,11 @@ c     Calculate SPH sum for rho:
       enddo
 
 c     Thirdly, calculate the normalized rho, rho=sum(rho)/sum(w)
-      if (nor_density) then 
+!      if (nor_density) then 
         do i=1, ntotal
           rho(i)=rho(i)/wi(i)
         enddo
-      endif 
+!      endif 
  
       end
 

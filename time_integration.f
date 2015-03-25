@@ -3,24 +3,9 @@ c----------------------------------------------------------------------
       use param
       use declarations_sph
       implicit none     
-c  
-      double precision, pointer, dimension(:) :: rho, p, u, drho, du
-      double precision, pointer, dimension(:,:) :: x,vx,av,dvx 
 c
       integer :: i, j, k, d, ntotal, it
-      double precision :: temp_rho, temp_u
       type(particles), pointer :: pl
-
-      ntotal = parts%ntotal
-      x     => parts%x
-      vx    => parts%vx
-      rho   => parts%rho
-      p     => parts%p
-      u     => parts%u
-      drho  => parts%drho
-      dvx   => parts%dvx
-      du    => parts%du
-      av    => parts%av
               
       do it = 1, maxtimestep   
   
@@ -68,15 +53,6 @@ c     velocity half a time step
 c---  Definition of variables out of the function vector:    
 
         call single_step
-
-        do i = 1, ntotal
-           if(parts%zone(i)==1.and.x(2,i)>-wasserjet%immerse)then
-              drho(i) = 0.
-              du(i)   = 0.
-              dvx(:,i)  = 0.
-              parts%dvof(i) = 0.
-           endif
-        enddo
 
         if (itimestep .eq. 1) then
            pl => parts
@@ -150,49 +126,22 @@ c---  Definition of variables out of the function vector:
 
 !--------------------Velocity Inlet-----------------------
 
-!DEC$IF(.FALSE.)
-        k = 0
-        do i = 1,ntotal
-           if(parts%zone(i)==1.and.x(2,i)<-wasserjet%immerse)then
-              parts%zone(i) = 0
-              k = k + 1
-              x(1,ntotal+k) = x(1,i)
-              x(2,ntotal+k) = x(2,i)+parts%hsml(i)
-              parts%vol(ntotal+k) = parts%vol(i)
-              parts%hsml(ntotal+k) = parts%hsml(i)
-              parts%itype(ntotal+k) = 2
-              vx(1,ntotal+k) = 0.
-              vx(2,ntotal+k) = inlet_velocity
-              parts%p(ntotal+k) = 0.
-              rho(ntotal+k) = 1000.
-              parts%mass(ntotal+k) = parts%vol(ntotal+k)*rho(ntotal+k)
-              parts%zone(ntotal+k) = 1
 
-              parts%dvx(:,ntotal+k) = 0.
-              parts%du(ntotal+k)  = 0.
-              parts%drho(ntotal+k)= 0.
-           endif
-        enddo
-        parts%ntotal = parts%ntotal + k
-        ntotal = parts%ntotal
-!---------------------------------------------------------
-
-!DEC$ENDIF
         time = time + dt
 
 !	if (itimestep>=save_step_from.and.mod(itimestep,save_step).eq.0) then
 !          call output
 !	endif 
 
-        if (mod(itimestep,print_step).eq.0) then
-          write(*,*)
-          write(*,101)'x','velocity', 'dvx'    
-          write(*,100)x(1,moni_particle), vx(1,moni_particle), 
-     &                dvx(1,moni_particle)    
-        endif
+!        if (mod(itimestep,print_step).eq.0) then
+!          write(*,*)
+!          write(*,101)'x','velocity', 'dvx'    
+!          write(*,100)x(1,moni_particle), vx(1,moni_particle), 
+!     &                dvx(1,moni_particle)    
+!        endif
         
-101     format(1x,3(2x,a12))	 
-100     format(1x,3(2x,e13.6))
+!101     format(1x,3(2x,a12))	 
+!100     format(1x,3(2x,e13.6))
 
       enddo
 
@@ -207,17 +156,10 @@ c ---------------------------------------------------------------------
       implicit none
 
       do i = 1, pl%ntotal +pl%nvirt    ! originally only pl%ntotal       
-         pl%u_min(i) = pl%u(i)
-         temp_u=0.
-         !if (dim.eq.1) temp_u=-nsym*p(i)*vx(1,i)/x(1,i)/rho(i)
-         pl%u(i) = pl%u(i) + (dt/2.)* (pl%du(i)+temp_u)
-         if(pl%u(i).lt.0)  pl%u(i) = 0.                 
             
          if (.not.summation_density) then    
             pl%rho_min(i) = pl%rho(i)
-            temp_rho=0.
-            !if (dim.eq.1) temp_rho=-nsym*rho(i)*vx(1,i)/x(1,i)
-            pl%rho(i) = pl%rho(i) +(dt/2.)*( pl%drho(i)+ temp_rho)
+            pl%rho(i) = pl%rho(i) +(dt/2.)* pl%drho(i)
          endif
 
          if(trim(pl%imaterial)=='water'.and.volume_fraction)then
@@ -259,15 +201,9 @@ c -------------------------------------------------------------------
       implicit none
 
       do i=1,pl%ntotal +pl%nvirt     ! origionally pl%ntotal
-         temp_u=0.
-         !if (dim.eq.1) temp_u=-nsym*p(i)*vx(1,i)/x(1,i)/rho(i)        
-         pl%u(i) = pl%u(i) + (dt/2.)*(pl%du(i) + temp_u)
-         if(pl%u(i).lt.0)  pl%u(i) = 0.             
          
          if (.not.summation_density ) then
-            temp_rho=0.
-            !if (dim.eq.1) temp_rho=-nsym*rho(i)*vx(1,i)/x(1,i)
-            pl%rho(i) = pl%rho(i) + (dt/2.)* (pl%drho(i)+temp_rho)
+            pl%rho(i) = pl%rho(i) + (dt/2.)* pl%drho(i)
          endif
 
          if(trim(pl%imaterial)=='water'.and.volume_fraction)then
@@ -307,15 +243,9 @@ c ------------------------------------------------------------------
       implicit none
 
       do i=1,pl%ntotal +pl%nvirt  ! origionally pl%ntotal            
-         temp_u=0.
-         !if (dim.eq.1) temp_u=-nsym*p(i)*vx(1,i)/x(1,i)/rho(i)                       
-         pl%u(i) = pl%u_min(i) + dt*(pl%du(i)+temp_u)
-         if(pl%u(i).lt.0)  pl%u(i) = 0.          
             
          if (.not.summation_density ) then 
-            temp_rho=0.
-            !if (dim.eq.1) temp_rho=-nsym*rho(i)*vx(1,i)/x(1,i)        	           
-            pl%rho(i) = pl%rho_min(i) + dt*(pl%drho(i)+temp_rho)
+            pl%rho(i) = pl%rho_min(i) + dt*pl%drho(i)
          endif
 
          if(trim(pl%imaterial)=='water'.and.volume_fraction)then
@@ -351,6 +281,9 @@ c ------------------------------------------------------------------
       return
       end subroutine
 
+
+
+
       subroutine return_mapping
 c ------------------------------------------------------------------
       implicit none
@@ -379,3 +312,163 @@ c ------------------------------------------------------------------
       end subroutine
 
       end subroutine
+      subroutine time_integration_for_water
+c----------------------------------------------------------------------
+      use param
+      use declarations_sph
+      implicit none     
+c
+      integer :: i, j, k, d, ntotal, it
+      type(particles), pointer :: pl
+              
+      do it = 1, maxtimestep    
+        itimestep = itimestep+1
+        parts%itimestep = itimestep
+
+c     If not first time step, then update thermal energy, density and 
+c     velocity half a time step  
+
+        if (itimestep .ne. 1) then
+           pl => parts
+!           call first_half
+      do i = 1, pl%ntotal +pl%nvirt    ! originally only pl%ntotal       
+            
+         if (.not.summation_density) then    
+            pl%rho_min(i) = pl%rho(i)
+            pl%rho(i) = pl%rho(i) +(dt/2.)* pl%drho(i)
+         endif
+          
+         if(pl%itype(i)<0)cycle
+         do d = 1, dim
+            pl%v_min(d, i) = pl%vx(d, i)
+            pl%vx(d, i) = pl%vx(d, i) + (dt/2.)*pl%dvx(d, i)
+         enddo
+      enddo
+           
+        endif
+
+        call single_step
+
+        if (itimestep .eq. 1) then
+           pl => parts
+!           call first_step
+      do i=1,pl%ntotal +pl%nvirt     ! origionally pl%ntotal
+         
+         if (.not.summation_density ) then
+            pl%rho(i) = pl%rho(i) + (dt/2.)* pl%drho(i)
+         endif
+
+         if(pl%itype(i)<0)cycle
+
+         do d = 1, dim        
+            pl%vx(d, i) = pl%vx(d, i) + (dt/2.) * pl%dvx(d, i) 
+     &                  + pl%av(d, i)
+            pl%x(d, i) = pl%x(d, i) + dt * pl%vx(d, i)
+         enddo           
+
+      enddo 
+           
+        else
+           pl => parts
+!           call second_half
+       do i=1,pl%ntotal +pl%nvirt  ! origionally pl%ntotal            
+            
+         if (.not.summation_density ) then 
+            pl%rho(i) = pl%rho_min(i) + dt*pl%drho(i)
+         endif
+
+         if(pl%itype(i)<0)cycle
+
+         do d = 1, dim                   
+            pl%vx(d, i) = pl%v_min(d, i) + dt * pl%dvx(d, i) 
+     &                  + pl%av(d, i)
+            pl%x(d, i) = pl%x(d, i) + dt * pl%vx(d, i)                  
+         enddo
+         
+      enddo          
+        endif 
+
+        time = time + dt
+
+        if (mod(itimestep,print_step).eq.0) then
+         write(*,*)'______________________________________________'
+         write(*,*)'  current number of time step =',
+     &           itimestep,'     current time=', real(time+dt)
+         write(*,*)'______________________________________________'
+        endif  
+
+      enddo
+
+      return
+
+c -------------------
+      contains
+c -------------------
+
+      subroutine first_half
+c ---------------------------------------------------------------------
+      implicit none
+
+      do i = 1, pl%ntotal +pl%nvirt    ! originally only pl%ntotal       
+            
+         if (.not.summation_density) then    
+            pl%rho_min(i) = pl%rho(i)
+            pl%rho(i) = pl%rho(i) +(dt/2.)* pl%drho(i)
+         endif
+          
+         if(pl%itype(i)<0)cycle
+         do d = 1, dim
+            pl%v_min(d, i) = pl%vx(d, i)
+            pl%vx(d, i) = pl%vx(d, i) + (dt/2.)*pl%dvx(d, i)
+         enddo
+      enddo
+ 
+      return
+      end subroutine
+
+      subroutine first_step
+c -------------------------------------------------------------------
+      implicit none
+
+      do i=1,pl%ntotal +pl%nvirt     ! origionally pl%ntotal
+         
+         if (.not.summation_density ) then
+            pl%rho(i) = pl%rho(i) + (dt/2.)* pl%drho(i)
+         endif
+
+         if(pl%itype(i)<0)cycle
+
+         do d = 1, dim        
+            pl%vx(d, i) = pl%vx(d, i) + (dt/2.) * pl%dvx(d, i) 
+     &                  + pl%av(d, i)
+            pl%x(d, i) = pl%x(d, i) + dt * pl%vx(d, i)
+         enddo           
+
+      enddo 
+      
+      return
+      end subroutine
+
+      subroutine second_half
+c ------------------------------------------------------------------
+      implicit none
+
+      do i=1,pl%ntotal +pl%nvirt  ! origionally pl%ntotal            
+            
+         if (.not.summation_density ) then 
+            pl%rho(i) = pl%rho_min(i) + dt*pl%drho(i)
+         endif
+
+         if(pl%itype(i)<0)cycle
+
+         do d = 1, dim                   
+            pl%vx(d, i) = pl%v_min(d, i) + dt * pl%dvx(d, i) 
+     &                  + pl%av(d, i)
+            pl%x(d, i) = pl%x(d, i) + dt * pl%vx(d, i)                  
+         enddo
+         
+      enddo
+
+      return
+      end subroutine
+      end subroutine       
