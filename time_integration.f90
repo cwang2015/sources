@@ -1,9 +1,9 @@
       subroutine time_integration
-c----------------------------------------------------------------------
+!----------------------------------------------------------------------
       use param
       use declarations_sph
       implicit none     
-c
+!
       integer :: i, j, k, d, ntotal, it
       type(particles), pointer :: pl
               
@@ -16,15 +16,15 @@ c
 
         if (mod(itimestep,print_step).eq.0) then
          write(*,*)'______________________________________________'
-         write(*,*)'  current number of time step =',
-     &           itimestep,'     current time=', real(time+dt)
+         write(*,*)'  current number of time step =',              &
+                   itimestep,'     current time=', real(time+dt)
          write(*,*)'______________________________________________'
         endif  
   
 !--------------For water--------------------------------------------------
       
-c     If not first time step, then update thermal energy, density and 
-c     velocity half a time step  
+!     If not first time step, then update thermal energy, density and 
+!     velocity half a time step  
 
         if (itimestep .ne. 1) then
            pl => parts
@@ -50,7 +50,7 @@ c     velocity half a time step
 !!DEC$ENDIF
         endif
 
-c---  Definition of variables out of the function vector:    
+!---  Definition of variables out of the function vector:    
 
         call single_step
 
@@ -147,12 +147,12 @@ c---  Definition of variables out of the function vector:
 
       return
 
-c -------------------
+! -------------------
       contains
-c -------------------
+! -------------------
 
       subroutine first_half
-c ---------------------------------------------------------------------
+! ---------------------------------------------------------------------
       implicit none
 
       do i = 1, pl%ntotal +pl%nvirt    ! originally only pl%ntotal       
@@ -197,7 +197,7 @@ c ---------------------------------------------------------------------
       end subroutine
 
       subroutine first_step
-c -------------------------------------------------------------------
+! -------------------------------------------------------------------
       implicit none
 
       do i=1,pl%ntotal +pl%nvirt     ! origionally pl%ntotal
@@ -228,8 +228,8 @@ c -------------------------------------------------------------------
          !if(pl%itype(i)<0.and.pl%x(2,i)<-0.2)cycle
          do d = 1, dim        
          !if(pl%itype(i)<0.and.d==1)cycle
-            pl%vx(d, i) = pl%vx(d, i) + (dt/2.) * pl%dvx(d, i) 
-     &                  + pl%av(d, i)
+            pl%vx(d, i) = pl%vx(d, i) + (dt/2.) * pl%dvx(d, i)   &
+                        + pl%av(d, i)
             pl%x(d, i) = pl%x(d, i) + dt * pl%vx(d, i)
          enddo           
          !if(trim(pl%imaterial)=='soil')write(*,*) pl%dvx(1:2,i) 
@@ -239,7 +239,7 @@ c -------------------------------------------------------------------
       end subroutine
 
       subroutine second_half
-c ------------------------------------------------------------------
+! ------------------------------------------------------------------
       implicit none
 
       do i=1,pl%ntotal +pl%nvirt  ! origionally pl%ntotal            
@@ -270,8 +270,8 @@ c ------------------------------------------------------------------
          !if(pl%itype(i)<0.and.pl%x(2,i)<-0.2)cycle
          do d = 1, dim                   
          !if(pl%itype(i)<0.and.d==1)cycle
-            pl%vx(d, i) = pl%v_min(d, i) + dt * pl%dvx(d, i) 
-     &                  + pl%av(d, i)
+            pl%vx(d, i) = pl%v_min(d, i) + dt * pl%dvx(d, i)   &
+                        + pl%av(d, i)
             pl%x(d, i) = pl%x(d, i) + dt * pl%vx(d, i)                  
          enddo
          
@@ -281,11 +281,8 @@ c ------------------------------------------------------------------
       return
       end subroutine
 
-
-
-
       subroutine return_mapping
-c ------------------------------------------------------------------
+! ------------------------------------------------------------------
       implicit none
 
       do i=1,pl%ntotal+pl%nvirt  ! origionally pl%ntotal            
@@ -312,25 +309,26 @@ c ------------------------------------------------------------------
       end subroutine
 
       end subroutine
+
+!----------------------------------------------------------------------      
       subroutine time_integration_for_water
-c----------------------------------------------------------------------
-      use param
-      use declarations_sph
-      implicit none     
-c
-      integer :: i, j, k, d, ntotal, it
-      type(particles), pointer :: pl
+!----------------------------------------------------------------------
+use param
+use declarations_sph
+implicit none     
+
+integer :: i, j, k, d, ntotal, it
+type(particles), pointer :: pl
               
-      do it = 1, maxtimestep    
-        itimestep = itimestep+1
-        parts%itimestep = itimestep
+do it = 1, maxtimestep    
+   itimestep = itimestep+1
+   parts%itimestep = itimestep
 
-c     If not first time step, then update thermal energy, density and 
-c     velocity half a time step  
+!     If not first time step, then update thermal energy, density and 
+!     velocity half a time step  
 
-        if (itimestep .ne. 1) then
-           pl => parts
-!           call first_half
+   if(itimestep .ne. 1)then
+      pl => parts
       do i = 1, pl%ntotal +pl%nvirt    ! originally only pl%ntotal       
             
          if (.not.summation_density) then    
@@ -339,136 +337,70 @@ c     velocity half a time step
          endif
           
          if(pl%itype(i)<0)cycle
+
          do d = 1, dim
             pl%v_min(d, i) = pl%vx(d, i)
             pl%vx(d, i) = pl%vx(d, i) + (dt/2.)*pl%dvx(d, i)
          enddo
       enddo
            
-        endif
+   endif
 
-        call single_step
+   call single_step_for_water
 
-        if (itimestep .eq. 1) then
-           pl => parts
-!           call first_step
+   if(itimestep .eq. 1) then
+      pl => parts
       do i=1,pl%ntotal +pl%nvirt     ! origionally pl%ntotal
          
-         if (.not.summation_density ) then
+         if(.not.summation_density )then
             pl%rho(i) = pl%rho(i) + (dt/2.)* pl%drho(i)
          endif
 
          if(pl%itype(i)<0)cycle
 
          do d = 1, dim        
-            pl%vx(d, i) = pl%vx(d, i) + (dt/2.) * pl%dvx(d, i) 
-     &                  + pl%av(d, i)
+            pl%vx(d, i) = pl%vx(d, i) + (dt/2.) * pl%dvx(d, i)   & 
+                        + pl%av(d, i)
             pl%x(d, i) = pl%x(d, i) + dt * pl%vx(d, i)
          enddo           
 
       enddo 
            
-        else
-           pl => parts
-!           call second_half
+   else
+
+       pl => parts
        do i=1,pl%ntotal +pl%nvirt  ! origionally pl%ntotal            
             
-         if (.not.summation_density ) then 
+         if(.not.summation_density )then 
             pl%rho(i) = pl%rho_min(i) + dt*pl%drho(i)
          endif
 
          if(pl%itype(i)<0)cycle
 
          do d = 1, dim                   
-            pl%vx(d, i) = pl%v_min(d, i) + dt * pl%dvx(d, i) 
-     &                  + pl%av(d, i)
-            pl%x(d, i) = pl%x(d, i) + dt * pl%vx(d, i)                  
-         enddo
-         
-      enddo          
-        endif 
-
-        time = time + dt
-
-        if (mod(itimestep,print_step).eq.0) then
-         write(*,*)'______________________________________________'
-         write(*,*)'  current number of time step =',
-     &           itimestep,'     current time=', real(time+dt)
-         write(*,*)'______________________________________________'
-        endif  
-
-      enddo
-
-      return
-
-c -------------------
-      contains
-c -------------------
-
-      subroutine first_half
-c ---------------------------------------------------------------------
-      implicit none
-
-      do i = 1, pl%ntotal +pl%nvirt    ! originally only pl%ntotal       
-            
-         if (.not.summation_density) then    
-            pl%rho_min(i) = pl%rho(i)
-            pl%rho(i) = pl%rho(i) +(dt/2.)* pl%drho(i)
-         endif
-          
-         if(pl%itype(i)<0)cycle
-         do d = 1, dim
-            pl%v_min(d, i) = pl%vx(d, i)
-            pl%vx(d, i) = pl%vx(d, i) + (dt/2.)*pl%dvx(d, i)
-         enddo
-      enddo
- 
-      return
-      end subroutine
-
-      subroutine first_step
-c -------------------------------------------------------------------
-      implicit none
-
-      do i=1,pl%ntotal +pl%nvirt     ! origionally pl%ntotal
-         
-         if (.not.summation_density ) then
-            pl%rho(i) = pl%rho(i) + (dt/2.)* pl%drho(i)
-         endif
-
-         if(pl%itype(i)<0)cycle
-
-         do d = 1, dim        
-            pl%vx(d, i) = pl%vx(d, i) + (dt/2.) * pl%dvx(d, i) 
-     &                  + pl%av(d, i)
-            pl%x(d, i) = pl%x(d, i) + dt * pl%vx(d, i)
-         enddo           
-
-      enddo 
-      
-      return
-      end subroutine
-
-      subroutine second_half
-c ------------------------------------------------------------------
-      implicit none
-
-      do i=1,pl%ntotal +pl%nvirt  ! origionally pl%ntotal            
-            
-         if (.not.summation_density ) then 
-            pl%rho(i) = pl%rho_min(i) + dt*pl%drho(i)
-         endif
-
-         if(pl%itype(i)<0)cycle
-
-         do d = 1, dim                   
-            pl%vx(d, i) = pl%v_min(d, i) + dt * pl%dvx(d, i) 
-     &                  + pl%av(d, i)
+            pl%vx(d, i) = pl%v_min(d, i) + dt * pl%dvx(d, i)    & 
+                        + pl%av(d, i)
             pl%x(d, i) = pl%x(d, i) + dt * pl%vx(d, i)                  
          enddo
          
       enddo
 
-      return
-      end subroutine
-      end subroutine       
+   endif 
+
+   time = time + dt
+
+   if(mod(itimestep,print_step).eq.0)then
+      write(*,*)'______________________________________________'
+      write(*,*)'  current number of time step =',                &
+                itimestep,'     current time=', real(time+dt)
+      write(*,*)'______________________________________________'
+   endif  
+
+   if(itimestep>=save_step_from.and.mod(itimestep,save_step).eq.0)then
+      call output
+   endif 
+
+enddo
+
+return
+end subroutine       

@@ -243,22 +243,24 @@ endif
       endif 
 
 return
+end subroutine
 
-contains
 
-!---------------------------------------------
+!-------------------------------------------------
       subroutine single_step_for_water
-!---------------------------------------------
+!-------------------------------------------------
+use param
+use declarations_sph
 use m_sph_fo
 implicit none
+type(particles), pointer :: pl
 type(material),pointer :: property
 
+pl => parts
 property => pl%material
 
 pl%dvx = 0.d0; pl%drho = 0.d0
 
-if(trim(pl%imaterial)=='water') pl%dvof = 0.d0
- 
 !---  Interaction parameters, calculating neighboring particles
 !     and optimzing smoothing length
 
@@ -268,23 +270,15 @@ if(mod(itimestep,print_step).eq.0.and.int_stat) then
    call pl%interaction_statistics
 endif   
 
-!--- Added by Wang
-!if(nor_density) call norm_density(pl)
-
 !---  Density approximation or change rate
      
-!if (summation_density) then      
-    call sum_density(pl)
-!else             
-!    call con_density(pl)
-    pl%drho = -pl%rho*(df2(pl%vx(1,:),'x',pl)+df2(pl%vx(2,:),'y',pl))
-!endif
+if(summation_density) call sum_density(pl)
+
+pl%drho = -pl%rho*(df2(pl%vx(1,:),'x',pl)+df2(pl%vx(2,:),'y',pl))
       
 if(artificial_density)then
-   !if(trim(pl%imaterial)=='water')then
-      !!call renormalize_density_gradient(pl)
-      call art_density(pl)
-   !endif
+   !call renormalize_density_gradient(pl)
+   call art_density(pl)
 endif
        
 !---  Internal forces:
@@ -313,46 +307,26 @@ pl%dvx(2,:) = - df(pl%p,'y',pl) + df(pl%sxy,'x',pl) + df(pl%syy,'y',pl)
 where (pl%rho.gt.0.0) pl%dvx(1,:) = pl%dvx(1,:)/pl%rho
 where (pl%rho.gt.0.0) pl%dvx(2,:) = pl%dvx(2,:)/pl%rho
        
-!if(trim(pl%imaterial)=='water'.and.water_tension_instability==2) &
-!   call tension_instability(pl) 
-
-! --- Plasticity flow rule   ! This was done before Jaummann_rate, because we 
-!     we need txx,tyy,tzz, which was destroyed in Jaumann_rate!
-
-
+!if(water_tension_instability==2) call tension_instability(pl) 
 
 !---  Artificial viscosity:
 
 if (visc_artificial) call art_visc(pl)
-
-
-!if(trim(pl%imaterial)=='water'.and.water_artificial_volume)  &
-!        call art_volume_fraction_water2(pl)
-
-!--- Damping
-!       if(trim(pl%imaterial)=='soil') call damping_stress(pl)
     
 !---  External forces:
 
-      !if (ex_force) call ext_force(pl)
-      if (ex_force)then
-          if(self_gravity) call gravity_force(pl)
-!          call repulsive_force(pl)
-      endif
+pl%dvx(2,:) = pl%dvx(2,:) + gravity
 
-!     Calculating the neighboring particles and undating HSML
+!call repulsive_force(pl)
+
+! Calculating the neighboring particles and undating HSML
       
-      if (sle.ne.0) call h_upgrade(pl)
-
-!      if (heat_artificial) call art_heat(ntotal+nvirt,hsml,   &
-!          mass,x,vx,niac,rho,u, c,pair_i,pair_j,w,dwdx,ahdudt)
+if (sle.ne.0) call h_upgrade(pl)
      
-!     Calculating average velocity of each partile for avoiding penetration
+! Calculating average velocity of each partile for avoiding penetration
 
-      if (average_velocity) call av_vel(pl) 
+if (average_velocity) call av_vel(pl) 
 
-!---  Convert velocity, force, and energy to f and dfdt  
-      
 if(mod(itimestep,print_step).eq.0) then     
 !  call pl%particle_monitor
    call pl%minimum_time_step  
@@ -361,6 +335,5 @@ endif
 return
 end subroutine
 
-end subroutine
 
 
