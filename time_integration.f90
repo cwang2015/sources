@@ -405,6 +405,83 @@ enddo
 return
 end subroutine      
 
+!----------------------------------------------------------------------      
+      subroutine time_integration_for_water_by_verlet
+!----------------------------------------------------------------------
+use param
+use declarations_sph
+implicit none     
+
+integer :: i, j, k, d, ntotal, it
+type(particles), pointer :: pl
+              
+real(dp), pointer, dimension(:,:) :: lastvx   => null()   
+real(dp), pointer, dimension(:,:) :: temp1    => null() 
+real(dp), pointer, dimension(:)   :: lastrho  => null()
+real(dp), pointer, dimension(:)   :: temp2    => null()
+
+
+do it = 1, maxtimestep
+    itimestep = itimestep+1
+    parts%itimestep = itimestep
+    pl => parts
+    lastvx = pl%vx
+    
+if(mod(itimestep,50) .ne. 50) then
+    do i = 1, pl%ntotal
+       do d = 1, dim
+          pl%x(d,i) = pl%x(d,i) + dt * pl%vx(d,i) +(dt**2./2.)*pl%dvx(d,i)
+          lastvx(d,i) = lastvx(d,i) + 2.*dt*pl%dvx(d,i)
+       enddo
+    enddo
+else
+    do i = 1, pl%ntotal
+       do d = 1, dim
+          pl%x(d,i) = pl%x(d,i) + dt * pl%vx(d,i) +(dt**2./2.)*pl%dvx(d,i)
+          lastvx(d,i) = pl%vx(d,i) + dt*pl%dvx(d,i)
+       enddo
+    enddo
+endif
+temp1 = pl%vx
+pl%vx = lastvx
+lastvx = temp1
+
+if(mod(itimestep,50) .ne. 50) then
+    do i = 1, pl%ntotal+pl%nvirt
+       do d = 1, dim
+          lastrho(i) = lastrho(i) + dt*2.* pl%drho(i)
+       enddo
+    enddo
+else
+    do i = 1, pl%ntotal+pl%nvirt
+       do d = 1, dim
+          lastrho(i) = pl%rho(i) + dt*2.* pl%drho(i)
+       enddo
+    enddo
+endif
+temp2 = pl%rho
+pl%rho = lastrho
+lastrho = temp2
+
+   time = time + dt
+
+   if(mod(itimestep,print_step).eq.0)then
+      write(*,*)'______________________________________________'
+      write(*,*)'  current number of time step =',                &
+                itimestep,'     current time=', real(time+dt)
+      write(*,*)'______________________________________________'
+   endif  
+
+   if(itimestep>=save_step_from.and.mod(itimestep,save_step).eq.0)then
+      call output
+   endif 
+
+enddo
+
+return
+end subroutine      
+         
+
 !----------------------------------------------------------------------
              subroutine time_integration_for_soil
 !----------------------------------------------------------------------
