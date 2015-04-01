@@ -424,15 +424,15 @@ allocate(lastvx(2,parts%maxn))
 allocate(temp1(2,parts%maxn))
 allocate(lastrho(parts%maxn))
 allocate(temp2(parts%maxn))
+    pl => parts
+    lastvx = pl%vx
+    lastrho = pl%rho
 
 do it = 1, maxtimestep 
     itimestep = itimestep+1
-    pl => parts
-    lastvx = pl%vx
-
    call single_step_for_water
 
-!if(mod(itimestep,50) .ne. 0) then
+if(mod(itimestep,50) .ne. 0) then
     do i = 1, pl%ntotal
        do d = 1, dim
           pl%x(d,i) = pl%x(d,i) + dt * pl%vx(d,i) +(dt**2./2.)*pl%dvx(d,i)
@@ -440,34 +440,30 @@ do it = 1, maxtimestep
        
        enddo
     enddo
-!else
-!    do i = 1, pl%ntotal
-!       do d = 1, dim
-!          pl%x(d,i) = pl%x(d,i) + dt * pl%vx(d,i) +(dt**2./2.)*pl%dvx(d,i)
-!          lastvx(d,i) = pl%vx(d,i) + dt*pl%dvx(d,i)
-!      enddo
-!    enddo
-!endif
-!temp1 = pl%vx
-!pl%vx = lastvx
-!lastvx = temp1
+else
+    do i = 1, pl%ntotal
+       do d = 1, dim
+          pl%x(d,i) = pl%x(d,i) + dt * pl%vx(d,i) +(dt**2./2.)*pl%dvx(d,i)
+          lastvx(d,i) = pl%vx(d,i) + dt*pl%dvx(d,i)
+      enddo
+    enddo
+endif
+temp1 = pl%vx
+pl%vx = lastvx
+lastvx = temp1
 
 !if(mod(itimestep,50) .ne. 0) then
-    do i = 1, pl%ntotal+pl%nvirt
-       do d = 1, dim
-          lastrho(i) = lastrho(i) + dt*2.* pl%drho(i)
-       enddo
-    enddo
-!else
-!   do i = 1, pl%ntotal+pl%nvirt
-!       do d = 1, dim
-!          lastrho(i) = pl%rho(i) + dt* pl%drho(i)
-!       enddo
+!    do i = 1, pl%ntotal+pl%nvirt
+!          lastrho(i) = pl%rho(i) + dt * 2. * pl%drho(i)
 !    enddo
+!else
+   do i = 1, pl%ntotal+pl%nvirt
+          lastrho(i) = pl%rho(i) + dt* pl%drho(i)
+   enddo
 !endif
-!temp2 = pl%rho
-!pl%rho = lastrho
-!lastrho = temp2
+temp2 = pl%rho
+pl%rho = lastrho
+lastrho = temp2
 
    time = time + dt
 
