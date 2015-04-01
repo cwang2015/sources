@@ -415,18 +415,24 @@ implicit none
 integer :: i, j, k, d, ntotal, it
 type(particles), pointer :: pl
               
-real(dp), pointer, dimension(:,:) :: lastvx   => null()   
-real(dp), pointer, dimension(:,:) :: temp1    => null() 
-real(dp), pointer, dimension(:)   :: lastrho  => null()
-real(dp), pointer, dimension(:)   :: temp2    => null()
+real(dp), allocatable, dimension(:,:) :: lastvx   
+real(dp), allocatable, dimension(:,:) :: temp1    
+real(dp), allocatable, dimension(:)   :: lastrho  
+real(dp), allocatable, dimension(:)   :: temp2    
 
+allocate(lastvx(2,parts%maxn))
+allocate(temp1(2,parts%maxn))
+allocate(lastrho(parts%maxn))
+allocate(temp2(parts%maxn))
 
 do it = 1, maxtimestep
     itimestep = itimestep+1
     parts%itimestep = itimestep
     pl => parts
     lastvx = pl%vx
-    
+
+   call single_step_for_water
+
 if(mod(itimestep,50) .ne. 50) then
     do i = 1, pl%ntotal
        do d = 1, dim
@@ -477,6 +483,11 @@ lastrho = temp2
    endif 
 
 enddo
+
+deallocate(lastvx)
+deallocate(temp1)
+deallocate(lastrho)
+deallocate(temp2)
 
 return
 end subroutine      
