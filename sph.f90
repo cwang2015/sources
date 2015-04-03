@@ -50,7 +50,8 @@ do while (.true.)
 
 !   call time_integration_for_water_by_verlet
 !   call time_integration_for_water
-   call time_integration_for_soil
+!   call time_integration_for_soil
+   call time_integration
 
    call time_elapsed(s2)
 

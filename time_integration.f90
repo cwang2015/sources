@@ -21,8 +21,6 @@
          write(*,*)'______________________________________________'
         endif  
   
-!--------------For water--------------------------------------------------
-      
 !     If not first time step, then update thermal energy, density and 
 !     velocity half a time step  
 
@@ -30,24 +28,15 @@
            pl => parts
            call first_half
         
-           !if(nor_density) call norm_density(pl)
-
-!!DEC$IF(.FALSE.)
-!!!Added on 3.Aug.2014
-           if(trim(pl%imaterial)=='soil')then
-              call drucker_prager_failure_criterion(pl)
-           endif
-
                              ! For soil
-                             if(.not.single_phase)then
+                             !if(.not.single_phase)then
                                 pl => soil
                                 call first_half
-                              call drucker_prager_failure_criterion(pl)
+                                call drucker_prager_failure_criterion(pl)
                                 !call volume_fraction_soil(soil)
                                 !call volume_fraction_water(parts, soil)
-                             endif  
+                             !endif  
 
-!!DEC$ENDIF
         endif
 
 !---  Definition of variables out of the function vector:    
@@ -57,49 +46,26 @@
         if (itimestep .eq. 1) then
            pl => parts
            call first_step
-           !if(nor_density) call norm_density(pl)
 
-!!DEC$IF(.FALSE.)
-!!!Added on 3.Aug.2014
-           if(trim(pl%imaterial)=='soil')then
-              if(plasticity==2)then
-                 call plastic_or_not(pl)
-                 call return_mapping
-              endif
-              call drucker_prager_failure_criterion(pl)
-           endif
-
-                                if(.not.single_phase)then
+                                !if(.not.single_phase)then
                                     pl => soil
                                     call first_step
 
-                                   if(plasticity==2)then
-                                      call plastic_or_not(pl)
-                                      call return_mapping
-                                   endif
+                                    if(plasticity==2)then
+                                       call plastic_or_not(pl)
+                                       call return_mapping
+                                    endif
 
-                               call drucker_prager_failure_criterion(pl)
-                                 !call volume_fraction_soil(soil)
-                                 !call volume_fraction_water(parts, soil)
-                                endif
-!!DEC$ENDIF
+                                    call drucker_prager_failure_criterion(pl)
+                                    !call volume_fraction_soil(soil)
+                                    !call volume_fraction_water(parts, soil)
+                                !endif
         else
    
            pl => parts
            call second_half          
-           !if(nor_density) call norm_density(pl)
 
-!!DEC$IF(.FALSE.)
-!!!Added on 3.Aug.2014
-           if(trim(pl%imaterial)=='soil')then
-              if(plasticity==2)then
-                 call plastic_or_not(pl)
-                 call return_mapping
-              endif
-              call drucker_prager_failure_criterion(pl)
-           endif
-
-                                if(.not.single_phase)then
+                                !if(.not.single_phase)then
                                    pl => soil
                                    call second_half
 
@@ -108,12 +74,11 @@
                                       call return_mapping
                                    endif
 
-                               call drucker_prager_failure_criterion(pl)
-                                 !call volume_fraction_soil(soil)
-                                 !call volume_fraction_water(parts, soil)
-                                endif
+                                   call drucker_prager_failure_criterion(pl)
+                                   !call volume_fraction_soil(soil)
+                                   !call volume_fraction_water(parts, soil)
+                                !endif
 
-!!DEC$ENDIF
         endif 
 
 
@@ -185,9 +150,7 @@
          endif
           
          if(pl%itype(i)<0)cycle
-         !if(pl%itype(i)<0.and.pl%x(2,i)<-0.2)cycle
          do d = 1, dim
-         !if(pl%itype(i)<0.and.d==1)cycle
             pl%v_min(d, i) = pl%vx(d, i)
             pl%vx(d, i) = pl%vx(d, i) + (dt/2.)*pl%dvx(d, i)
          enddo
@@ -225,14 +188,11 @@
          endif
         
          if(pl%itype(i)<0)cycle
-         !if(pl%itype(i)<0.and.pl%x(2,i)<-0.2)cycle
          do d = 1, dim        
-         !if(pl%itype(i)<0.and.d==1)cycle
             pl%vx(d, i) = pl%vx(d, i) + (dt/2.) * pl%dvx(d, i)   &
                         + pl%av(d, i)
             pl%x(d, i) = pl%x(d, i) + dt * pl%vx(d, i)
          enddo           
-         !if(trim(pl%imaterial)=='soil')write(*,*) pl%dvx(1:2,i) 
       enddo 
       
       return
@@ -267,15 +227,11 @@
          endif
 
          if(pl%itype(i)<0)cycle
-         !if(pl%itype(i)<0.and.pl%x(2,i)<-0.2)cycle
          do d = 1, dim                   
-         !if(pl%itype(i)<0.and.d==1)cycle
             pl%vx(d, i) = pl%v_min(d, i) + dt * pl%dvx(d, i)   &
                         + pl%av(d, i)
             pl%x(d, i) = pl%x(d, i) + dt * pl%vx(d, i)                  
          enddo
-         
-         !if(trim(pl%imaterial)=='soil')write(*,*) pl%vx(1:2,i) 
       enddo
 
       return

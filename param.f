@@ -115,10 +115,10 @@ c                    .false.: No normalization.
       parameter (soil_artificial_stress = .false.)
 
       logical volume_fraction
-      parameter(volume_fraction=.false.)
+      parameter(volume_fraction=.true.)
       logical water_artificial_volume
-      parameter (water_artificial_volume = .false.)
-      logical, parameter :: volume_fraction_renorm = .false.
+      parameter (water_artificial_volume = .true.)
+      logical, parameter :: volume_fraction_renorm = .true.
 
 ! 0 ignor; 1 negative pressure to zero; 2 artficial stress
       integer water_tension_instability

@@ -560,6 +560,25 @@ c     Calculate SPH sum for shear tensor Tab = va,b + vb,a - 2/3 delta_ab vc,c
       return
       end subroutine
 
+c ---------------------------------------------------------------------
+      subroutine newtonian_fluid(parts)
+c----------------------------------------------------------------------
+      use param
+      use m_particles
+      implicit none
+
+      type(particles) parts
+      integer ntotal
+
+      ntotal = parts%ntotal + parts%nvirt
+
+      parts%sxx(1:ntotal) = parts%eta(1:ntotal)*parts%txx(1:ntotal)
+      parts%syy(1:ntotal) = parts%eta(1:ntotal)*parts%tyy(1:ntotal)
+      parts%sxy(1:ntotal) = parts%eta(1:ntotal)*parts%txy(1:ntotal)
+
+      return
+      end subroutine
+
 !---------------------------------------------------------------------
       subroutine plastic_flow_rule(parts)
 !---------------------------------------------------------------------
