@@ -75,6 +75,7 @@ integer :: skf = 4
 !     nor_density =  .true. : Density normalization by using CSPM,
 !                    .false.: No normalization.
 
+integer :: integrate_scheme = 1  ! =1, LF; =2, Verlet
 logical :: summation_density  = .false.         
 logical :: average_velocity  = .false.         
 logical :: config_input  = .false. 
