@@ -48,7 +48,13 @@ do while (.true.)
    read(*,*) maxtimestep
       !maxtimestep = 400000      
 
-   call time_integration_for_water_by_verlet
+   if(integrate_scheme==1)then
+      if(single_phase.and.parts%imaterial=='water') call time_integration_for_water
+      if(single_phase.and.parts%imaterial=='soil')  call time_integration_for_soil
+      if(.not.single_phase) call time_integration
+   elseif(integrate_scheme==2)then
+      call time_integration_for_water_by_verlet
+   endif
 
    call time_elapsed(s2)
 

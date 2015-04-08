@@ -114,6 +114,10 @@
           write(*,*) 'Darcy parameter: porosity, permeability '
           write(*,*) sio2%porosity, sio2%permeability
 
+      case('INTEGRATION SCHEME')
+          read(pvalu,*) integrate_scheme
+          write(*,*) 'Integration scheme: ', integrate_scheme 
+
       case('SOIL FAILURE CRITERIA')
        
           read(pvalu,*) sio2%cohesion, SIO2%phi

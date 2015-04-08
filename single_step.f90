@@ -19,25 +19,14 @@ if(dbg) write(*,*) 'In single_step...'
                                       if(single_phase) nphase=1
 
                                       do iphase = 1, nphase
-                                         !if(iphase==2) cycle
                                          if(iphase==1) pl => parts  !!!
-                                         if(iphase==2) pl => soil !!!
+                                         if(iphase==2) pl => soil   !!!
 
-if(trim(pl%imaterial)=='water')call single_step_for_water
-
-!DEC$IF(.FALSE.)
 pl%dvx = 0.d0; pl%drho = 0.d0
+if(trim(pl%imaterial)=='water')pl%dvof = 0.d0
 if(trim(pl%imaterial)=='soil')then
-   pl%dsxx = 0.d0; pl%dsxy = 0.d0; pl%dsyy = 0.d0
-          pl%dp = 0.d0
+   pl%dsxx = 0.d0; pl%dsxy = 0.d0; pl%dsyy = 0.d0; pl%dp = 0.d0
 endif
-if(trim(pl%imaterial)=='water') pl%dvof = 0.d0
-
-!if(iphase==2)exit
-     
-!---  Positions of virtual (boundary) particles: 
-
-!if (virtual_part) call virt_part
  
 !---  Interaction parameters, calculating neighboring particles
 !     and optimzing smoothing length
@@ -64,7 +53,7 @@ endif
 
 !---  Density approximation or change rate
      
-if (summation_density) then      
+if(summation_density)then      
     call sum_density(pl)
 else             
     call con_density(pl)         
@@ -75,10 +64,6 @@ if(artificial_density)then
       !!call renormalize_density_gradient(pl)
       call art_density(pl)
    !endif
-endif
-
-if(trim(pl%imaterial)=='soil')then
-!   write(*,*) pl%dsyy(381:400)
 endif
 
 !---  Dynamic viscosity:
@@ -110,12 +95,7 @@ elseif(trim(pl%imaterial)=='soil')then
             write(*,*) 'Failured points: ', pl%nfail
 endif
 
-if(trim(pl%imaterial)=='soil')then
-!   write(*,*) '-----'
-!   write(*,*) pl%dsyy(381:400)
-endif
-
-call int_force1(pl) 
+call int_force(pl) 
        
 if(trim(pl%imaterial)=='water'.and.water_tension_instability==2) &
    call tension_instability(pl) 
@@ -123,32 +103,20 @@ if(trim(pl%imaterial)=='water'.and.water_tension_instability==2) &
 ! --- Plasticity flow rule   ! This was done before Jaummann_rate, because we 
 !     we need txx,tyy,tzz, which was destroyed in Jaumann_rate!
 
-if(trim(pl%imaterial)=='soil')then   !!! Just a test!
-!   if(plasticity==1)then 
-!      call plastic_flow_rule(pl)
-!   elseif(plasticity==2)then     
-!      call plastic_flow_rule2(pl)
-!   elseif(plasticity==3)then
-!      call plastic_or_not(pl)
-!      call plastic_flow_rule3(pl)
-!   endif
-endif
-
-if(trim(pl%imaterial)=='soil')then
-!   write(*,*) 'after plastic_flow_rule'
-!   write(*,*) pl%dsyy(381:400)
+if(trim(pl%imaterial)=='soil')then   
+   if(plasticity==1)then 
+      call plastic_flow_rule(pl)
+   elseif(plasticity==2)then     
+      call plastic_flow_rule2(pl)
+   elseif(plasticity==3)then
+      call plastic_or_not(pl)
+      call plastic_flow_rule3(pl)
+   endif
 endif
 
 ! --- Jaumann rate  !When???
 
-if(trim(pl%imaterial)=='soil')then
-   call Jaumann_rate(pl)
-endif
-
-if(trim(pl%imaterial)=='soil')then
-!   write(*,*) 'after Jaumann_rate'
-!   write(*,*) pl%dsyy(381:400)
-endif
+if(trim(pl%imaterial)=='soil')call Jaumann_rate(pl)
 
 !---  Artificial viscosity:
 
@@ -165,21 +133,20 @@ if(trim(pl%imaterial)=='water'.and.water_artificial_volume)  &
 !---  External forces:
 
       !if (ex_force) call ext_force(pl)
-      if (ex_force)then
-          if(self_gravity) call gravity_force(pl)
-          call repulsive_force(pl)
-      endif
+!      if (ex_force)then
+!          if(self_gravity) call gravity_force(pl)
+!          call repulsive_force(pl)
+!      endif
+
+pl%dvx(2,:) = pl%dvx(2,:) + gravity
 
 !     Calculating the neighboring particles and undating HSML
       
-      if (sle.ne.0) call h_upgrade(pl)
+if (sle.ne.0) call h_upgrade(pl)
 
-!      if (heat_artificial) call art_heat(ntotal+nvirt,hsml,   &
-!          mass,x,vx,niac,rho,u, c,pair_i,pair_j,w,dwdx,ahdudt)
-     
 !     Calculating average velocity of each partile for avoiding penetration
 
-      if (average_velocity) call av_vel(pl) 
+if (average_velocity) call av_vel(pl) 
 
 !---  Convert velocity, force, and energy to f and dfdt  
       
@@ -188,7 +155,6 @@ if(mod(itimestep,print_step).eq.0) then
    call pl%minimum_time_step  
 endif
 
-!DEC$ENDIF
                                             enddo ! iphase
 
 !call drag_force(parts,soil)   !!! Porous media
@@ -215,21 +181,21 @@ endif
          call parts%interaction_statistics
       endif    
 
-      !call darcy_law(parts,soil)          
+      call darcy_law(parts,soil)          
       call pore_water_pressure(parts,soil) 
 
       if(volume_fraction)then
-!        call volume_fraction_soil(soil)
-!        call volume_fraction_water2(parts,soil)
-!        call volume_fraction_water(parts,soil)  ! phi_f = 1- phi_s
-       if(volume_fraction_renorm)then
-        if(mod(itimestep,40).eq.0) then
-!           ntotal = parts%ntotal+parts%nvirt
-!           parts%rho(1:ntotal) = parts%rho(1:ntotal)/parts%vof(1:ntotal) 
-!           parts%vof = parts%vof2
-!           parts%rho(1:ntotal) = parts%rho(1:ntotal)*parts%vof(1:ntotal) 
-        endif
-       endif
+         call volume_fraction_soil(soil)
+         call volume_fraction_water2(parts,soil)
+         call volume_fraction_water(parts,soil)  ! phi_f = 1- phi_s
+         if(volume_fraction_renorm)then
+            if(mod(itimestep,40).eq.0) then
+               ntotal = parts%ntotal+parts%nvirt
+               parts%rho(1:ntotal) = parts%rho(1:ntotal)/parts%vof(1:ntotal) 
+               parts%vof = parts%vof2
+               parts%rho(1:ntotal) = parts%rho(1:ntotal)*parts%vof(1:ntotal) 
+            endif
+         endif
       endif
 
 !      call direct_find(parts) 
@@ -272,8 +238,8 @@ endif
 
 !---  Density approximation or change rate
      
-if(summation_density) call sum_density(pl)
-
+!if(summation_density) call sum_density(pl)
+call sum_density(pl)
 pl%drho = -pl%rho*(df2(pl%vx(1,:),'x',pl)+df2(pl%vx(2,:),'y',pl))
       
 if(artificial_density)then
@@ -327,6 +293,128 @@ if (sle.ne.0) call h_upgrade(pl)
 
 if (average_velocity) call av_vel(pl) 
 
+if(mod(itimestep,print_step).eq.0) then     
+!  call pl%particle_monitor
+   call pl%minimum_time_step  
+endif
+
+return
+end subroutine
+
+
+!----------------------------------------------------------------------      
+               subroutine single_step_for_soil
+!----------------------------------------------------------------------
+!   Subroutine to determine the right hand side of a differential 
+!   equation in a single step for performing time integration 
+!----------------------------------------------------------------------
+use param 
+use declarations_sph
+use m_sph_fo
+implicit none
+
+type(particles), pointer :: pl
+type(material), pointer :: property
+
+pl => parts
+property => pl%material
+
+pl%dvx = 0.d0; pl%drho = 0.d0
+pl%dsxx = 0.d0; pl%dsxy = 0.d0; pl%dsyy = 0.d0
+pl%dp = 0.d0
+ 
+!---  Interaction parameters, calculating neighboring particles
+!     and optimzing smoothing length
+  
+call pl%find_pairs
+
+if(mod(itimestep,print_step).eq.0.and.int_stat) then
+   call pl%interaction_statistics
+endif   
+
+!---  Density approximation or change rate
+     
+if (summation_density) then      
+    call sum_density(pl)
+else             
+    call con_density(pl)         
+endif
+      
+if(artificial_density)then
+   !if(trim(pl%imaterial)=='water')then
+      !!call renormalize_density_gradient(pl)
+      call art_density(pl)
+   !endif
+endif
+
+call shear_modulus(pl)
+       
+!---  Internal forces:
+
+call shear_strain_rate(pl)   
+call velocity_divergence(pl)
+
+call pressure(pl)
+
+if(yield_criterion == 1)then
+   call mohr_coulomb_failure_criterion(pl)
+elseif(yield_criterion == 2)then
+   call drucker_prager_failure_criterion(pl)
+endif
+
+!call int_force1(pl)
+
+pl%dvx(1,:) = - df(pl%p,'x',pl) + df(pl%sxx,'x',pl) + df(pl%sxy,'y',pl)
+pl%dvx(2,:) = - df(pl%p,'y',pl) + df(pl%sxy,'x',pl) + df(pl%syy,'y',pl)
+
+where (pl%rho.gt.0.0) pl%dvx(1,:) = pl%dvx(1,:)/pl%rho
+where (pl%rho.gt.0.0) pl%dvx(2,:) = pl%dvx(2,:)/pl%rho       
+
+! --- Plasticity flow rule   ! This was done before Jaummann_rate, because we 
+!     we need txx,tyy,tzz, which was destroyed in Jaumann_rate!
+
+if(plasticity==1)then 
+   call plastic_flow_rule(pl)
+elseif(plasticity==2)then     
+   call plastic_flow_rule2(pl)
+elseif(plasticity==3)then
+   call plastic_or_not(pl)
+   call plastic_flow_rule3(pl)
+endif
+
+! --- Jaumann rate  !When???
+
+call Jaumann_rate(pl)
+
+!---  Artificial viscosity:
+
+if (visc_artificial) call art_visc(pl)
+
+if(soil_artificial_stress) call art_stress(pl)
+
+!--- Damping
+!       if(trim(pl%imaterial)=='soil') call damping_stress(pl)
+    
+!---  External forces:
+
+      !if (ex_force) call ext_force(pl)
+!      if (ex_force)then
+!          if(self_gravity) call gravity_force(pl)
+!          call repulsive_force(pl)
+!      endif
+
+pl%dvx(2,:) = pl%dvx(2,:) + gravity
+
+! Calculating the neighboring particles and undating HSML
+      
+if (sle.ne.0) call h_upgrade(pl)
+     
+! Calculating average velocity of each partile for avoiding penetration
+
+if (average_velocity) call av_vel(pl) 
+
+!---  Convert velocity, force, and energy to f and dfdt  
+      
 if(mod(itimestep,print_step).eq.0) then     
 !  call pl%particle_monitor
    call pl%minimum_time_step  
