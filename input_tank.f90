@@ -14,19 +14,20 @@ double precision element_size, soil_submerged_depth
 
 ! Set nozzle and tank geometry parameters
 
-call tank%set(xl=0.5d0,yl=0.3d0,m=40,n=24)
+call tank%set(xl=0.6375d0,yl=0.33d0,m=102,n=52)
 npoint = tank%m*tank%n
 allocate(tank%x(npoint),tank%y(npoint),tank%zone(npoint))
 call tank%cell_center
 !      write(*,*) 'x=', tank%x
 !      write(*,*) 'y=', tank%y
+!      just for test 1 
 
 ! Zoning
 tank%zone = 2
 do i = 1, tank%m*tank%n
-   if(tank%x(i)<0.05.or.tank%x(i)>0.45.or.tank%y(i)<0.05) tank%zone(i) = 1
-   if(tank%zone(i)==1.and.tank%x(i)>0.2)tank%zone(i)=3
-   if(tank%zone(i)==2.and.tank%x(i)>0.2)tank%zone(i)=4
+   if(tank%x(i)<0.026.or.tank%x(i)>0.6115.or.tank%y(i)<0.026) tank%zone(i) = 1
+   if(tank%zone(i)==1.and.tank%x(i)>0.17625)tank%zone(i)=3
+   if(tank%zone(i)==2.and.tank%x(i)>0.17625)tank%zone(i)=4
 enddo
 !      write(*,*) tank%zone
 

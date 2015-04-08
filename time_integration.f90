@@ -368,26 +368,32 @@ use param
 use declarations_sph
 implicit none     
 
-integer :: i, j, k, d, ntotal, it
+integer :: i, j, k, d, ntotal, it 
 type(particles), pointer :: pl
               
-real(dp), pointer, dimension(:,:) :: lastvx   => null()   
-real(dp), pointer, dimension(:,:) :: temp1    => null() 
-real(dp), pointer, dimension(:)   :: lastrho  => null()
-real(dp), pointer, dimension(:)   :: temp2    => null()
+real(dp), allocatable, dimension(:,:) :: lastvx   
+real(dp), allocatable, dimension(:,:) :: temp1    
+real(dp), allocatable, dimension(:)   :: lastrho  
+real(dp), allocatable, dimension(:)   :: temp2    
 
-
-do it = 1, maxtimestep
-    itimestep = itimestep+1
-    parts%itimestep = itimestep
+allocate(lastvx(2,parts%maxn))
+allocate(temp1(2,parts%maxn))
+allocate(lastrho(parts%maxn))
+allocate(temp2(parts%maxn))
     pl => parts
     lastvx = pl%vx
-    
-if(mod(itimestep,50) .ne. 50) then
+    lastrho = pl%rho
+
+do it = 1, maxtimestep 
+    itimestep = itimestep+1
+   call single_step_for_water
+
+if(mod(itimestep,50) .ne. 0) then
     do i = 1, pl%ntotal
        do d = 1, dim
           pl%x(d,i) = pl%x(d,i) + dt * pl%vx(d,i) +(dt**2./2.)*pl%dvx(d,i)
           lastvx(d,i) = lastvx(d,i) + 2.*dt*pl%dvx(d,i)
+       
        enddo
     enddo
 else
@@ -395,25 +401,25 @@ else
        do d = 1, dim
           pl%x(d,i) = pl%x(d,i) + dt * pl%vx(d,i) +(dt**2./2.)*pl%dvx(d,i)
           lastvx(d,i) = pl%vx(d,i) + dt*pl%dvx(d,i)
-       enddo
+      enddo
     enddo
 endif
 temp1 = pl%vx
 pl%vx = lastvx
 lastvx = temp1
 
-if(mod(itimestep,50) .ne. 50) then
+if(itimestep .eq. 1) then
     do i = 1, pl%ntotal+pl%nvirt
-       do d = 1, dim
-          lastrho(i) = lastrho(i) + dt*2.* pl%drho(i)
-       enddo
+          lastrho(i) = pl%rho(i) + dt * 2. * pl%drho(i)
+    enddo
+elseif(mod(itimestep,50) .ne. 0) then
+    do i = 1, pl%ntotal+pl%nvirt
+          lastrho(i) = lastrho(i) + dt * 2. * pl%drho(i)
     enddo
 else
-    do i = 1, pl%ntotal+pl%nvirt
-       do d = 1, dim
-          lastrho(i) = pl%rho(i) + dt*2.* pl%drho(i)
-       enddo
-    enddo
+   do i = 1, pl%ntotal+pl%nvirt
+          lastrho(i) = pl%rho(i) + dt* pl%drho(i)
+   enddo
 endif
 temp2 = pl%rho
 pl%rho = lastrho
@@ -433,6 +439,12 @@ lastrho = temp2
    endif 
 
 enddo
+
+deallocate(lastvx)
+deallocate(lastrho)
+deallocate(temp1)
+deallocate(temp2)
+
 
 return
 end subroutine      
