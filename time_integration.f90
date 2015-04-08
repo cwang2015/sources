@@ -452,15 +452,19 @@ temp1 = pl%vx
 pl%vx = lastvx
 lastvx = temp1
 
-!if(mod(itimestep,50) .ne. 0) then
-!    do i = 1, pl%ntotal+pl%nvirt
-!          lastrho(i) = pl%rho(i) + dt * 2. * pl%drho(i)
-!    enddo
-!else
+if(itimestep .eq. 1) then
+    do i = 1, pl%ntotal+pl%nvirt
+          lastrho(i) = pl%rho(i) + dt * 2. * pl%drho(i)
+    enddo
+elseif(mod(itimestep,50) .ne. 0) then
+    do i = 1, pl%ntotal+pl%nvirt
+          lastrho(i) = lastrho(i) + dt * 2. * pl%drho(i)
+    enddo
+else
    do i = 1, pl%ntotal+pl%nvirt
           lastrho(i) = pl%rho(i) + dt* pl%drho(i)
    enddo
-!endif
+endif
 temp2 = pl%rho
 pl%rho = lastrho
 lastrho = temp2
