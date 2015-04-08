@@ -20,6 +20,7 @@ allocate(tank%x(npoint),tank%y(npoint),tank%zone(npoint))
 call tank%cell_center
 !      write(*,*) 'x=', tank%x
 !      write(*,*) 'y=', tank%y
+!      just for test 1 
 
 ! Zoning
 tank%zone = 2
