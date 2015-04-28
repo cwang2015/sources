@@ -361,6 +361,7 @@ enddo
 return
 end subroutine      
 
+
 !----------------------------------------------------------------------      
       subroutine time_integration_for_water_by_verlet
 !----------------------------------------------------------------------
@@ -449,6 +450,96 @@ deallocate(temp2)
 return
 end subroutine      
          
+!----------------------------------------------------------------------      
+      subroutine time_integration_for_water_by_verlet_openmp
+!----------------------------------------------------------------------
+use param
+use declarations_sph
+implicit none     
+
+
+integer :: i, j, k, d, ntotal, it 
+double precision mypi
+type(particles), pointer :: pl
+              
+real(dp), allocatable, dimension(:,:) :: lastvx   
+real(dp), allocatable, dimension(:,:) :: temp1    
+real(dp), allocatable, dimension(:)   :: lastrho  
+real(dp), allocatable, dimension(:)   :: temp2    
+
+allocate(lastvx(2,parts%maxn))
+allocate(temp1(2,parts%maxn))
+allocate(lastrho(parts%maxn))
+allocate(temp2(parts%maxn))
+    pl => parts
+    lastvx = pl%vx
+    lastrho = pl%rho
+
+do it = 1, maxtimestep 
+    itimestep = itimestep+1
+   call single_step_for_water
+!$omp parallel    
+!$omp do
+if(mod(itimestep,50) .ne. 0) then    
+    do i = 1, pl%ntotal
+       do d = 1, dim
+          pl%x(d,i) = pl%x(d,i) + dt * pl%vx(d,i) +(dt**2./2.)*pl%dvx(d,i)
+          lastvx(d,i) = lastvx(d,i) + 2.*dt*pl%dvx(d,i)
+       enddo
+    enddo
+else
+    do i = 1, pl%ntotal
+       do d = 1, dim
+          pl%x(d,i) = pl%x(d,i) + dt * pl%vx(d,i) +(dt**2./2.)*pl%dvx(d,i)
+          lastvx(d,i) = pl%vx(d,i) + dt*pl%dvx(d,i)
+      enddo
+    enddo
+endif
+temp1 = pl%vx
+pl%vx = lastvx
+lastvx = temp1
+
+if(itimestep .eq. 1) then
+    do i = 1, pl%ntotal+pl%nvirt
+          lastrho(i) = pl%rho(i) + dt * 2. * pl%drho(i)
+    enddo
+elseif(mod(itimestep,50) .ne. 0) then
+    do i = 1, pl%ntotal+pl%nvirt
+          lastrho(i) = lastrho(i) + dt * 2. * pl%drho(i)
+    enddo
+else
+   do i = 1, pl%ntotal+pl%nvirt
+          lastrho(i) = pl%rho(i) + dt* pl%drho(i)
+   enddo
+endif
+temp2 = pl%rho
+pl%rho = lastrho
+lastrho = temp2
+!$omp end do
+!$omp end parallel
+   time = time + dt
+
+   if(mod(itimestep,print_step).eq.0)then
+      write(*,*)'______________________________________________'
+      write(*,*)'  current number of time step =',                &
+                itimestep,'     current time=', real(time+dt)
+      write(*,*)'______________________________________________'
+   endif  
+
+   if(itimestep>=save_step_from.and.mod(itimestep,save_step).eq.0)then
+      call output
+   endif 
+
+enddo
+
+deallocate(lastvx)
+deallocate(lastrho)
+deallocate(temp1)
+deallocate(temp2)
+
+
+return
+end subroutine   
 
 !----------------------------------------------------------------------
              subroutine time_integration_for_soil

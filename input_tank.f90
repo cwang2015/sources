@@ -24,7 +24,7 @@ call tank%cell_center
 ! Zoning
 tank%zone = 2
 do i = 1, tank%m*tank%n
-   if(tank%x(i)<0.026.or.tank%x(i)>0.6115.or.tank%y(i)<0.026) tank%zone(i) = 1
+   if(tank%x(i)<0.02.or.tank%x(i)>0.6175.or.tank%y(i)<0.02) tank%zone(i) = 1
    if(tank%zone(i)==1.and.tank%x(i)>0.17625)tank%zone(i)=3
    if(tank%zone(i)==2.and.tank%x(i)>0.17625)tank%zone(i)=4
 enddo

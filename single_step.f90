@@ -254,6 +254,7 @@ endif
 where(pl%rho>0.0) pl%p = property%b*((pl%rho/property%rho0)**property%gamma-1)
 
 !Calculate SPH sum for shear tensor Tab = va,b + vb,a - 2/3 delta_ab vc,c
+!$omp parallel
 
 pl%txx = 2./3.*(2.0*df(pl%vx(1,:),'x',pl)-df(pl%vx(2,:),'y',pl))
 pl%txy = df(pl%vx(1,:),'y',pl)+df(pl%vx(2,:),'x',pl)
@@ -273,6 +274,7 @@ pl%dvx(2,:) = - df(pl%p,'y',pl) + df(pl%sxy,'x',pl) + df(pl%syy,'y',pl)
 where (pl%rho.gt.0.0) pl%dvx(1,:) = pl%dvx(1,:)/pl%rho
 where (pl%rho.gt.0.0) pl%dvx(2,:) = pl%dvx(2,:)/pl%rho
        
+!$omp end parallel
 !if(water_tension_instability==2) call tension_instability(pl) 
 
 !---  Artificial viscosity:
