@@ -27,7 +27,7 @@ character(len=32) output_file_name(3)
 double precision inlet_velocity
 
 ! Geometry object
-type(geo) wasserjet
+!type(geo) wasserjet
 logical with_nozzle
 
 ! Particle size: large, small?
@@ -41,6 +41,7 @@ logical dry_soil
 character(len=32) particle_type
 
 type(material), target :: H2O, SiO2
+type(parameters), target :: params
 type(numerical), target :: numeric
 
 ! Particles 

@@ -93,8 +93,8 @@
        case('IMMERSE DEPTH')
                   ndim = 1
                   if(ncoma>=ndim) call trim_pvalu(trim(pvalu),',',ndim)
-                  read(pvalu,*) wasserjet%immerse
-                  write(*,*) 'Immerse depth = ', wasserjet%immerse
+                  !read(pvalu,*) wasserjet%immerse
+                  !write(*,*) 'Immerse depth = ', wasserjet%immerse
 
        case('WITH NOZZLE')
                   
