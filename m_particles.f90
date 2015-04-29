@@ -64,6 +64,12 @@ end type
 
 type numerical
 
+!     Nearest neighbor particle searching (nnps) method
+!     nnps = 1 : Simplest and direct searching
+!            2 : Sorting grid linked list
+!            3 : Tree algorithm
+integer :: nnps = 1
+
 ! Gravitational acceleration
   real(dp) :: gravity = -9.8
 
@@ -94,7 +100,7 @@ type particles
 
    integer :: dim   = 2
    integer :: maxn  = 0
-   integer :: nnps  = 1
+!   integer :: nnps  = 1
    integer :: niac  = 0
    integer :: max_interaction = 0
    integer :: ntotal = 0, nvirt = 0
@@ -724,7 +730,7 @@ implicit none
 class(particles) parts
 integer nnps
 
-nnps = parts%nnps
+nnps = parts%numeric%nnps
 if(nnps == 1)then
    call direct_find(parts)
 elseif(nnps == 2)then

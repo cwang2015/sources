@@ -33,7 +33,7 @@ integer :: pa_sph = 2
 !     nnps = 1 : Simplest and direct searching
 !            2 : Sorting grid linked list
 !            3 : Tree algorithm
-integer :: nnps = 1 
+!integer :: nnps = 1 
 
 !     Smoothing length evolution (sle) algorithm
 !     sle = 0 : Keep unchanged,

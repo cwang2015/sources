@@ -32,15 +32,15 @@ endif
 !---  Interaction parameters, calculating neighboring particles
 !     and optimzing smoothing length
   
-if (nnps.eq.1) then 
+if (pl%numeric%nnps.eq.1) then 
    call direct_find(pl)
-else if (nnps.eq.2) then
+else if (pl%numeric%nnps.eq.2) then
 !        call link_list(itimestep, ntotal+nvirt,hsml(1),x,niac,pair_i,
 !     &       pair_j,w,dwdx,ns)
 !        call link_list(itimestep, parts%ntotal+parts%nvirt,
 !     &       parts%hsml(1),parts%x,parts%niac,parts%pair_i,
 !     &       parts%pair_j,parts%w,parts%dwdx,parts%countiac)
-else if (nnps.eq.3) then 
+else if (pl%numeric%nnps.eq.3) then 
 !        call tree_search(itimestep, ntotal+nvirt,hsml,x,niac,pair_i,
 !     &       pair_j,w,dwdx,ns)
 endif         
@@ -180,13 +180,13 @@ endif
 !---  Interaction parameters, calculating neighboring particles
 !     and optimzing smoothing length
   
-      if (nnps.eq.1) then 
+      if (numeric%nnps.eq.1) then 
          call direct_find_2(parts,soil)
         !call direct_find(parts)
-      else if (nnps.eq.2) then
+      else if (numeric%nnps.eq.2) then
 !        call link_list(itimestep, ntotal+nvirt,hsml(1),x,niac,pair_i,
 !     &       pair_j,w,dwdx,ns)
-      else if (nnps.eq.3) then 
+      else if (numeric%nnps.eq.3) then 
 !        call tree_search(itimestep, ntotal+nvirt,hsml,x,niac,pair_i,
 !     &       pair_j,w,dwdx,ns)
       endif         

@@ -39,6 +39,11 @@
           read(pvalu,*) save_step
           write(*,*) 'Save step = ', save_step
 
+      case('PARTICLE PAIRS FIND METHOD')
+
+         read(pvalu,*) numeric%nnps
+         write(*,*) 'Particle pairs find method = ', numeric%nnps 
+
       case('RESULTS FILE')
                 
                   !ndim = 1
