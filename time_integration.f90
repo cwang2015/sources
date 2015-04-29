@@ -118,7 +118,7 @@
 
       subroutine first_half
 ! ---------------------------------------------------------------------
-      implicit none
+implicit none
 
       do i = 1, pl%ntotal +pl%nvirt    ! originally only pl%ntotal       
             
@@ -155,7 +155,7 @@
             pl%vx(d, i) = pl%vx(d, i) + (dt/2.)*pl%dvx(d, i)
          enddo
       enddo
- 
+
       return
       end subroutine
 

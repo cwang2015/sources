@@ -6,6 +6,7 @@
 !----------------------------------------------------------------------
 use param 
 use declarations_sph
+use m_sph_fo
 implicit none
 
 integer  nphase, iphase
@@ -53,11 +54,11 @@ endif
 
 !---  Density approximation or change rate
      
-if(summation_density)then      
-    call sum_density(pl)
-else             
+!if(summation_density)then      
+!if(mod(itimestep,30)==0) call sum_density(pl)
+!else             
     call con_density(pl)         
-endif
+!endif
       
 if(artificial_density)then
    !if(trim(pl%imaterial)=='water')then
@@ -95,8 +96,20 @@ elseif(trim(pl%imaterial)=='soil')then
             write(*,*) 'Failured points: ', pl%nfail
 endif
 
-call int_force(pl) 
-       
+
+!Calculate internal force for water phase !! -phi_f Grad(p)
+if(pl%imaterial=='water')then
+
+   pl%dvx(1,:) = -pl%vof*df(pl%p,'x',pl) + df(pl%vof*pl%sxx,'x',pl) + df(pl%vof*pl%sxy,'y',pl)
+   pl%dvx(2,:) = -pl%vof*df(pl%p,'y',pl) + df(pl%vof*pl%sxy,'x',pl) + df(pl%vof*pl%syy,'y',pl)
+
+   where (pl%rho.gt.0.0) pl%dvx(1,:) = pl%dvx(1,:)/pl%rho
+   where (pl%rho.gt.0.0) pl%dvx(2,:) = pl%dvx(2,:)/pl%rho
+
+else      
+   call int_force(pl) 
+endif      
+
 if(trim(pl%imaterial)=='water'.and.water_tension_instability==2) &
    call tension_instability(pl) 
 
@@ -136,6 +149,7 @@ if(trim(pl%imaterial)=='water'.and.water_artificial_volume)  &
 !      if (ex_force)then
 !          if(self_gravity) call gravity_force(pl)
 !          call repulsive_force(pl)
+          call pl%repulsive_force
 !      endif
 
 pl%dvx(2,:) = pl%dvx(2,:) + gravity

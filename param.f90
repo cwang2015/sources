@@ -77,13 +77,13 @@ integer :: skf = 4
 
 integer :: integrate_scheme = 1  ! =1, LF; =2, Verlet
 logical :: summation_density  = .false.         
-logical :: average_velocity  = .false.         
+logical :: average_velocity  = .true.         
 logical :: config_input  = .false. 
 logical :: virtual_part  = .true. 
 logical :: vp_input  = .false.  
 logical :: visc  = .true.  
 logical :: ex_force  = .true.
-logical :: visc_artificial  = .false. 
+logical :: visc_artificial  = .true. 
 logical :: heat_artificial  = .false. 
 !logical :: self_gravity  = .true.      
 logical :: nor_density  = .false.              
@@ -93,7 +93,7 @@ integer :: stress_integration = 1
 integer :: yield_criterion = 2
 integer :: plasticity = 3  ! =0 non; =1 Bui, =2 return mapping =3 Lopez
 logical :: artificial_density = .true.                  
-logical :: soil_artificial_stress = .false.
+logical :: soil_artificial_stress = .true.
 
 logical :: volume_fraction = .true.
 logical :: water_artificial_volume = .true.

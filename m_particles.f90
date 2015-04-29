@@ -69,10 +69,10 @@ type numerical
 
 ! Artificial viscosity
 ! alpha: shear viscosity; beta: bulk viscosity; etq: parameter to avoid sigularities   
-   real(dp) :: alpha=0.d0, beta=0.d0, etq=0.1d0
+   real(dp) :: alpha=0.1d0, beta=0.d0, etq=0.1d0
 
 ! Leonard_Johns repulsive force
-   real(dp) :: rr0 = 0.d0, dd = 0.d0, p1 = 12, p2 = 4
+   real(dp) :: rr0 = 0.005d0, dd = 0.1d0, p1 = 12, p2 = 4
 
 ! Delta-SPH
    real(dp) :: delta = 0.1d0
@@ -109,7 +109,7 @@ type particles
   integer, pointer, dimension(:) :: real_zone => null(), virtual_zone => null()
 
 ! Numerical parameters
-   class(*), pointer :: numeric => null()
+   class(numerical), pointer :: numeric => null()
    
 ! Particle fundamental data
    integer,  pointer, dimension(:)   :: itype=> null()
@@ -216,6 +216,9 @@ type particles
        procedure :: take_virtual => take_virtual_points1
        procedure :: setup_itype
        procedure :: find_pairs
+       procedure :: repulsive_force
+
+!       procedure :: find_particle_nearest2_point
 !       procedure :: grad_scalar
 !       procedure :: grad_tensor
 !       generic :: grad => grad_scalar, grad_tensor
@@ -734,6 +737,82 @@ endif
 
 return
 end subroutine
+
+!--------------------------------------------------------------------------
+      subroutine repulsive_force(parts)
+!--------------------------------------------------------------------------
+implicit none
+
+class(particles) parts
+double precision dx(3), rr, f, rr0, dd, p1, p2     
+integer i, j, k, d
+           
+rr0 = parts%numeric%rr0; dd = parts%numeric%dd
+p1 = parts%numeric%p1; p2 = parts%numeric%p2
+      
+do k=1,parts%niac
+   i = parts%pair_i(k)
+   j = parts%pair_j(k)  
+   if(parts%itype(i).gt.0.and.parts%itype(j).lt.0)then  
+      rr = 0.      
+      do d=1,parts%dim
+         dx(d) =  parts%x(d,i) -  parts%x(d,j)
+         rr = rr + dx(d)*dx(d)
+      enddo  
+      rr = sqrt(rr)
+      if(rr.lt.rr0)then
+         f = ((rr0/rr)**p1-(rr0/rr)**p2)/rr**2
+         do d = 1, parts%dim
+            parts%dvx(d, i) = parts%dvx(d, i) + dd*dx(d)*f
+         enddo
+      endif
+   endif        
+enddo   
+       
+return
+end subroutine
+
+!---------------------------------------------------------------------
+!   function find_particle_nearest2_point(parts,x,y ) result(index)
+!---------------------------------------------------------------------
+!implicit none
+!class(particles) parts
+!real(dp) x, y
+!integer index
+!integer ntotal, i
+!real(dp) :: mindist = 10.d10, dist
+
+!ntotal = parts%ntotal + parts%nvirt
+!do i = 1, ntotal
+!   dist = (parts%x(1,i)-x)**2.0 + (parts%x(2,i)-y)**2.0
+!   if(dist<mindist)then
+!      index = i
+!      mindist = dist
+!   endif        
+!enddo
+
+!end function
+
+!------------------------------------------------------------------------
+!   function find_particles_nearest2_points(parts,x,y ) result(indices)
+!------------------------------------------------------------------------
+!implicit none
+!class(particles) parts
+!real(dp):: x(:), y(:)
+!integer index
+!integer ntotal, i
+!real(dp) :: mindist = 10.d10, dist
+
+!ntotal = parts%ntotal + parts%nvirt
+!do i = 1, ntotal
+!   dist = (parts%x(1,i)-x)**2.0 + (parts%x(2,i)-y)**2.0
+!   if(dist<mindist)then
+!      index = i
+!      mindist = dist
+!   endif        
+!enddo
+
+!end function
 
 !--------------------------------------------
     subroutine array_equal_array(a,b)

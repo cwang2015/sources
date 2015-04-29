@@ -1,3 +1,5 @@
+
+!DEC$IF(.FALSE.)
 !--------------------------------------------------------------------------
       subroutine repulsive_force(parts)
 !--------------------------------------------------------------------------
@@ -62,4 +64,6 @@ do k=1,niac
 enddo   
        
 return
-end subroutine         
+end subroutine     
+
+!DEC$ENDIF

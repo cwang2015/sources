@@ -149,19 +149,20 @@ c----------------------------------------------------------------------
          water => parts%material
          parts%p(1:ntotal) = water%b*((parts%rho(1:ntotal)/(water%rho0  &
                             *parts%vof(1:ntotal))) &   !!! False density
-                            **water%gamma-1)
+                            **water%gamma-1)  
 
 ! Tension instability
                               if(water_tension_instability==1)then
          do i = 1, ntotal
             if(parts%p(i)<0)then
                parts%p(i) = 0.d0
-               !parts%rho(i) = water%rho0*parts%vof(i)
+               parts%rho(i) = water%rho0*parts%vof(i)
             endif
          enddo
                               endif
 
-         parts%c(1:ntotal) = water%c         
+         !parts%c(1:ntotal) = water%c         
+         parts%c(1:ntotal) = water%c*(parts%rho(1:ntotal)/(water%rho0*parts%vof(1:ntotal)))**3.0         
 
       elseif(parts%imaterial=='soil')then
 
@@ -194,7 +195,7 @@ parts%p(1:ntotal) = water%b*((parts%rho(1:ntotal)/(water%rho0  &
                    *parts%vof(1:ntotal))) &   !!! False density
                   **water%gamma-1)
 
-parts%c(1:ntotal) = water%c         
+parts%c(1:ntotal) = water%c*(parts%rho(1:ntotal)/(water%rho0*parts%vof(1:ntotal)))**3.0         
 
 return
 end subroutine
