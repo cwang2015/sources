@@ -878,8 +878,8 @@ nnps = parts%numeric%nnps
 if(nnps == 1)then
    call direct_find(parts)
 elseif(nnps == 2)then
-!   call link_list(parts)
-   stop 'find_pairs: link_list method not implemented yet!'
+   call link_list(parts)
+!   stop 'find_pairs: link_list method not implemented yet!'
 elseif(nnps == 3)then
 !    call tree_search(parts)
    stop 'find_pairs: tree_search method not implemented yet!'
