@@ -21,7 +21,7 @@ c     Subroutine for saving particle information to external disk file
       mass   => parts%mass
       hsml   => parts%hsml
       p      => parts%p
-
+      if(this_image()==1)then
               if(trim(parts%imaterial)=='water')then
 
       write(f_xv,*) 'VARIABLES="X","Y","Pressure","VoF",'     
@@ -107,7 +107,7 @@ c      write(f_state,*)  soil%fail(1:ntotal2)
       !write(f_other,*) time, -soil%p(420)+soil%syy(420)
       !write(f_other,*) time, -soil%p(395)+soil%syy(395)
       !write(f_other,*) time, -parts%p(420)+parts%syy(420)
-
+      endif
       return
       end subroutine
 
