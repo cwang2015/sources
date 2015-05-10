@@ -6,6 +6,8 @@ use param
 use declarations
 use declarations_sph
 implicit none     
+   INTEGER :: nthreads, myid
+   INTEGER, EXTERNAL :: OMP_GET_THREAD_NUM, OMP_GET_NUM_THREADS
 !
 integer d, m, i, yesorno,num
 double precision s1, s2
@@ -19,15 +21,16 @@ call time_elapsed(s1)
 call getarg(1,cas_file)
 write(*,*) 'cas_file:', cas_file
 call read_cas
-
+ 
 if(this_image()==1)then
 call open_files      
 endif
 
+
 call allocate_sph
 
 call input
-              
+    
 if(this_image() == 1)then     
    write(*,*)'  **************************************************'
    write(*,*)'  Initial particle configuration generated   '   

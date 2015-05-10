@@ -475,11 +475,12 @@ allocate(temp2(parts%maxn))
     lastvx = pl%vx
     lastrho = pl%rho
 
+
+    
 do it = 1, maxtimestep 
     itimestep = itimestep+1
    call single_step_for_water
 !$omp parallel    
-!$omp do
 if(mod(itimestep,50) .ne. 0) then    
     do i = 1, pl%ntotal
        do d = 1, dim
@@ -515,7 +516,6 @@ endif
 temp2 = pl%rho
 pl%rho = lastrho
 lastrho = temp2
-!$omp end do
 !$omp end parallel
    time = time + dt
 
