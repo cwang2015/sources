@@ -14,25 +14,29 @@ double precision element_size, soil_submerged_depth
 
 ! Set nozzle and tank geometry parameters
 
-call tank%set(xl=0.2d0,yl=0.1d0,m=40,n=20)
+!call tank%set(xl=0.2d0,yl=0.1d0,m=80,n=40)
+call tank%set(xl=0.25d0,yl=0.125d0,m=100,n=50)
+!call tank%set(xl=0.26d0,yl=0.13d0,m=52,n=26)
 npoint = tank%m*tank%n
 allocate(tank%x(npoint),tank%y(npoint),tank%zone(npoint))
 call tank%cell_center
+tank%x = tank%x-0.005; tank%y = tank%y - 0.005
+!tank%x = tank%x-0.01; tank%y = tank%y - 0.01
 !      write(*,*) 'x=', tank%x
 !      write(*,*) 'y=', tank%y
 
 ! Zoning
 tank%zone = 2
 do i = 1, tank%m*tank%n
-   if(tank%x(i)<0.01.or.tank%x(i)>0.19.or.tank%y(i)<0.01) tank%zone(i) = 1
+   if(tank%x(i)<0.d0.or.tank%x(i)>0.24.or.tank%y(i)<0.d0) tank%zone(i) = 1
 !   if(tank%x(i)<0.025.or.tank%x(i)>0.475.or.tank%y(i)<0.025) tank%zone(i) = 1
    if(tank%zone(i)==1.and.tank%x(i)>0.06)tank%zone(i)=3
-   if(tank%zone(i)==1.and.tank%y(i)>0.05)tank%zone(i)=5
-   if(tank%zone(i)==5.and.tank%y(i)>0.08)tank%zone(i)=6
-   if(tank%zone(i)==3.and.tank%y(i)>0.08)tank%zone(i)=6
+   if(tank%zone(i)==1.and.tank%y(i)>0.048)tank%zone(i)=5
+   if(tank%zone(i)==5.and.tank%y(i)>0.1)tank%zone(i)=6
+   if(tank%zone(i)==3.and.tank%y(i)>0.1)tank%zone(i)=6
    if(tank%zone(i)==2.and.tank%x(i)>0.06)tank%zone(i)=4
-   if(tank%zone(i)==2.and.tank%y(i)>0.05)tank%zone(i)=4
-   if(tank%zone(i)==4.and.tank%y(i)>0.08)tank%zone(i)=7
+   if(tank%zone(i)==2.and.tank%y(i)>0.048)tank%zone(i)=4
+   if(tank%zone(i)==4.and.tank%y(i)>0.1)tank%zone(i)=7
 enddo
 !      write(*,*) tank%zone
 
@@ -65,7 +69,7 @@ call parts%setup_itype
 parts%vx = 0.d0
 
 ! ...Stress. You must define the free surface first.
-water_surface = 0.08
+water_surface = 0.1
 wass => parts%material
 do i = 1,parts%ntotal+parts%nvirt
    parts%p(i) = wass%rho0*gravity*(parts%x(2,i)-water_surface)
@@ -79,7 +83,7 @@ parts%c = wass%c
 
 do i = 1, parts%ntotal + parts%nvirt
    parts%vof(i) = 1.0
-   if(parts%zone(i)==1.or.parts%zone(i)==2)parts%vof(i) = 0.45
+   if(parts%zone(i)==1.or.parts%zone(i)==2)parts%vof(i) = 0.3
 enddo
 if(single_phase) parts%vof = 1.0
 if(.not.volume_fraction)  parts%vof = 1.0
@@ -107,7 +111,7 @@ call soil%setup_itype
 soil%vx = 0.d0
 
 ! ...Stress. You must define the free surface first.
-soil_surface = 0.05
+soil_surface = 0.048
 sand => soil%material
 do i = 1,soil%ntotal+soil%nvirt
    soil%p(i) = (sand%rho0-wass%rho0)*gravity*(soil%x(2,i)-soil_surface)
@@ -124,7 +128,7 @@ soil%c = sand%c
 
 ! Volume fraction
 
-soil%vof = 0.55
+soil%vof = 0.7
 if(.not.volume_fraction)soil%vof = 1.0
 
 ! Density and Mass

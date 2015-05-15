@@ -28,8 +28,8 @@
           rrw = water%w(k)/(water%rho(i)*soil%rho(j))
 
 ! For staturated soil
-!        if(volume_fraction) cf = water%vof(i)*water%rho(i)*(-gravity)/ks
-        if(volume_fraction) cf = water%vof(i)*soil%vof(j)*water%rho(i)*(-gravity)/ks
+        if(volume_fraction) cf = water%vof(i)*water%rho(i)*(-gravity)/ks
+!        if(volume_fraction) cf = water%vof(i)*soil%vof(j)*water%rho(i)*(-gravity)/ks
 
           do d=1,dim
              sp = cf*(water%vx(d,i)-soil%vx(d,j))*rrw

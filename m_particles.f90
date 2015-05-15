@@ -1,22 +1,8 @@
 !---------------------------
     module m_particles
 !---------------------------
-use constants, ex_pi=>pi
 implicit none
-
-! Configuration of the water-jet problem; Problem specific
-!type geo
-
-! size of each dimension
-!  double precision dl,dr,dh,ds,dj,D,L,H,immerse
-! descrete intervals
-!  integer  mdl,mdr,mdh,mds,mdj,mD,mL,mH
-!  contains
-!    procedure :: set => set_geo_sub
-
-!end type
-
-! Rectangular area
+integer, parameter :: dp = kind(0.d0)
 
 type block             
      real(dp) xl, yl
@@ -215,7 +201,7 @@ integer :: nnps = 1
 
 ! Artificial viscosity
 ! alpha: shear viscosity; beta: bulk viscosity; etq: parameter to avoid sigularities   
-   real(dp) :: alpha=0.1d0, beta=0.d0, etq=0.1d0
+   real(dp) :: alpha=0.d0, beta=0.d0, etq=0.1d0
 
 ! Leonard_Johns repulsive force
    real(dp) :: rr0 = 0.005d0, dd = 0.1d0, p1 = 12, p2 = 4
@@ -879,7 +865,9 @@ if(nnps == 1)then
    call direct_find(parts)
 elseif(nnps == 2)then
 !   call link_list(parts)
-   stop 'find_pairs: link_list method not implemented yet!'
+   call link_list(parts%itimestep, parts%ntotal+parts%nvirt,parts%hsml(1),  &
+   parts%x,parts%niac,parts%pair_i,parts%pair_j,parts%w,parts%dwdx,parts%countiac)
+!   stop 'find_pairs: link_list method not implemented yet!'
 elseif(nnps == 3)then
 !    call tree_search(parts)
    stop 'find_pairs: tree_search method not implemented yet!'
