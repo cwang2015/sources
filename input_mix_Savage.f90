@@ -15,13 +15,13 @@ double precision element_size, soil_submerged_depth
 ! Set nozzle and tank geometry parameters
 
 !call tank%set(xl=0.2d0,yl=0.1d0,m=80,n=40)
-call tank%set(xl=0.25d0,yl=0.125d0,m=100,n=50)
-!call tank%set(xl=0.26d0,yl=0.13d0,m=52,n=26)
+!call tank%set(xl=0.25d0,yl=0.125d0,m=100,n=50)
+call tank%set(xl=0.26d0,yl=0.13d0,m=52,n=26)
 npoint = tank%m*tank%n
 allocate(tank%x(npoint),tank%y(npoint),tank%zone(npoint))
 call tank%cell_center
-tank%x = tank%x-0.005; tank%y = tank%y - 0.005
-!tank%x = tank%x-0.01; tank%y = tank%y - 0.01
+!tank%x = tank%x-0.005; tank%y = tank%y - 0.005
+tank%x = tank%x-0.01; tank%y = tank%y - 0.01
 !      write(*,*) 'x=', tank%x
 !      write(*,*) 'y=', tank%y
 
@@ -58,6 +58,7 @@ call soil%take_virtual(tank,6)
 
 parts%vol = tank%dx*tank%dy
 parts%hsml = tank%dx*1.2
+parts%dspp = tank%dx
 
 ! itype is positive for real particles, negative for virtual particles.
  
@@ -83,7 +84,7 @@ parts%c = wass%c
 
 do i = 1, parts%ntotal + parts%nvirt
    parts%vof(i) = 1.0
-   if(parts%zone(i)==1.or.parts%zone(i)==2)parts%vof(i) = 0.3
+   if(parts%zone(i)==1.or.parts%zone(i)==2)parts%vof(i) = 0.45
 enddo
 if(single_phase) parts%vof = 1.0
 if(.not.volume_fraction)  parts%vof = 1.0
@@ -100,6 +101,7 @@ parts%mass = parts%vol * parts%rho
 
 soil%vol = tank%dx*tank%dy
 soil%hsml = tank%dx*1.2
+soil%dspp = tank%dx
 
 ! itype is positive for real particles, negative for virtual particles.
  
@@ -128,7 +130,7 @@ soil%c = sand%c
 
 ! Volume fraction
 
-soil%vof = 0.7
+soil%vof = 0.55
 if(.not.volume_fraction)soil%vof = 1.0
 
 ! Density and Mass
