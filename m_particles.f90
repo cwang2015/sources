@@ -201,10 +201,10 @@ integer :: nnps = 1
 
 ! Artificial viscosity
 ! alpha: shear viscosity; beta: bulk viscosity; etq: parameter to avoid sigularities   
-   real(dp) :: alpha=0.d0, beta=0.d0, etq=0.1d0
+   real(dp) :: alpha=0.1d0, beta=0.d0, etq=0.1d0
 
 ! Leonard_Johns repulsive force
-   real(dp) :: rr0 = 0.005d0, dd = 0.1d0, p1 = 12, p2 = 4
+   real(dp) :: dd = 0.1d0, p1 = 12, p2 = 4
 
 ! Delta-SPH
    real(dp) :: delta = 0.1d0
@@ -231,6 +231,7 @@ type particles
    integer :: max_interaction = 0
    integer :: ntotal = 0, nvirt = 0
    integer :: max_zone = 10
+   real(dp) dspp  ! initial particle interval  
 
    class(parameters), pointer :: params => null()
 
@@ -885,7 +886,7 @@ class(particles) parts
 double precision dx(3), rr, f, rr0, dd, p1, p2     
 integer i, j, k, d
            
-rr0 = parts%numeric%rr0; dd = parts%numeric%dd
+rr0 = parts%dspp; dd = parts%numeric%dd
 p1 = parts%numeric%p1; p2 = parts%numeric%p2
       
 do k=1,parts%niac
