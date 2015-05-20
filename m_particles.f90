@@ -224,28 +224,192 @@ end type
 ! Particles in SPH method
 type particles
 
-   integer :: dim   = 2
-   integer :: maxn  = 0
+!Physics parameter
+real(dp) :: gravity = -9.8
+
+!Geometry parameters
+
+!dim : Dimension of the problem (1, 2 or 3)
+integer :: dim = 2        
+        
 !   integer :: nnps  = 1
    integer :: niac  = 0
-   integer :: max_interaction = 0
    integer :: ntotal = 0, nvirt = 0
-   integer :: max_zone = 10
    real(dp) dspp  ! initial particle interval  
+
+
+
+!Parameters for the computational geometry,  
+!x_maxgeom : Upper limit of allowed x-regime 
+!x_mingeom : Lower limit of allowed x-regime 
+!y_maxgeom : Upper limit of allowed y-regime 
+!y_mingeom : Lower limit of allowed y-regime 
+!z_maxgeom : Upper limit of allowed z-regime 
+!z_mingeom : Lower limit of allowed z-regime 
+real(dp) :: x_maxgeom = 10.e0, x_mingeom = -10.e0,  &
+            y_maxgeom = 10.e0, y_mingeom = -10.e0,  &
+            z_maxgeom = 10.e0, z_mingeom = -10.e0
+
+!Parameter used for sorting grid cells in the link list algorithm
+!maxngx  : Maximum number of sorting grid cells in x-direction
+!maxngy  : Maximum number of sorting grid cells in y-direction
+!maxngz  : Maximum number of sorting grid cells in z-direction
+!Determining maximum number of sorting grid cells:
+!(For an homogeneous particle distribution:)
+!1-dim. problem: maxngx = maxn ,  maxngy = maxngz = 1
+!2-dim. problem: maxngx = maxngy ~ sqrt(maxn) ,  maxngz = 1
+!3-dim. problem: maxngx = maxngy = maxngz ~ maxn^(1/3)
+integer :: maxngx = 100,maxngy = 100, maxngz = 1
+
+integer, pointer, dimension(:,:,:) :: grid => null()
+integer, pointer, dimension(:,:) :: xgcell => null()
+integer, pointer, dimension(:) :: celldata => null() 
+integer  ngridx(3),ghsmlx(3)
+real(dp) mingridx(3),maxgridx(3),dgeomx(3)
+
+!Memory allocation
+
+!maxn: Maximum number of particles
+!max_interation : Maximum number of interaction pairs
+integer :: maxn = 12000, max_interaction = 100 * 12000
+  
+!SPH algorithm
+
+!Particle approximation (pa_sph)
+!pa_sph = 1 : (e.g. (p(i)+p(j))/(rho(i)*rho(j))
+!         2 : (e.g. (p(i)/rho(i)**2+p(j)/rho(j)**2)
+integer :: pa_sph = 2 
+
+!Nearest neighbor particle searching (nnps) method
+!nnps = 1 : Simplest and direct searching
+!       2 : Sorting grid linked list
+!       3 : Tree algorithm
+integer :: nnps = 1 
+
+!Smoothing length evolution (sle) algorithm
+!sle = 0 : Keep unchanged,
+!      1 : h = fac * (m/rho)^(1/dim)
+!      2 : dh/dt = (-1/dim)*(h/rho)*(drho/dt)
+!      3 : Other approaches (e.g. h = h_0 * (rho_0/rho)**(1/dim) ) 
+integer :: sle = 0 
+
+!Smoothing kernel function 
+!skf = 1, cubic spline kernel by W4 - Spline (Monaghan 1985)
+!    = 2, Gauss kernel   (Gingold and Monaghan 1981) 
+!    = 3, Quintic kernel (Morris 1997)
+!    = 4, Wendland    
+integer :: skf = 4 
+
+!Switches for different senarios
+
+!summation_density = .TRUE. : Use density summation model in the code, 
+!                    .FALSE.: Use continuiity equation
+!average_velocity = .TRUE. : Monaghan treatment on average velocity,
+!                   .FALSE.: No average treatment.
+!config_input = .TRUE. : Load initial configuration data,
+!               .FALSE.: Generate initial configuration.
+!virtual_part = .TRUE. : Use vritual particle,
+!               .FALSE.: No use of vritual particle.
+!vp_input = .TRUE. : Load virtual particle information,
+!           .FALSE.: Generate virtual particle information.
+!visc = .true. : Consider viscosity,
+!       .false.: No viscosity.
+!ex_force =.true. : Consider external force,
+!          .false.: No external force.
+!visc_artificial = .true. : Consider artificial viscosity,
+!                  .false.: No considering of artificial viscosity.
+!heat_artificial = .true. : Consider artificial heating,
+!                  .false.: No considering of artificial heating.
+!self_gravity = .true. : Considering self_gravity,
+!               .false.: No considering of self_gravity
+!nor_density =  .true. : Density normalization by using CSPM,
+!               .false.: No normalization.
+
+integer :: integrate_scheme = 1  ! =1, LF; =2, Verlet
+logical :: summation_density  = .false.         
+logical :: average_velocity  = .true.         
+logical :: config_input  = .false. 
+logical :: virtual_part  = .true. 
+logical :: vp_input  = .false.  
+logical :: visc  = .true.  
+logical :: ex_force  = .true.
+logical :: visc_artificial  = .true. 
+logical :: heat_artificial  = .false. 
+logical :: self_gravity  = .true.      
+logical :: nor_density  = .false.              
+
+integer :: soil_pressure = 2  ! =1, eos; =2, mean trace
+integer :: stress_integration = 1
+integer :: yield_criterion = 2
+integer :: plasticity = 3  ! =0 non; =1 Bui, =2 return mapping =3 Lopez
+logical :: artificial_density = .true.                  
+logical :: soil_artificial_stress = .true.
+
+logical :: volume_fraction = .true.
+logical :: water_artificial_volume = .true.
+logical :: volume_fraction_renorm = .true.
+
+! 0 ignor; 1 negative pressure to zero; 2 artficial stress
+integer :: water_tension_instability = 0
+
+! Symmetry of the problem
+! nsym = 0 : no symmetry,
+!      = 1 : axis symmetry,
+!      = 2 : center symmetry.     
+integer :: nsym = 0
+
+! Control parameters for output 
+! int_stat = .true. : Print statistics about SPH particle interactions.
+!                     including virtual particle information.
+! print_step: Print Timestep (On Screen)
+! save_step : Save Timestep    (To Disk File)
+! moni_particle: The particle number for information monitoring.
+logical :: int_stat = .true.
+integer :: print_step, save_step, moni_particle = 264
+
+!Recorde time interval
+integer :: save_step_from = 0, save_step_to = 100
+
+!Material parameters
+
+!For equation of state (EOS) of water
+
+!real(dp) rho0_f,b,gamma,cf,viscosity
+
+!For soil
+
+!real(dp) rho0_s,cs,k,porosity,permeability,G,E,niu,cohesion,phi
+   
+! Artificial viscosity
+! alpha: shear viscosity; beta: bulk viscosity; etq: to avoid sigularities   
+!real(dp) :: alpha=0.1d0, beta=0.d0, etq=0.1d0
+
+! Leonard_Johns repulsive force
+!real(dp) :: rr0 = 0.005d0, dd = 0.1d0, p1 = 12, p2 = 4
+
+! Delta-SPH
+!real(dp) :: delta = 0.1d0   
 
    class(parameters), pointer :: params => null()
 
    character(len=32) :: imaterial
    class(*), pointer :: material => null()
 
-! Background point
-  type(block), pointer :: backpoint => null()
-  integer nreal_zone, nvirtual_zone
-  integer, pointer, dimension(:) :: real_zone => null(), virtual_zone => null()
-
 ! Numerical parameters
    class(numerical), pointer :: numeric => null()
-   
+
+! Particle interaction pair
+   integer :: maxp = 0, minp = 0
+   integer :: maxiac = 0, miniac = 0
+   integer :: sumiac = 0, noiac  = 0
+   integer, pointer, dimension(:)  :: pair_i => null()
+   integer, pointer, dimension(:)  :: pair_j => null()
+   integer, pointer, dimension(:)  :: countiac=>null()
+
+! Kernel and its derivative
+   real(dp), pointer, dimension(:)   :: w    => null()
+   real(dp), pointer, dimension(:,:) :: dwdx => null()
+
 ! Particle fundamental data
    integer,  pointer, dimension(:)   :: itype=> null()
    real(dp), pointer, dimension(:,:) :: x    => null()
@@ -317,17 +481,7 @@ type particles
    integer :: nfail = 0
    integer, pointer, dimension(:) :: fail => null()
 
-! Kernel and its derivative
-   real(dp), pointer, dimension(:)   :: w    => null()
-   real(dp), pointer, dimension(:,:) :: dwdx => null()
 
-! Particle interaction pair
-   integer :: maxp = 0, minp = 0
-   integer :: maxiac = 0, miniac = 0
-   integer :: sumiac = 0, noiac  = 0
-   integer, pointer, dimension(:)  :: pair_i => null()
-   integer, pointer, dimension(:)  :: pair_j => null()
-   integer, pointer, dimension(:)  :: countiac=>null()
 
 ! Boundry particles defined as type particles
    type(particles), pointer :: bor
@@ -345,12 +499,16 @@ type particles
        procedure :: depend_virtual_particles
        procedure :: interaction_statistics
        procedure :: minimum_time_step
-       procedure :: take_real_points
        procedure :: take_real => take_real_points1
-       procedure :: take_virtual_points
        procedure :: take_virtual => take_virtual_points1
        procedure :: setup_itype
+       procedure :: get_scale_k
+       procedure :: direct_find
+       procedure :: init_grid
+       procedure :: grid_geom
+       procedure :: link_list
        procedure :: find_pairs
+       procedure :: kernel
        procedure :: repulsive_force
 
 !       procedure :: find_particle_nearest2_point
@@ -527,21 +685,48 @@ end select
 return
 end subroutine
 
+! Statistics for the interaction
 !-------------------------------------------------
      subroutine interaction_statistics(parts)
 !-------------------------------------------------
 implicit none
 class(particles) parts
+integer ntotal, i,j,d
+integer  sumiac, maxiac, miniac, noiac, maxp, minp
+logical :: dbg = .false.
 
-          print *,' >> Statistics: interactions per particle:'
-          print *,'**** Particle:',parts%maxp,                 &
-                  ' maximal interactions:', parts%maxiac
-          print *,'**** Particle:',parts%minp,                 &
-                  ' minimal interactions:', parts%miniac
-          print *,'**** Average :',real(parts%sumiac)/         &
-                             real(parts%ntotal+parts%nvirt)
-          print *,'**** Total pairs : ',parts%niac
-          print *,'**** Particles with no interactions:',parts%noiac
+ntotal   =   parts%ntotal + parts%nvirt
+sumiac = 0
+maxiac = 0
+miniac = 1000
+noiac  = 0
+
+do i=1,ntotal
+   sumiac = sumiac + parts%countiac(i)
+   if (parts%countiac(i).gt.maxiac) then
+      maxiac = parts%countiac(i)
+      maxp = i
+   endif
+   if (parts%countiac(i).lt.miniac) then 
+      miniac = parts%countiac(i)
+      minp = i
+   endif
+   if (parts%countiac(i).eq.0) noiac  = noiac + 1
+enddo
+
+parts%maxp = maxp;        parts%minp = minp  
+parts%maxiac = maxiac;    parts%miniac = miniac
+parts%sumiac = sumiac;    parts%noiac = noiac
+
+print *,' >> Statistics: interactions per particle:'
+print *,'**** Particle:',parts%maxp,                 &
+        ' maximal interactions:', parts%maxiac
+print *,'**** Particle:',parts%minp,                 &
+        ' minimal interactions:', parts%miniac
+print *,'**** Average :',real(parts%sumiac)/         &
+                         real(parts%ntotal+parts%nvirt)
+print *,'**** Total pairs : ',parts%niac
+print *,'**** Particles with no interactions:',parts%noiac
 
 return
 end subroutine
@@ -722,6 +907,8 @@ end subroutine
 !return
 !end subroutine
 
+
+!DEC$IF(.FALSE.)
 !-----------------------------------------------
       subroutine take_real_points(this,tank)
 !-----------------------------------------------
@@ -749,6 +936,8 @@ this%ntotal = k
 
 return
 end subroutine
+
+!DEC$ENDIF
 
 !--------------------------------------------------
       subroutine take_real_points1(this,tank,zone)
@@ -779,6 +968,8 @@ this%ntotal = k
 return
 end subroutine
 
+
+!DEC$IF(.FALSE.)
 !-----------------------------------------------------
       subroutine take_virtual_points(this,tank)
 !-----------------------------------------------------
@@ -806,6 +997,8 @@ this%nvirt = k-this%ntotal
 
 return
 end subroutine
+
+!DEC$ENDIF
 
 !-----------------------------------------------------
       subroutine take_virtual_points1(this,tank,zone)
@@ -854,6 +1047,338 @@ endif
 return
 end subroutine
 
+!-------------------------------------------------
+     function get_scale_k(this) result(scale_k)
+!-------------------------------------------------
+implicit none
+class(particles) this
+integer scale_k
+
+select case (this%skf)
+  case(1)
+     scale_k = 2
+  case(2)
+     scale_k = 3
+  case(3)
+     scale_k = 3
+  case(4)
+     scale_k = 2
+  case default
+     stop 'get_scale_k: No such kernel function!'
+end select 
+
+end function
+
+!----------------------------------------------------------------------
+       subroutine direct_find(parts)
+!----------------------------------------------------------------------
+!   Subroutine to calculate the smoothing funciton for each particle and
+!   the interaction parameters used by the SPH algorithm. Interaction 
+!   pairs are determined by directly comparing the particle distance 
+!   with the corresponding smoothing length.
+!-----------------------------------------------------------------------
+      implicit none
+      
+      class(particles) parts
+
+      integer ntotal, niac,i,j,d,scale_k
+      real(dp) dxiac(3), driac, r, mhsml, tdwdx(3)
+      logical :: dbg = .false.
+
+      if(dbg) write(*,*) 'In direct_find...'
+
+      ntotal   =   parts%ntotal + parts%nvirt
+      scale_k = parts%get_scale_k()
+     
+      do i=1,ntotal
+        parts%countiac(i) = 0
+      enddo
+
+      niac = 0
+
+      do i=1,ntotal-1     
+        do j = i+1, ntotal
+          dxiac(1) = parts%x(1,i) - parts%x(1,j)
+          driac    = dxiac(1)*dxiac(1)
+          do d=2,parts%dim
+            dxiac(d) = parts%x(d,i) - parts%x(d,j)
+            driac    = driac + dxiac(d)*dxiac(d)
+          enddo
+          mhsml = (parts%hsml(i)+parts%hsml(j))/2.
+          if (sqrt(driac).lt.scale_k*mhsml) then
+            if (niac.lt.parts%max_interaction) then    
+
+!     Neighboring pair list, and totalinteraction number and
+!     the interaction number for each particle 
+
+              niac = niac + 1
+              parts%pair_i(niac) = i
+              parts%pair_j(niac) = j
+              r = sqrt(driac)
+              parts%countiac(i) = parts%countiac(i) + 1
+              parts%countiac(j) = parts%countiac(j) + 1
+
+!     Kernel and derivations of kernel
+              call parts%kernel(r,dxiac,mhsml,parts%w(niac),tdwdx)
+              do d=1,parts%dim
+                parts%dwdx(d,niac) = tdwdx(d)
+              enddo                                      
+            else
+              print *,  ' >>> ERROR <<< : Too many interactions' 
+              stop
+            endif
+          endif
+        enddo
+      enddo  
+
+      parts%niac = niac
+ 
+      end subroutine
+
+!----------------------------------------------------------------------
+       subroutine direct_find_2(parts,part2)
+!----------------------------------------------------------------------
+      implicit none
+      
+      class(particles) parts, part2
+      integer ntotal, niac,i,j,d, scale_k
+      real(dp) dxiac(3), driac, r, mhsml, tdwdx(3)
+      logical :: dbg = .false.
+
+      if(dbg) write(*,*) 'In direct_find2...'
+
+      ntotal   =   parts%ntotal + parts%nvirt
+      scale_k  =   parts%get_scale_k()
+     
+      do i=1,ntotal
+        parts%countiac(i) = 0
+      enddo
+      part2%countiac = 0
+
+      niac = 0
+
+      do i=1,ntotal     
+        do j = 1, part2%ntotal+part2%nvirt
+          dxiac(1) = parts%x(1,i) - part2%x(1,j)
+          driac    = dxiac(1)*dxiac(1)
+          do d=2,parts%dim
+            dxiac(d) = parts%x(d,i) - part2%x(d,j)
+            driac    = driac + dxiac(d)*dxiac(d)
+          enddo
+          mhsml = (parts%hsml(i)+part2%hsml(j))/2.
+          if (sqrt(driac).lt.scale_k*mhsml) then
+            if (niac.lt.parts%max_interaction) then    
+
+!     Neighboring pair list, and totalinteraction number and
+!     the interaction number for each particle 
+
+              niac = niac + 1
+              parts%pair_i(niac) = i
+              parts%pair_j(niac) = j
+              r = sqrt(driac)
+              parts%countiac(i) = parts%countiac(i) + 1
+              part2%countiac(j) = part2%countiac(j) + 1
+
+!     Kernel and derivations of kernel
+              call parts%kernel(r,dxiac,mhsml,parts%w(niac),tdwdx)
+              do d=1,parts%dim
+                parts%dwdx(d,niac) = tdwdx(d)
+              enddo                                     
+            else
+              print *, ' >>> ERROR <<< : Too many interactions' 
+              stop
+            endif
+          endif
+        enddo
+      enddo  
+
+      parts%niac = niac
+
+      end subroutine
+
+!   Subroutine to established a pair linked list by sorting grid cell.
+!   It is suitable for a homogeneous particle distribution with the 
+!   same smoothing length in an instant. A fixed number of particles
+!   lie in each cell.       
+!----------------------------------------------------------------------      
+      subroutine init_grid(parts)
+!----------------------------------------------------------------------      
+      implicit none
+      class(particles) parts
+      real(dp) hsml 
+      integer i, j, k, d, dim, ntotal
+!     Averaged number of particles per grid cell
+      real(dp), parameter :: nppg = 3.e0
+
+      hsml = parts%hsml(1)   !!! hsml is same for all particles
+      dim = parts%dim; ntotal = parts%ntotal + parts%nvirt
+      
+!     Range of sorting grid
+
+      parts%maxgridx(1) = parts%x_maxgeom;  parts%mingridx(1) = parts%x_mingeom
+      parts%maxgridx(2) = parts%y_maxgeom;  parts%mingridx(2) = parts%y_mingeom
+      parts%maxgridx(3) = parts%z_maxgeom;  parts%mingridx(3) = parts%z_mingeom
+      parts%dgeomx = parts%maxgridx - parts%mingridx
+
+!     Number of grid cells in x-, y- and z-direction:
+
+      if (dim.eq.1) then
+        parts%ngridx(1) = min(int(ntotal/nppg) + 1,parts%maxngx)
+      else if (dim.eq.2) then
+        parts%ngridx(1) = &
+        min(int(sqrt(ntotal*parts%dgeomx(1)/(parts%dgeomx(2)*nppg))) + 1,parts%maxngx)
+        parts%ngridx(2) = &
+        min(int(parts%ngridx(1)*parts%dgeomx(2)/parts%dgeomx(1)) + 1,parts%maxngy)
+      else if (dim.eq.3) then
+        parts%ngridx(1) = min(int((ntotal*parts%dgeomx(1)*parts%dgeomx(1)/   &
+           (parts%dgeomx(2)*parts%dgeomx(3)*nppg))**(1.e0/3.e0)) + 1,parts%maxngx)
+        parts%ngridx(2) =  &
+           min(int(parts%ngridx(1)*parts%dgeomx(2)/parts%dgeomx(1)) + 1,parts%maxngy)
+        parts%ngridx(3) =  &
+           min(int(parts%ngridx(1)*parts%dgeomx(3)/parts%dgeomx(1)) + 1,parts%maxngz)
+      endif
+
+!     Smoothing Length measured in grid cells:
+      do d=1,dim
+         parts%ghsmlx(d) = int(real(parts%ngridx(d))*hsml/parts%dgeomx(d)) + 1
+      enddo
+
+      parts%grid = 0   ! Initialize grid
+
+      end subroutine
+
+!   Subroutine to calculate the coordinates (xgcell) of the cell of 
+!   the sorting  grid, in which the particle with coordinates (x) lies.      
+!-----------------------------------------------------------------------      
+      subroutine grid_geom(parts,i,x,xgcell)
+!-----------------------------------------------------------------------
+      implicit none
+      class(particles) parts
+      integer i, xgcell(3)
+      real(dp) x(3)
+      integer d
+
+      do d=1,3
+        xgcell(d) = 1
+      enddo
+
+      do d=1,parts%dim
+        if ((x(d).gt.parts%maxgridx(d)).or.(x(d).lt.parts%mingridx(d))) then
+          print *,' >>> ERROR <<< : Particle out of range'
+          print *,'    Particle position: x(',i,d,') = ',x(d)
+          print *,'    Range: [xmin,xmax](',D,') =                    &
+                 [',parts%mingridx(d),',',parts%maxgridx(d),']'
+          stop
+        else
+          xgcell(d) = int(real(parts%ngridx(d))/parts%dgeomx(d)*      &
+                      (x(d)-parts%mingridx(d)) + 1.e0)
+        endif
+      enddo
+
+      end subroutine
+
+!----------------------------------------------------------------------      
+      subroutine link_list(parts)
+!----------------------------------------------------------------------
+!   Subroutine to calculate the smoothing funciton for each particle and
+!   the interaction parameters used by the SPH algorithm. Interaction 
+!   pairs are determined by using a sorting grid linked list  
+!----------------------------------------------------------------------
+      implicit none
+
+      class(particles) parts
+      integer i, j, d, scale_k, ntotal, niac    
+      integer gcell(3),xcell,ycell,zcell,minxcell(3),maxxcell(3)
+      integer dnxgcell(3),dpxgcell(3)
+      real(dp) hsml,dr,r,dx(3),tdwdx(3)
+
+      ntotal  = parts%ntotal + parts%nvirt
+      scale_k = parts%get_scale_k()
+      hsml = parts%hsml(1)             !!! hsml is same for all particles!
+
+      do i=1,ntotal
+         parts%countiac(i) = 0
+      enddo
+
+      call parts%init_grid
+      
+!     Position particles on grid and create linked list:
+      
+      do i=1,ntotal
+        call parts%grid_geom(i,parts%x(:,i),gcell)
+        do d=1,parts%dim
+          parts%xgcell(d,i) = gcell(d)
+        enddo
+        parts%celldata(i) = parts%grid(gcell(1),gcell(2),gcell(3))
+        parts%grid(gcell(1),gcell(2),gcell(3)) = i
+      enddo
+
+!     Determine interaction parameters:
+
+      niac = 0
+      do i=1,ntotal-1
+
+!     Determine range of grid to go through:
+         
+        do d=1,3
+          minxcell(d) = 1
+          maxxcell(d) = 1
+        enddo
+        do d=1,parts%dim
+          dnxgcell(d) = parts%xgcell(d,i) - parts%ghsmlx(d)
+          dpxgcell(d) = parts%xgcell(d,i) + parts%ghsmlx(d)
+          minxcell(d) = max(dnxgcell(d),1)
+          maxxcell(d) = min(dpxgcell(d),parts%ngridx(d))
+        enddo
+
+!     Search grid:
+      
+        do zcell=minxcell(3),maxxcell(3)
+          do ycell=minxcell(2),maxxcell(2)
+            do xcell=minxcell(1),maxxcell(1)
+              j = parts%grid(xcell,ycell,zcell)
+ 1            if (j.gt.i) then
+                dx(1) = parts%x(1,i) - parts%x(1,j)
+                dr    = dx(1)*dx(1)
+                do d=2,parts%dim
+                  dx(d) = parts%x(d,i) - parts%x(d,j)
+                  dr    = dr + dx(d)*dx(d)
+                enddo
+                if (sqrt(dr).lt.scale_k*hsml) then
+                  if (niac.lt.parts%max_interaction) then
+
+!     Neighboring pair list, and totalinteraction number and
+!     the interaction number for each particle 
+
+                    niac = niac + 1
+                    parts%pair_i(niac) = i
+                    parts%pair_j(niac) = j
+                    r = sqrt(dr)
+                    parts%countiac(i) = parts%countiac(i) + 1
+                    parts%countiac(j) = parts%countiac(j) + 1
+                           
+!--- Kernel and derivations of kernel
+
+                    call parts%kernel(r,dx,hsml,parts%w(niac),tdwdx)  !!!!!!!!
+	            do d = 1, parts%dim
+	              parts%dwdx(d,niac)=tdwdx(d)
+                    enddo                  
+                  else
+                    print *, ' >>> Error <<< : too many interactions'
+                    stop
+                  endif
+                endif
+                j = parts%celldata(j)
+                goto 1
+              endif
+            enddo
+          enddo
+        enddo
+      enddo
+      parts%niac = niac
+
+      end subroutine
+
 !--------------------------------------------
      subroutine find_pairs(parts)
 !--------------------------------------------
@@ -865,9 +1390,9 @@ nnps = parts%numeric%nnps
 if(nnps == 1)then
    call direct_find(parts)
 elseif(nnps == 2)then
-!   call link_list(parts)
-   call link_list(parts%itimestep, parts%ntotal+parts%nvirt,parts%hsml(1),  &
-   parts%x,parts%niac,parts%pair_i,parts%pair_j,parts%w,parts%dwdx,parts%countiac)
+   call link_list(parts)
+!   call link_list(parts%itimestep, parts%ntotal+parts%nvirt,parts%hsml(1),  &
+!   parts%x,parts%niac,parts%pair_i,parts%pair_j,parts%w,parts%dwdx,parts%countiac)
 !   stop 'find_pairs: link_list method not implemented yet!'
 elseif(nnps == 3)then
 !    call tree_search(parts)
@@ -876,6 +1401,142 @@ endif
 
 return
 end subroutine
+
+!----------------------------------------------------------------------
+        subroutine kernel(this,r,dx,hsml,w,dwdx)   
+!----------------------------------------------------------------------
+!   Subroutine to calculate the smoothing kernel wij and its 
+!   derivatives dwdxij.
+!     if skf = 1, cubic spline kernel by W4 - Spline (Monaghan 1985)
+!            = 2, Gauss kernel   (Gingold and Monaghan 1981) 
+!            = 3, Quintic kernel (Morris 1997)
+!            = 4, Wendland kernel
+!----------------------------------------------------------------------
+      implicit none
+      class(particles) this
+      real(dp) r, dx(3), hsml, w, dwdx(3)
+      integer i, j, d, dim, skf      
+      real(dp) q, dw, factor
+      real(dp), parameter :: pi = 3.14159265358979323846 
+      logical :: dbg = .false.
+
+      if(dbg) write(*,*) 'In kernel...'
+
+      dim = this%dim; skf = this%skf
+
+      q = r/hsml 
+      w = 0.e0
+      do d=1,dim         
+        dwdx(d) = 0.e0
+      enddo   
+
+      if (skf.eq.1) then     
+        if (dim.eq.1) then
+          factor = 1.e0/hsml
+        elseif (dim.eq.2) then
+          factor = 15.e0/(7.e0*pi*hsml*hsml)
+        elseif (dim.eq.3) then
+          factor = 3.e0/(2.e0*pi*hsml*hsml*hsml)
+        else
+         print *,' >>> Error <<< : Wrong dimension: Dim =',dim
+         stop
+        endif                                           
+        if (q.ge.0.and.q.le.1.e0) then          
+          w = factor * (2./3. - q*q + q**3 / 2.)
+          do d = 1, dim
+            dwdx(d) = factor * (-2.+3./2.*q)/hsml**2 * dx(d)       
+          enddo   
+        else if (q.gt.1.e0.and.q.le.2) then          
+          w = factor * 1.e0/6.e0 * (2.-q)**3 
+          do d = 1, dim
+            dwdx(d) =-factor * 1.e0/6.e0 * 3.*(2.-q)**2/hsml * (dx(d)/r)        
+          enddo              
+	else
+	  w=0.
+          do d= 1, dim
+            dwdx(d) = 0.
+          enddo             
+        endif     
+                                    
+      else if (skf.eq.2) then
+      
+        factor = 1.e0 / (hsml**dim * pi**(dim/2.))      
+	if(q.ge.0.and.q.le.3) then
+	  w = factor * exp(-q*q)
+          do d = 1, dim
+            dwdx(d) = w * ( -2.* dx(d)/hsml/hsml)
+          enddo 
+	else
+	  w = 0.
+          do d = 1, dim
+            dwdx(d) = 0.
+          enddo 	   
+	endif	       
+	
+      else if (skf.eq.3) then	
+      
+        if (dim.eq.1) then
+          factor = 1.e0 / (120.e0*hsml)
+        elseif (dim.eq.2) then
+          factor = 7.e0 / (478.e0*pi*hsml*hsml)
+        elseif (dim.eq.3) then
+          factor = 1.e0 / (120.e0*pi*hsml*hsml*hsml)
+        else
+         print *,' >>> Error <<< : Wrong dimension: Dim =',dim
+         stop
+        endif              
+	if(q.ge.0.and.q.le.1) then
+          w = factor * ( (3-q)**5 - 6*(2-q)**5 + 15*(1-q)**5 )
+          do d= 1, dim
+            dwdx(d) = factor * ( (-120 + 120*q - 50*q**2)      &
+                              / hsml**2 * dx(d) )
+          enddo 
+	else if(q.gt.1.and.q.le.2) then
+          w = factor * ( (3-q)**5 - 6*(2-q)**5 )
+          do d= 1, dim
+            dwdx(d) = factor * (-5*(3-q)**4 + 30*(2-q)**4)     &
+                             / hsml * (dx(d)/r) 
+          enddo 
+        else if(q.gt.2.and.q.le.3) then
+          w = factor * (3-q)**5 
+          do d= 1, dim
+            dwdx(d) = factor * (-5*(3-q)**4) / hsml * (dx(d)/r) 
+          enddo 
+        else   
+	  w = 0.
+          do d = 1, dim
+            dwdx(d) = 0.
+          enddo  
+        endif                      
+     
+      elseif(skf.eq.4)then    ! Wendland. refer to SPHysic manual
+
+        if (dim.eq.1) then
+          factor = 0.
+        elseif (dim.eq.2) then
+          factor = 7.e0 / (4.e0*pi*hsml*hsml)
+        elseif (dim.eq.3) then
+          factor = 0.
+        else
+         print *,' >>> Error <<< : Wrong dimension: Dim =',dim
+         stop
+        endif              
+	if(q.ge.0.and.q.le.2) then
+          w = factor * ( (1-q/2)**4 *(1+2*q) )
+          do d= 1, dim
+            dwdx(d) = factor*(-5+15*q/2-15*q**2/4+5*q**3/8)/    &
+                      hsml**2*dx(d)
+          enddo 
+	else   
+	  w = 0.
+          do d = 1, dim
+            dwdx(d) = 0.
+          enddo  
+        endif 
+           
+      endif 
+		
+      end subroutine
 
 !--------------------------------------------------------------------------
       subroutine repulsive_force(parts)

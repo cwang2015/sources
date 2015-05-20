@@ -121,7 +121,7 @@ c     the interaction number for each particle
                            
 C--- Kernel and derivations of kernel
 
-                    call kernel(r,dx,hsml,w(niac),tdwdx)
+                    !call kernel(r,dx,hsml,w(niac),tdwdx)  !!!!!!!!
 	            do d = 1, dim
 	              dwdx(d,niac)=tdwdx(d)
                     enddo                  

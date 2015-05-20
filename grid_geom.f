@@ -15,8 +15,8 @@ c     xgcell   : x-, y- and z-coordinte of sorting grid cell       [out]
       implicit none
 C      include 'param.inc'
 
-      integer i, ngridx(dim),xgcell(3)
-      double precision x(dim), maxgridx(dim), mingridx(dim), dgeomx(dim)
+      integer i, ngridx(3),xgcell(3)
+      double precision x(3), maxgridx(3), mingridx(3), dgeomx(3)
       integer d
 
       do d=1,3

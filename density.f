@@ -39,7 +39,7 @@ c     and take contribution of particle itself:
 c     Firstly calculate the integration of the kernel over the space
 
       do i=1,ntotal
-        call kernel(r,hv,hsml(i),selfdens,hv)
+        call parts%kernel(r,hv,hsml(i),selfdens,hv)
         wi(i)=selfdens*mass(i)/rho(i)
       enddo
 
@@ -53,7 +53,7 @@ c     Firstly calculate the integration of the kernel over the space
 c     Secondly calculate the rho integration over the space
 
       do i=1,ntotal
-        call kernel(r,hv,hsml(i),selfdens,hv)
+        call parts%kernel(r,hv,hsml(i),selfdens,hv)
         rho(i) = selfdens*mass(i)
       enddo
 
@@ -127,7 +127,7 @@ c     and take contribution of particle itself:
 c     Firstly calculate the integration of the kernel over the space
 
       do i=1,ntotal
-        call kernel(r,hv,hsml(i),selfdens,hv)
+        call parts%kernel(r,hv,hsml(i),selfdens,hv)
         wi(i)=selfdens*mass(i)/rho(i)
       enddo
 

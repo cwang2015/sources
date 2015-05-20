@@ -13,14 +13,17 @@ parts%max_interaction = max_interaction
 call allocate_particles(parts)
 
 allocate(parts%zone(maxn)); parts%zone = 0
-allocate(parts%real_zone(parts%max_zone)); parts%real_zone = 0
-allocate(parts%virtual_zone(parts%max_zone)); parts%virtual_zone = 0
+!allocate(parts%real_zone(parts%max_zone)); parts%real_zone = 0
+!allocate(parts%virtual_zone(parts%max_zone)); parts%virtual_zone = 0
 
 allocate(parts%w(max_interaction));             parts%w   = 0.d0
 allocate(parts%dwdx(dim,max_interaction));      parts%dwdx= 0.d0
 allocate(parts%pair_i(max_interaction));        parts%pair_i = 0
 allocate(parts%pair_j(max_interaction));        parts%pair_j = 0
 allocate(parts%countiac(maxn));                 parts%countiac=0
+allocate(parts%grid(parts%maxngx,parts%maxngy,parts%maxngz)); parts%grid = 0
+allocate(parts%xgcell(dim,maxn)); parts%xgcell = 0
+allocate(parts%celldata(maxn)); parts%celldata = 0
 
 ! Fields variables
 
@@ -59,14 +62,16 @@ soil%max_interaction = max_interaction
 call allocate_particles(soil)
 
 allocate(soil%zone(maxn)); soil%zone = 0
-allocate(soil%real_zone(soil%max_zone)); soil%real_zone = 0
-allocate(soil%virtual_zone(soil%max_zone)); soil%virtual_zone = 0
+!allocate(soil%real_zone(soil%max_zone)); soil%real_zone = 0
+!allocate(soil%virtual_zone(soil%max_zone)); soil%virtual_zone = 0
 
 soil%w      => parts%w
 soil%dwdx   => parts%dwdx
 soil%pair_i => parts%pair_i
 soil%pair_j => parts%pair_j
 allocate(soil%countiac(maxn));    soil%countiac=0
+soil%grid   => parts%grid; soil%xgcell => parts%xgcell
+soil%celldata => parts%celldata
 
 ! Fields variables
 call allocate_particles_fields(soil)

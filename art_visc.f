@@ -367,7 +367,7 @@ c     Parameter
       double precision, pointer, dimension(:) :: mass,hsml,rho,p,w,vof
       double precision, pointer, dimension(:,:) :: dvx,dwdx
       integer, pointer, dimension(:) :: pair_i, pair_j
-      double precision wi,dx(2),dwx(2),n,fij,eps,eps2, pa, pb
+      double precision wi,dx(3),dwx(3),n,fij,eps,eps2, pa, pb
       integer i,j,k,d, niac
 
 !      write(*,*) 'In tension_instability...'
@@ -388,7 +388,7 @@ c     Parameter
       n = 4       !4
       eps = 0.05  !0.35
       !eps2 = 0.01
-      call kernel(hsml(1),dx,hsml(1),wi,dwx)     ! hsml is assumed constant
+      call water%kernel(hsml(1),dx,hsml(1),wi,dwx)     ! hsml is assumed constant
 
       do k = 1, niac
          i = pair_i(k)

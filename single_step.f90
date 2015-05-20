@@ -35,6 +35,7 @@ endif
 if (pl%numeric%nnps.eq.1) then 
    call direct_find(pl)
 else if (pl%numeric%nnps.eq.2) then
+   call link_list(pl)     
 !        call link_list(itimestep, ntotal+nvirt,hsml(1),x,niac,pair_i,
 !     &       pair_j,w,dwdx,ns)
 !        call link_list(itimestep, parts%ntotal+parts%nvirt,
@@ -180,16 +181,16 @@ endif
 !---  Interaction parameters, calculating neighboring particles
 !     and optimzing smoothing length
   
-      if (numeric%nnps.eq.1) then 
+      !if (numeric%nnps.eq.1) then 
          call direct_find_2(parts,soil)
         !call direct_find(parts)
-      else if (numeric%nnps.eq.2) then
+      !else if (numeric%nnps.eq.2) then
 !        call link_list(itimestep, ntotal+nvirt,hsml(1),x,niac,pair_i,
 !     &       pair_j,w,dwdx,ns)
-      else if (numeric%nnps.eq.3) then 
+      !else if (numeric%nnps.eq.3) then 
 !        call tree_search(itimestep, ntotal+nvirt,hsml,x,niac,pair_i,
 !     &       pair_j,w,dwdx,ns)
-      endif         
+      !endif         
 
       if(mod(itimestep,print_step).eq.0.and.int_stat) then
          call parts%interaction_statistics
