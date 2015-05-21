@@ -246,8 +246,8 @@ integer :: dim = 2
 !y_mingeom : Lower limit of allowed y-regime 
 !z_maxgeom : Upper limit of allowed z-regime 
 !z_mingeom : Lower limit of allowed z-regime 
-real(dp) :: x_maxgeom = 10.e0, x_mingeom = -10.e0,  &
-            y_maxgeom = 10.e0, y_mingeom = -10.e0,  &
+real(dp) :: x_maxgeom = 0.3e0, x_mingeom = -0.05e0,  &
+            y_maxgeom = 0.15e0, y_mingeom = -0.05e0,  &
             z_maxgeom = 10.e0, z_mingeom = -10.e0
 
 !Parameter used for sorting grid cells in the link list algorithm
@@ -509,7 +509,13 @@ integer :: save_step_from = 0, save_step_to = 100
        procedure :: link_list
        procedure :: find_pairs
        procedure :: kernel
+       procedure :: sum_density
+       procedure :: con_density
        procedure :: repulsive_force
+       procedure :: df
+       procedure :: df2
+       procedure :: df3
+!       procedure :: time_integration_for_water
 
 !       procedure :: find_particle_nearest2_point
 !       procedure :: grad_scalar
@@ -537,6 +543,8 @@ interface operator(*)
    module procedure :: array_mul_real
    module procedure :: array_mul_double_real
 end interface
+
+!private :: df, df2, df3
 
 !=======
 contains
@@ -1292,6 +1300,9 @@ end function
       integer dnxgcell(3),dpxgcell(3)
       real(dp) hsml,dr,r,dx(3),tdwdx(3)
 
+!      INTEGER nthreads,n_per_threads, niac_per_threads, it, n_start(8), n_end(8)
+!      INTEGER, EXTERNAL :: OMP_GET_THREAD_NUM, OMP_GET_NUM_THREADS
+
       ntotal  = parts%ntotal + parts%nvirt
       scale_k = parts%get_scale_k()
       hsml = parts%hsml(1)             !!! hsml is same for all particles!
@@ -1314,6 +1325,23 @@ end function
       enddo
 
 !     Determine interaction parameters:
+!!$omp parallel
+!      nthreads = omp_get_num_threads()
+!      write(*,*) 'ooo', nthreads
+!!$omp end parallel       
+!      n_per_threads = ntotal/nthreads
+!      niac_per_threads = parts%max_interaction/threads
+!      do it = 1, nthreads
+!         n_start(it)=(it-1)*n_per*threads+1
+!         n_end(it) = it*n_per_threads
+!         niac_start(it)=(it-1)*niac_per_threads
+!         niac_end(it)=niac_start(it)
+!      enddo   
+
+!!$omp parallel do private(niac,i,d)
+!do it = 1, nthreads
+!       niac = niac_start(it)
+!       do i = n_start(it),n_end(it)
 
       niac = 0
       do i=1,ntotal-1
@@ -1545,32 +1573,228 @@ implicit none
 
 class(particles) parts
 double precision dx(3), rr, f, rr0, dd, p1, p2     
-integer i, j, k, d
+integer i, j, k, d, ii
            
 rr0 = parts%dspp; dd = parts%numeric%dd
 p1 = parts%numeric%p1; p2 = parts%numeric%p2
       
 do k=1,parts%niac
    i = parts%pair_i(k)
-   j = parts%pair_j(k)  
-   if(parts%itype(i).gt.0.and.parts%itype(j).lt.0)then  
+   j = parts%pair_j(k)
+   if(parts%itype(i)*parts%itype(j)>0)cycle  
+!   if(parts%itype(i).gt.0.and.parts%itype(j).lt.0)then  
       rr = 0.      
       do d=1,parts%dim
          dx(d) =  parts%x(d,i) -  parts%x(d,j)
          rr = rr + dx(d)*dx(d)
       enddo  
       rr = sqrt(rr)
-      if(rr.lt.rr0)then
+      !if(rr.lt.rr0)then
+      if(rr.gt.rr0)cycle
          f = ((rr0/rr)**p1-(rr0/rr)**p2)/rr**2
+         
+         ii = i
+         if(parts%itype(i)<0)ii=j 
+
          do d = 1, parts%dim
-            parts%dvx(d, i) = parts%dvx(d, i) + dd*dx(d)*f
+            parts%dvx(d, ii) = parts%dvx(d, ii) + dd*dx(d)*f
          enddo
-      endif
-   endif        
+      !endif
+   !endif        
 enddo   
        
 return
 end subroutine
+
+
+! Calculate partial derivatives of a field
+!-------------------------------------------
+          function df(parts,f,x)
+!-------------------------------------------
+implicit none
+
+real(dp) f(:)
+character(len=1) x
+class(particles) parts
+real(dp), allocatable :: df(:)
+real(dp), pointer, dimension(:) :: dwdx
+real(dp) fwx
+integer i, j, k
+
+allocate(df(size(f))); df = 0.
+
+if(x=='x')dwdx=>parts%dwdx(1,:)
+if(x=='y')dwdx=>parts%dwdx(2,:)
+
+do k=1,parts%niac
+   i = parts%pair_i(k)
+   j = parts%pair_j(k)
+   fwx = (f(i)+f(j))*dwdx(k)
+   df(i) = df(i) + parts%mass(j)/parts%rho(j)*fwx
+   df(j) = df(j) - parts%mass(i)/parts%rho(i)*fwx
+enddo
+
+end function
+
+! Calculate partial derivatives of a field
+!-------------------------------------------
+          function df2(parts,f,x)
+!-------------------------------------------
+implicit none
+
+real(dp) f(:)
+character(len=1) x
+class(particles) parts
+real(dp), allocatable :: df2(:)
+real(dp), pointer, dimension(:) :: dwdx
+real(dp) fwx
+integer i, j, k
+
+allocate(df2(size(f))); df2 = 0.
+
+if(x=='x')dwdx=>parts%dwdx(1,:)
+if(x=='y')dwdx=>parts%dwdx(2,:)
+
+do k=1,parts%niac
+   i = parts%pair_i(k)
+   j = parts%pair_j(k)
+   fwx = (f(j)-f(i))*dwdx(k)
+   df2(i) = df2(i) + parts%mass(j)*fwx
+   df2(j) = df2(j) + parts%mass(i)*fwx
+enddo
+
+do i = 1, parts%ntotal + parts%nvirt 
+   df2(i) = df2(i)/parts%rho(i)
+enddo   
+
+end function
+
+
+! Calculate partial derivatives of a field
+!-------------------------------------------
+          function df3(parts,f,x)
+!------------------------------------------- 
+implicit none
+
+real(dp) f(:)
+character(len=1) x
+class(particles) parts
+real(dp),allocatable :: df3(:)
+real(dp), pointer, dimension(:) :: dwdx
+real(dp) fwx
+integer i,j,k
+
+allocate(df3(size(f))); df3 = 0.
+
+if(x=='x')dwdx=>parts%dwdx(1,:)
+if(x=='y')dwdx=>parts%dwdx(2,:)
+
+do k=1,parts%niac
+   i = parts%pair_i(k)
+   j = parts%pair_j(k)
+   fwx = ((f(i)/parts%rho(i)**2)+(f(j)/parts%rho(j)**2))*dwdx(k)
+   df3(i) = df3(i) + parts%mass(j)*fwx
+   df3(j) = df3(j) - parts%mass(i)*fwx
+enddo
+
+do i = 1, parts%ntotal + parts%nvirt
+   df3(i) = df3(i)*parts%rho(i)
+enddo
+
+end function
+
+!Subroutine to calculate the density with SPH summation algorithm.
+!----------------------------------------------------------------------
+      subroutine sum_density(parts) 
+!----------------------------------------------------------------------
+      implicit none
+
+      class(particles) parts
+      integer ntotal, i, j, k, d      
+      real(dp) selfdens, hv(3), r, wi(parts%maxn)     
+
+      ntotal = parts%ntotal + parts%nvirt
+
+!     wi(maxn)---integration of the kernel itself
+        
+      hv = 0.d0
+
+!     Self density of each particle: Wii (Kernel for distance 0)
+!     and take contribution of particle itself:
+
+      r=0.d0
+      
+!     Firstly calculate the integration of the kernel over the space
+
+      do i=1,ntotal
+        call parts%kernel(r,hv,parts%hsml(i),selfdens,hv)
+        wi(i)=selfdens*parts%mass(i)/parts%rho(i)
+      enddo
+
+      do k=1,parts%niac
+        i = parts%pair_i(k)
+        j = parts%pair_j(k)
+        wi(i) = wi(i) + parts%mass(j)/parts%rho(j)*parts%w(k)
+        wi(j) = wi(j) + parts%mass(i)/parts%rho(i)*parts%w(k)
+      enddo
+
+!     Secondly calculate the rho integration over the space
+
+      do i=1,ntotal
+        call parts%kernel(r,hv,parts%hsml(i),selfdens,hv)
+        parts%rho(i) = selfdens*parts%mass(i)
+      enddo
+
+!     Calculate SPH sum for rho:
+      do k=1,parts%niac
+        i = parts%pair_i(k)
+        j = parts%pair_j(k)
+        parts%rho(i) = parts%rho(i) + parts%mass(j)*parts%w(k)
+        parts%rho(j) = parts%rho(j) + parts%mass(i)*parts%w(k)
+      enddo
+
+!     Thirdly, calculate the normalized rho, rho=sum(rho)/sum(w)
+!      if (nor_density) then 
+        do i=1, ntotal
+          parts%rho(i)=parts%rho(i)/wi(i)
+        enddo
+!      endif 
+ 
+      end subroutine
+
+
+! Subroutine to calculate the density with SPH continuiity approach.
+!----------------------------------------------------------------------      
+      subroutine con_density(parts)
+!----------------------------------------------------------------------
+      implicit none
+  
+      class(particles) parts      
+
+      integer ntotal,i,j,k,d    
+      double precision vcc, dvx(3) 
+      
+      ntotal = parts%ntotal + parts%nvirt
+
+      do i = 1, ntotal
+        parts%drho(i) = 0.
+      enddo
+     
+      do k=1,parts%niac      
+        i = parts%pair_i(k)
+        j = parts%pair_j(k)
+        do d=1, parts%dim
+          dvx(d) = parts%vx(d,i) - parts%vx(d,j) 
+        enddo        
+        vcc = dvx(1)* parts%dwdx(1,k)        
+        do d=2, parts%dim
+          vcc = vcc + dvx(d)*parts%dwdx(d,k)
+        enddo    
+        parts%drho(i) = parts%drho(i) + parts%mass(j)*vcc
+        parts%drho(j) = parts%drho(j) + parts%mass(i)*vcc       
+      enddo    
+
+      end subroutine
 
 !---------------------------------------------------------------------
 !   function find_particle_nearest2_point(parts,x,y ) result(index)

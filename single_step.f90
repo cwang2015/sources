@@ -6,7 +6,7 @@
 !----------------------------------------------------------------------
 use param 
 use declarations_sph
-use m_sph_fo
+!use m_sph_fo
 implicit none
 
 integer  nphase, iphase
@@ -101,8 +101,8 @@ endif
 !Calculate internal force for water phase !! -phi_f Grad(p)
 if(pl%imaterial=='water')then
 
-   pl%dvx(1,:) = -pl%vof*df(pl%p,'x',pl) + df(pl%vof*pl%sxx,'x',pl) + df(pl%vof*pl%sxy,'y',pl)
-   pl%dvx(2,:) = -pl%vof*df(pl%p,'y',pl) + df(pl%vof*pl%sxy,'x',pl) + df(pl%vof*pl%syy,'y',pl)
+   pl%dvx(1,:) = -pl%vof*pl%df(pl%p,'x') + pl%df(pl%vof*pl%sxx,'x') + pl%df(pl%vof*pl%sxy,'y')
+   pl%dvx(2,:) = -pl%vof*pl%df(pl%p,'y') + pl%df(pl%vof*pl%sxy,'x') + pl%df(pl%vof*pl%syy,'y')
 
    where (pl%rho.gt.0.0) pl%dvx(1,:) = pl%dvx(1,:)/pl%rho
    where (pl%rho.gt.0.0) pl%dvx(2,:) = pl%dvx(2,:)/pl%rho
@@ -232,7 +232,7 @@ end subroutine
 !-------------------------------------------------
 use param
 use declarations_sph
-use m_sph_fo
+!use m_sph_fo
 implicit none
 type(particles), pointer :: pl
 type(material),pointer :: property
@@ -255,7 +255,7 @@ endif
      
 !if(summation_density) call sum_density(pl)
 call sum_density(pl)
-pl%drho = -pl%rho*(df2(pl%vx(1,:),'x',pl)+df2(pl%vx(2,:),'y',pl))
+pl%drho = -pl%rho*(pl%df2(pl%vx(1,:),'x')+pl%df2(pl%vx(2,:),'y'))
       
 if(artificial_density)then
    !call renormalize_density_gradient(pl)
@@ -270,9 +270,9 @@ where(pl%rho>0.0) pl%p = property%b*((pl%rho/property%rho0)**property%gamma-1)
 
 !Calculate SPH sum for shear tensor Tab = va,b + vb,a - 2/3 delta_ab vc,c
 
-pl%txx = 2./3.*(2.0*df(pl%vx(1,:),'x',pl)-df(pl%vx(2,:),'y',pl))
-pl%txy = df(pl%vx(1,:),'y',pl)+df(pl%vx(2,:),'x',pl)
-pl%tyy = 2./3.*(2.0*df(pl%vx(2,:),'y',pl)-df(pl%vx(1,:),'x',pl))
+pl%txx = 2./3.*(2.0*pl%df(pl%vx(1,:),'x')-pl%df(pl%vx(2,:),'y'))
+pl%txy = pl%df(pl%vx(1,:),'y')+pl%df(pl%vx(2,:),'x')
+pl%tyy = 2./3.*(2.0*pl%df(pl%vx(2,:),'y')-pl%df(pl%vx(1,:),'x'))
 
 !Newtonian fluid
 
@@ -282,8 +282,8 @@ pl%sxy = property%viscosity*pl%txy
 
 !Calculate internal force
 
-pl%dvx(1,:) = - df(pl%p,'x',pl) + df(pl%sxx,'x',pl) + df(pl%sxy,'y',pl)
-pl%dvx(2,:) = - df(pl%p,'y',pl) + df(pl%sxy,'x',pl) + df(pl%syy,'y',pl)
+pl%dvx(1,:) = - pl%df(pl%p,'x') + pl%df(pl%sxx,'x') + pl%df(pl%sxy,'y')
+pl%dvx(2,:) = - pl%df(pl%p,'y') + pl%df(pl%sxy,'x') + pl%df(pl%syy,'y')
 
 where (pl%rho.gt.0.0) pl%dvx(1,:) = pl%dvx(1,:)/pl%rho
 where (pl%rho.gt.0.0) pl%dvx(2,:) = pl%dvx(2,:)/pl%rho
@@ -325,7 +325,7 @@ end subroutine
 !----------------------------------------------------------------------
 use param 
 use declarations_sph
-use m_sph_fo
+!use m_sph_fo
 implicit none
 
 type(particles), pointer :: pl
@@ -379,8 +379,8 @@ endif
 
 !call int_force1(pl)
 
-pl%dvx(1,:) = - df(pl%p,'x',pl) + df(pl%sxx,'x',pl) + df(pl%sxy,'y',pl)
-pl%dvx(2,:) = - df(pl%p,'y',pl) + df(pl%sxy,'x',pl) + df(pl%syy,'y',pl)
+pl%dvx(1,:) = - pl%df(pl%p,'x') + pl%df(pl%sxx,'x') + pl%df(pl%sxy,'y')
+pl%dvx(2,:) = - pl%df(pl%p,'y') + pl%df(pl%sxy,'x') + pl%df(pl%syy,'y')
 
 where (pl%rho.gt.0.0) pl%dvx(1,:) = pl%dvx(1,:)/pl%rho
 where (pl%rho.gt.0.0) pl%dvx(2,:) = pl%dvx(2,:)/pl%rho       
