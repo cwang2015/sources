@@ -465,6 +465,7 @@ do i = 1, this%m
    enddo
 enddo
 
+
 return
 end subroutine
 
@@ -876,11 +877,13 @@ integer nnps
 
 nnps = parts%numeric%nnps
 if(nnps == 1)then
+
    call direct_find(parts)
 elseif(nnps == 2)then
-   call link_list(parts%itimestep,parts%ntotal+parts%nvirt,parts%hsml(1),parts%x,parts%niac,parts%pair_i,parts%pair_j,parts%w,parts%dwdx,parts%countiac)
+   call link_list3(parts%itimestep,parts%ntotal+parts%nvirt,parts%hsml(1),parts%x,parts%niac,parts%pair_i,parts%pair_j,parts%w,parts%dwdx,parts%countiac)
    !print *,parts%niac,parts%pair_i,parts%pair_j,parts%w,parts%dwdx
    !   stop 'find_pairs: link_list method not implemented yet!'
+
 elseif(nnps == 3)then
 !    call tree_search(parts)
    stop 'find_pairs: tree_search method not implemented yet!'
@@ -896,7 +899,7 @@ implicit none
 
 class(particles) parts
 double precision dx(3), rr, f, rr0, dd, p1, p2     
-integer i, j, k, d
+integer i, j, k, d, ii
            
 rr0 = parts%numeric%rr0; dd = parts%numeric%dd
 p1 = parts%numeric%p1; p2 = parts%numeric%p2
@@ -904,20 +907,25 @@ p1 = parts%numeric%p1; p2 = parts%numeric%p2
 do k=1,parts%niac
    i = parts%pair_i(k)
    j = parts%pair_j(k)  
-   if(parts%itype(i).gt.0.and.parts%itype(j).lt.0)then  
+   if(parts%itype(i)*parts%itype(j)>0)cycle 
       rr = 0.      
       do d=1,parts%dim
          dx(d) =  parts%x(d,i) -  parts%x(d,j)
          rr = rr + dx(d)*dx(d)
       enddo  
       rr = sqrt(rr)
-      if(rr.lt.rr0)then
+!      if(rr.lt.rr0)then
+      if(rr.gt.rr0)cycle
          f = ((rr0/rr)**p1-(rr0/rr)**p2)/rr**2
+         
+         ii = i
+         if(parts%itype(i)<0)ii=j 
+         
          do d = 1, parts%dim
-            parts%dvx(d, i) = parts%dvx(d, i) + dd*dx(d)*f
+            parts%dvx(d, ii) = parts%dvx(d, ii) + dd*dx(d)*f
          enddo
-      endif
-   endif        
+!      endif
+!   endif        
 enddo   
        
 return

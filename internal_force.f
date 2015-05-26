@@ -6,7 +6,7 @@ c   of the Navier-Stokes equations, i.e. the pressure gradient and the
 c   gradient of the viscous stress tensor, used by the time integration. 
 c   Moreover the entropy production due to viscous dissipation, tds/dt, 
 c   and the change of internal energy per mass, de/dt, are calculated. 
- 
+
       use param
       use m_particles
       implicit none

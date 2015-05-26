@@ -458,10 +458,12 @@ use declarations_sph
 implicit none     
 
 
-integer :: i, j, k, d, ntotal, it 
+integer :: i, j, k, d, ntotal, it,n_per_threads,niac_per_threads,n_per_threads_just_real,nthreads,id
 double precision mypi
 type(particles), pointer :: pl
-              
+INTEGER, EXTERNAL ::  OMP_GET_NUM_THREADS,omp_get_thread_num
+integer,  dimension(4)   ::    n_start,n_end,n_start_just_real,n_end_just_real
+      
 real(dp), allocatable, dimension(:,:) :: lastvx   
 real(dp), allocatable, dimension(:,:) :: temp1    
 real(dp), allocatable, dimension(:)   :: lastrho  
@@ -480,43 +482,55 @@ allocate(temp2(parts%maxn))
 do it = 1, maxtimestep 
     itimestep = itimestep+1
    call single_step_for_water
-!$omp parallel    
-if(mod(itimestep,50) .ne. 0) then    
-    do i = 1, pl%ntotal
+!$omp parallel
+if(mod(itimestep,50) .ne. 0) then  
+!$omp  do
+    do i =  1,pl%ntotal
        do d = 1, dim
           pl%x(d,i) = pl%x(d,i) + dt * pl%vx(d,i) +(dt**2./2.)*pl%dvx(d,i)
           lastvx(d,i) = lastvx(d,i) + 2.*dt*pl%dvx(d,i)
        enddo
     enddo
+!$omp end do
 else
-    do i = 1, pl%ntotal
+!$omp do
+    do i =  1,pl%ntotal
        do d = 1, dim
           pl%x(d,i) = pl%x(d,i) + dt * pl%vx(d,i) +(dt**2./2.)*pl%dvx(d,i)
           lastvx(d,i) = pl%vx(d,i) + dt*pl%dvx(d,i)
       enddo
     enddo
+!$omp end do 
 endif
+!$omp end parallel
 temp1 = pl%vx
 pl%vx = lastvx
 lastvx = temp1
 
+!$omp parallel
 if(itimestep .eq. 1) then
+!$omp do
     do i = 1, pl%ntotal+pl%nvirt
           lastrho(i) = pl%rho(i) + dt * 2. * pl%drho(i)
     enddo
+!$omp end do 
 elseif(mod(itimestep,50) .ne. 0) then
+!$omp do
     do i = 1, pl%ntotal+pl%nvirt
           lastrho(i) = lastrho(i) + dt * 2. * pl%drho(i)
     enddo
+!$omp end do
 else
+!$omp do
    do i = 1, pl%ntotal+pl%nvirt
           lastrho(i) = pl%rho(i) + dt* pl%drho(i)
    enddo
+!$omp end do
 endif
+!$omp end parallel
 temp2 = pl%rho
 pl%rho = lastrho
 lastrho = temp2
-!$omp end parallel
    time = time + dt
 
    if(mod(itimestep,print_step).eq.0)then

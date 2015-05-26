@@ -29,11 +29,16 @@ C      include 'param.inc'
           print *,'    Particle position: x(',i,d,') = ',x(d)
           print *,'    Range: [xmin,xmax](',D,') = 
      &         [',mingridx(d),',',maxgridx(d),']'
-          stop
+           stop
         else
           xgcell(d) = int(real(ngridx(d))/dgeomx(d)*
      &         (x(d)-mingridx(d)) + 1.e0)
+  !       write(*,*)"x(d)",x(d)
+  !       write(*,*)"ngridx(d)",ngridx(d)
+  !       write(*,*)"dgeomx(d)",dgeomx(d)
+  !       write(*,*)"mingridx(d)",mingridx(d)
+  !       write(*,*) "xgcell(d)","d=",d,xgcell(d)
         endif
       enddo
-
+!         stop
       end

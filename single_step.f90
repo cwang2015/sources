@@ -33,7 +33,8 @@ endif
 !     and optimzing smoothing length
   
 if (pl%numeric%nnps.eq.1) then 
-   call direct_find(pl)
+!   call direct_find(itimestep, ntotal,hsml,x,niac,pair_i,
+!     &           pair_j,w,dwdx,countiac))
 else if (pl%numeric%nnps.eq.2) then
 !        call link_list(itimestep, ntotal+nvirt,hsml(1),x,niac,pair_i,
 !     &       pair_j,w,dwdx,ns)
@@ -181,7 +182,8 @@ endif
 !     and optimzing smoothing length
   
       if (numeric%nnps.eq.1) then 
-         call direct_find_2(parts,soil)
+ 
+        call direct_find_2(parts,soil)
         !call direct_find(parts)
       else if (numeric%nnps.eq.2) then
 !        call link_list(itimestep, ntotal+nvirt,hsml(1),x,niac,pair_i,
@@ -235,6 +237,7 @@ use m_sph_fo
 implicit none
 type(particles), pointer :: pl
 type(material),pointer :: property
+integer i,k,j
 
 pl => parts
 property => pl%material
@@ -245,7 +248,6 @@ pl%dvx = 0.d0; pl%drho = 0.d0
 !     and optimzing smoothing length
 
 call pl%find_pairs
-
 if(mod(itimestep,print_step).eq.0.and.int_stat) then
    call pl%interaction_statistics
 endif   
@@ -255,25 +257,37 @@ endif
 !if(summation_density) call sum_density(pl)
 call sum_density(pl)
 pl%drho = -pl%rho*(df2(pl%vx(1,:),'x',pl)+df2(pl%vx(2,:),'y',pl))
-      
+
 if(artificial_density)then
    !call renormalize_density_gradient(pl)
    call art_density(pl)
 endif
-       
+          
+
+!do k=1,pl%niac
+!   i = pl%pair_i(k)
+!   j = pl%pair_j(k)
+!   write(*,*) "i=",i
+!   write(*,*) "j=",j
+!enddo
+!stop
+
 !---  Internal forces:
 
 !Calculate pressure
 
+!!$omp parallel
 where(pl%rho>0.0) pl%p = property%b*((pl%rho/property%rho0)**property%gamma-1)
-
+!!$omp end parallel
 !Calculate SPH sum for shear tensor Tab = va,b + vb,a - 2/3 delta_ab vc,c
-!$omp parallel
 
+!turn df to df2-by luo
 pl%txx = 2./3.*(2.0*df(pl%vx(1,:),'x',pl)-df(pl%vx(2,:),'y',pl))
 pl%txy = df(pl%vx(1,:),'y',pl)+df(pl%vx(2,:),'x',pl)
 pl%tyy = 2./3.*(2.0*df(pl%vx(2,:),'y',pl)-df(pl%vx(1,:),'x',pl))
 
+!            write(*,*) "DAfads"
+ !     stop
 !Newtonian fluid
 
 pl%sxx = property%viscosity*pl%txx
@@ -281,14 +295,13 @@ pl%syy = property%viscosity*pl%tyy
 pl%sxy = property%viscosity*pl%txy
 
 !Calculate internal force
-
+!turn df to df2-by luo
 pl%dvx(1,:) = - df(pl%p,'x',pl) + df(pl%sxx,'x',pl) + df(pl%sxy,'y',pl)
 pl%dvx(2,:) = - df(pl%p,'y',pl) + df(pl%sxy,'x',pl) + df(pl%syy,'y',pl)
 
 where (pl%rho.gt.0.0) pl%dvx(1,:) = pl%dvx(1,:)/pl%rho
 where (pl%rho.gt.0.0) pl%dvx(2,:) = pl%dvx(2,:)/pl%rho
-       
-!$omp end parallel
+
 !if(water_tension_instability==2) call tension_instability(pl) 
 
 !---  Artificial viscosity:
@@ -304,7 +317,7 @@ pl%dvx(2,:) = pl%dvx(2,:) + gravity
 ! Calculating the neighboring particles and undating HSML
       
 if (sle.ne.0) call h_upgrade(pl)
-     
+
 ! Calculating average velocity of each partile for avoiding penetration
 
 if (average_velocity) call av_vel(pl) 

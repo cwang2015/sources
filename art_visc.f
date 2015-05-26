@@ -37,7 +37,7 @@ c     Subroutine to calculate the artificial viscosity (Monaghan, 1992)
       alpha = numeric%alpha; beta = numeric%beta; etq = numeric%etq
          
 c     Calculate SPH sum for artificial viscosity
-      
+!      !$omp parallel do private(i,j,mhsml,vr,rr,d,muv,etq,mc,mrho,piv,h)
       do k=1,niac
         i = pair_i(k)
         j = pair_j(k)
@@ -76,6 +76,7 @@ c     Calculate SPH sum for artificial viscous force
           enddo
         endif
       enddo
+!      !$omp end parallel do
 
 c     Change of specific internal energy:
 
@@ -127,7 +128,7 @@ c      write(*,*) 'In art_density...'
       numeric  => parts%numeric
 
       delta = numeric%delta
-          
+   !   !$omp parallel do private(i,j,rr,muv,d,h)
       do k=1,niac
         i = pair_i(k)
         j = pair_j(k)
@@ -147,7 +148,8 @@ c      write(*,*) 'In art_density...'
         drho(i) = drho(i) + delta*hsml(i)*c(i)*mass(j)*h/rho(j)
         drho(j) = drho(j) - delta*hsml(j)*c(j)*mass(i)*h/rho(i)
         
-      enddo
+        enddo
+    !    !$omp end parallel do
 
       return
       end subroutine
