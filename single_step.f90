@@ -64,7 +64,8 @@ endif
 if(artificial_density)then
    !if(trim(pl%imaterial)=='water')then
       !!call renormalize_density_gradient(pl)
-      call art_density(pl)
+      !call art_density(pl)
+      call delta_sph(pl,pl%rho,pl%drho)
    !endif
 endif
 
@@ -134,12 +135,18 @@ if(trim(pl%imaterial)=='soil')call Jaumann_rate(pl)
 
 !---  Artificial viscosity:
 
-if (visc_artificial) call art_visc(pl)
+if (visc_artificial) call pl%art_visc
 
-if(trim(pl%imaterial)=='soil'.and.soil_artificial_stress) &
-        call art_stress(pl)
+if(trim(pl%imaterial)=='soil'.and.soil_artificial_stress)then
+        !call art_stress(pl)
+   call pl%delta_sph(pl%p,pl%dp)
+   call pl%delta_sph(pl%sxx,pl%dsxx)
+   call pl%delta_sph(pl%sxy,pl%dsxy)
+   call pl%delta_sph(pl%syy,pl%dsyy)
+endif        
 if(trim(pl%imaterial)=='water'.and.water_artificial_volume)  &
-        call art_volume_fraction_water2(pl)
+        !call art_volume_fraction_water2(pl)
+        call pl%delta_sph(pl%vof,pl%dvof)
 
 !--- Damping
 !       if(trim(pl%imaterial)=='soil') call damping_stress(pl)
@@ -259,7 +266,8 @@ pl%drho = -pl%rho*(pl%df2(pl%vx(1,:),'x')+pl%df2(pl%vx(2,:),'y'))
       
 if(artificial_density)then
    !call renormalize_density_gradient(pl)
-   call art_density(pl)
+   !call art_density(pl)
+   call delta_sph(pl,pl%rho,pl%drho)
 endif
        
 !---  Internal forces:
@@ -292,7 +300,7 @@ where (pl%rho.gt.0.0) pl%dvx(2,:) = pl%dvx(2,:)/pl%rho
 
 !---  Artificial viscosity:
 
-if (visc_artificial) call art_visc(pl)
+if (visc_artificial) call pl%art_visc
     
 !---  External forces:
 
@@ -358,7 +366,8 @@ endif
 if(artificial_density)then
    !if(trim(pl%imaterial)=='water')then
       !!call renormalize_density_gradient(pl)
-      call art_density(pl)
+      !call art_density(pl)
+      call delta_sph(pl,pl%rho,pl%drho)
    !endif
 endif
 
@@ -403,9 +412,15 @@ call Jaumann_rate(pl)
 
 !---  Artificial viscosity:
 
-if (visc_artificial) call art_visc(pl)
+if (visc_artificial) call pl%art_visc
 
-if(soil_artificial_stress) call art_stress(pl)
+!if(soil_artificial_stress) call art_stress(pl)
+if(soil_artificial_stress)then
+   call pl%delta_sph(pl%p,pl%dp)
+   call pl%delta_sph(pl%sxx,pl%dsxx)
+   call pl%delta_sph(pl%sxy,pl%dsxy)
+   call pl%delta_sph(pl%syy,pl%dsyy)
+endif   
 
 !--- Damping
 !       if(trim(pl%imaterial)=='soil') call damping_stress(pl)

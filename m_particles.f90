@@ -45,7 +45,7 @@ real(dp) :: x_maxgeom = 10.e0, x_mingeom = -10.e0,  &
 
 !maxn: Maximum number of particles
 !max_interation : Maximum number of interaction pairs
-integer :: maxn = 12000, max_interaction = 100 * 12000
+integer :: maxn = 2000, max_interaction = 10 * 2000
   
 !SPH algorithm
 
@@ -208,6 +208,9 @@ integer :: nnps = 1
 
 ! Delta-SPH
    real(dp) :: delta = 0.1d0
+
+! Velocity average
+  real(dp) :: epsilon = 0.001
    
 end type
 
@@ -271,7 +274,7 @@ real(dp) mingridx(3),maxgridx(3),dgeomx(3)
 
 !maxn: Maximum number of particles
 !max_interation : Maximum number of interaction pairs
-integer :: maxn = 12000, max_interaction = 100 * 12000
+integer :: maxn = 2000, max_interaction = 10 * 2000
   
 !SPH algorithm
 
@@ -491,6 +494,8 @@ integer :: save_step_from = 0, save_step_to = 100
 
    integer itimestep
 
+   integer niac_start(8), niac_end(8), nthreads
+
    contains
 
        procedure :: write_particles
@@ -511,6 +516,9 @@ integer :: save_step_from = 0, save_step_to = 100
        procedure :: kernel
        procedure :: sum_density
        procedure :: con_density
+       procedure :: art_visc
+       procedure :: delta_sph
+       procedure :: av_vel
        procedure :: repulsive_force
        procedure :: df
        procedure :: df2
@@ -1292,6 +1300,7 @@ end function
 !   the interaction parameters used by the SPH algorithm. Interaction 
 !   pairs are determined by using a sorting grid linked list  
 !----------------------------------------------------------------------
+      use ifport
       implicit none
 
       class(particles) parts
@@ -1300,8 +1309,10 @@ end function
       integer dnxgcell(3),dpxgcell(3)
       real(dp) hsml,dr,r,dx(3),tdwdx(3)
 
-!      INTEGER nthreads,n_per_threads, niac_per_threads, it, n_start(8), n_end(8)
-!      INTEGER, EXTERNAL :: OMP_GET_THREAD_NUM, OMP_GET_NUM_THREADS
+      INTEGER nthreads,n_per_threads, niac_per_threads, it, n_start(8), n_end(8)
+      Integer niac_start(8),niac_end(8), last
+      INTEGER, EXTERNAL :: OMP_GET_THREAD_NUM, OMP_GET_NUM_THREADS
+      real(dp) t1,t2,t3
 
       ntotal  = parts%ntotal + parts%nvirt
       scale_k = parts%get_scale_k()
@@ -1325,26 +1336,28 @@ end function
       enddo
 
 !     Determine interaction parameters:
-!!$omp parallel
-!      nthreads = omp_get_num_threads()
-!      write(*,*) 'ooo', nthreads
-!!$omp end parallel       
-!      n_per_threads = ntotal/nthreads
-!      niac_per_threads = parts%max_interaction/threads
-!      do it = 1, nthreads
-!         n_start(it)=(it-1)*n_per*threads+1
-!         n_end(it) = it*n_per_threads
-!         niac_start(it)=(it-1)*niac_per_threads
-!         niac_end(it)=niac_start(it)
-!      enddo   
+!$omp parallel
+      nthreads = omp_get_num_threads()
+!$omp end parallel
+      n_per_threads = ntotal/nthreads
+      niac_per_threads = parts%max_interaction/nthreads
+      do it = 1, nthreads
+         n_start(it)=(it-1)*n_per_threads+1
+         n_end(it) = it*n_per_threads
+         niac_start(it)=(it-1)*niac_per_threads
+         niac_end(it)=niac_start(it)
+      enddo   
 
-!!$omp parallel do private(niac,i,d)
-!do it = 1, nthreads
-!       niac = niac_start(it)
-!       do i = n_start(it),n_end(it)
+      parts%pair_i = 0; parts%pair_j=0
+!      t1 = rtc()
+!$omp parallel 
+!$omp do private(niac,i,d,minxcell,maxxcell,dnxgcell,dpxgcell,xcell,ycell,zcell,j,dx,dr,r,tdwdx)
+do it = 1, nthreads
+       niac = niac_start(it)
+       do i = n_start(it),n_end(it)
 
-      niac = 0
-      do i=1,ntotal-1
+!      niac = 0
+!      do i=1,ntotal-1
 
 !     Determine range of grid to go through:
          
@@ -1374,6 +1387,7 @@ end function
                 enddo
                 if (sqrt(dr).lt.scale_k*hsml) then
                   if (niac.lt.parts%max_interaction) then
+                  !if (niac.lt.niac_per_threads) then
 
 !     Neighboring pair list, and totalinteraction number and
 !     the interaction number for each particle 
@@ -1382,28 +1396,70 @@ end function
                     parts%pair_i(niac) = i
                     parts%pair_j(niac) = j
                     r = sqrt(dr)
-                    parts%countiac(i) = parts%countiac(i) + 1
-                    parts%countiac(j) = parts%countiac(j) + 1
+                    !parts%countiac(i) = parts%countiac(i) + 1
+                    !parts%countiac(j) = parts%countiac(j) + 1
                            
 !--- Kernel and derivations of kernel
 
                     call parts%kernel(r,dx,hsml,parts%w(niac),tdwdx)  !!!!!!!!
-	            do d = 1, parts%dim
-	              parts%dwdx(d,niac)=tdwdx(d)
+                    do d = 1, parts%dim
+                       parts%dwdx(d,niac)=tdwdx(d)
                     enddo                  
                   else
-                    print *, ' >>> Error <<< : too many interactions'
+                    print *, ' >>> Error <<< : too many interactions', &
+                    it,niac,niac_per_threads
                     stop
                   endif
                 endif
                 j = parts%celldata(j)
                 goto 1
               endif
-            enddo
-          enddo
-        enddo
+            enddo !xcell
+          enddo !ycell
+        enddo !zcell
+      enddo !i
+
+      niac_start(it) = niac_start(it)+1
+      niac_end(it) = niac
+      enddo !it      
+!$omp end do
+!$omp end parallel
+!      t2 = rtc()
+!      write(*,*) t2-t1
+      parts%niac = 0
+      do it = 1, nthreads
+         parts%niac = parts%niac + niac_end(it)-niac_start(it)+1
       enddo
-      parts%niac = niac
+
+      last = parts%max_interaction
+      do while(parts%pair_i(last)==0)
+         last = last - 1
+      enddo  
+      i = 1 
+      do while(i<last)
+         if(parts%pair_i(i)/=0)then
+            i = i + 1
+            cycle
+         endif        
+         parts%pair_i(i) = parts%pair_i(last)
+         parts%pair_j(i) = parts%pair_j(last)
+         parts%w(i)      = parts%w(last)
+         parts%dwdx(1,i) = parts%dwdx(1,last)
+         parts%dwdx(2,i) = parts%dwdx(2,last)
+         last = last - 1
+         do while(parts%pair_i(last)==0)
+            last = last - 1
+         enddo
+         i = i + 1
+      enddo   
+!      t3 = rtc()
+!      write(*,*) t1,t2,t3
+!      write(*,*) t2-t1,t3-t2
+!      pause
+!      if(last/=parts%niac) stop 'adfasdf'
+!      do i = 1, last
+!         if(parts%pair_i(i)==0) stop 'adf'
+!      enddo   
 
       end subroutine
 
@@ -1794,6 +1850,147 @@ end function
         parts%drho(j) = parts%drho(j) + parts%mass(i)*vcc       
       enddo    
 
+      end subroutine
+
+! Subroutine to calculate the artificial viscosity (Monaghan, 1992) 
+!----------------------------------------------------------------------      
+      subroutine art_visc(parts)
+!----------------------------------------------------------------------
+      implicit none
+
+      class(particles) parts
+
+      type(numerical), pointer :: numeric
+      real(dp) dx, dvx(3), alpha, beta, etq, piv, muv, vr, rr, h, mc, mrho, mhsml
+      integer i,j,k,d,dim,ntotal,niac
+
+      ntotal   =  parts%ntotal + parts%nvirt
+      niac     =  parts%niac; dim = parts%dim
+            
+      numeric  => parts%numeric      
+      alpha = numeric%alpha; beta = numeric%beta; etq = numeric%etq
+         
+!     Calculate SPH sum for artificial viscosity
+      
+      do k=1,niac
+        i = parts%pair_i(k)
+        j = parts%pair_j(k)
+        mhsml= (parts%hsml(i)+parts%hsml(j))/2.
+        vr = 0.e0
+        rr = 0.e0
+        do d=1,dim
+          dvx(d) = parts%vx(d,i) - parts%vx(d,j)
+          dx     = parts%x(d,i)  - parts%x(d,j)
+          vr     = vr + dvx(d)*dx
+          rr     = rr + dx*dx
+        enddo
+
+!     Artificial viscous force only if v_ij * r_ij < 0
+
+        if (vr.lt.0.e0) then
+
+!     Calculate muv_ij = hsml v_ij * r_ij / ( r_ij^2 + hsml^2 etq^2 )
+            
+          muv = mhsml*vr/(rr + mhsml*mhsml*etq*etq)
+          
+!     Calculate PIv_ij = (-alpha muv_ij c_ij + beta muv_ij^2) / rho_ij
+
+          mc   = 0.5e0*(parts%c(i) + parts%c(j))
+          mrho = 0.5e0*(parts%rho(i) + parts%rho(j))
+          piv  = (beta*muv - alpha*mc)*muv/mrho              
+
+!     Calculate SPH sum for artificial viscous force
+
+          do d=1,dim
+            h = -piv*parts%dwdx(d,k)
+            parts%dvx(d,i) = parts%dvx(d,i) + parts%mass(j)*h
+            parts%dvx(d,j) = parts%dvx(d,j) - parts%mass(i)*h
+!            dedt(i) = dedt(i) - mass(j)*dvx(d)*h
+!            dedt(j) = dedt(j) - mass(i)*dvx(d)*h
+          enddo
+        endif
+      enddo
+
+!     Change of specific internal energy:
+
+      return
+      end subroutine
+
+!-------------------------------------------------------------------
+      subroutine delta_sph(parts,f,df)
+!-------------------------------------------------------------------
+      implicit none
+
+      class(particles) parts
+      real(dp), dimension(:) :: f,df
+
+      real(dp) dx(3),delta, muv, rr, h
+      integer i,j,k,d,ntotal,niac,dim
+
+!      write(*,*) 'In art_density...'
+
+      ntotal   =  parts%ntotal + parts%nvirt
+      niac     =  parts%niac; dim = parts%dim            
+      delta    = parts%numeric%delta
+          
+      do k=1,niac
+         i = parts%pair_i(k)
+         j = parts%pair_j(k)
+         rr = 0.e0
+         do d=1,dim
+            dx(d)  =  parts%x(d,i) -  parts%x(d,j)
+            rr     = rr + dx(d)*dx(d)
+         enddo
+            
+         muv = 2.0*(f(i)-f(j))/rr
+
+         h = 0.d0
+         do d=1,dim
+            !h = h + (dx(d)*muv - (drhodx(d,i)+drhodx(d,j)))*dwdx(d,k)
+            h = h + dx(d)*muv*parts%dwdx(d,k)
+         enddo
+         df(i) = df(i) + delta*parts%hsml(i)*parts%c(i)*parts%mass(j)*h/parts%rho(j)
+         df(j) = df(j) - delta*parts%hsml(j)*parts%c(j)*parts%mass(i)*h/parts%rho(i)
+      enddo
+
+      return
+      end subroutine
+
+!     Subroutine to calculate the average velocity to correct velocity
+!     for preventing.penetration (monaghan, 1992)      
+!----------------------------------------------------------------------      
+      subroutine av_vel(parts)
+!----------------------------------------------------------------------   
+      implicit none
+
+      class(particles),target :: parts
+      real(dp) vcc, dvx(3), epsilon, mrho
+      integer i,j,k,d,ntotal,niac    
+
+      ntotal = parts%ntotal
+      niac   = parts%niac
+      epsilon = parts%numeric%epsilon
+      
+      parts%av = 0.d0
+     
+      do k=1,niac       
+         i = parts%pair_i(k)
+         j = parts%pair_j(k)       
+         mrho = (parts%rho(i)+parts%rho(j))/2.0
+         do d=1,parts%dim
+            dvx(d) = parts%vx(d,i) - parts%vx(d,j)            
+            parts%av(d, i) = parts%av(d,i) - parts%mass(j)*dvx(d)/mrho*parts%w(k)
+            parts%av(d, j) = parts%av(d,j) + parts%mass(i)*dvx(d)/mrho*parts%w(k)       
+         enddo                    
+      enddo  
+        
+      do i = 1, ntotal
+         do d = 1, parts%dim
+            parts%av(d,i) = epsilon * parts%av(d,i)
+         enddo 
+      enddo             
+
+      return
       end subroutine
 
 !---------------------------------------------------------------------
