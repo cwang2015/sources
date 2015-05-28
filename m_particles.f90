@@ -393,7 +393,7 @@ integer :: save_step_from = 0, save_step_to = 100
 ! Delta-SPH
 !real(dp) :: delta = 0.1d0   
 
-   class(parameters), pointer :: params => null()
+!   class(parameters), pointer :: params => null()
 
    character(len=32) :: imaterial
    class(*), pointer :: material => null()
@@ -430,7 +430,7 @@ integer :: save_step_from = 0, save_step_to = 100
    real(dp), pointer, dimension(:)   :: rho  => null()
    real(dp), pointer, dimension(:,:) :: vx   => null()   
    real(dp), pointer, dimension(:)   :: p    => null()
-   real(dp), pointer, dimension(:)   :: eta  => null()   
+   !real(dp), pointer, dimension(:)   :: eta  => null()   
    real(dp), pointer, dimension(:)   :: c    => null()   
    real(dp), pointer, dimension(:)   :: u    => null()
 
@@ -514,8 +514,14 @@ integer :: save_step_from = 0, save_step_to = 100
        procedure :: link_list
        procedure :: find_pairs
        procedure :: kernel
+       procedure :: initial_density
+       procedure :: pressure
+       procedure :: pressure_water
+       procedure :: pressure_soil
+       procedure :: tension_instability_water 
        procedure :: sum_density
        procedure :: con_density
+       procedure :: newtonian_fluid
        procedure :: art_visc
        procedure :: delta_sph
        procedure :: av_vel
@@ -523,13 +529,20 @@ integer :: save_step_from = 0, save_step_to = 100
        procedure :: df
        procedure :: df2
        procedure :: df3
+       procedure :: velocity_divergence
 !       procedure :: time_integration_for_water
-
 !       procedure :: find_particle_nearest2_point
 !       procedure :: grad_scalar
 !       procedure :: grad_tensor
 !       generic :: grad => grad_scalar, grad_tensor
- 
+      procedure :: shear_strain_rate 
+      procedure :: Jaumann_rate
+      procedure :: mohr_coulomb_failure_criterion
+      procedure :: drucker_prager_failure_criterion
+      procedure :: plastic_or_not
+      procedure :: plastic_flow_rule
+      procedure :: plastic_flow_rule2
+      procedure :: plastic_flow_rule3
 end type 
 
 interface write_field
@@ -1759,6 +1772,187 @@ enddo
 
 end function
 
+!-----------------------------------------------------------------------
+      subroutine velocity_divergence(parts)
+!-----------------------------------------------------------------------
+      implicit none
+
+      class(particles) parts      
+      integer, pointer, dimension(:) :: pair_i, pair_j
+      double precision, pointer, dimension(:) :: mass, rho, vcc
+      double precision, pointer, dimension(:,:) :: vx, dwdx
+      integer i,j,k,d, dim, ntotal, niac
+      double precision dvx(3), hvcc
+      
+      pair_i => parts%pair_i
+      pair_j => parts%pair_j
+      mass   => parts%mass
+      rho    => parts%rho
+      vcc    => parts%vcc
+      vx     => parts%vx
+      dwdx   => parts%dwdx
+
+      ntotal = parts%ntotal + parts%nvirt
+      niac   = parts%niac; dim = parts%dim 
+
+      do i=1,ntotal
+        vcc(i) = 0.e0         
+      enddo
+    
+      do k=1,niac
+        i = pair_i(k)
+        j = pair_j(k)
+        do d=1,dim
+          dvx(d) = vx(d,j) - vx(d,i) 
+        enddo        
+        hvcc = dvx(1)*dwdx(1,k)
+        do d=2,dim
+          hvcc = hvcc + dvx(d)*dwdx(d,k)
+        enddo    
+         vcc(i) = vcc(i) + mass(j)*hvcc/rho(j)
+         vcc(j) = vcc(j) + mass(i)*hvcc/rho(i)
+      enddo  
+   
+      return
+      end subroutine
+
+!---------------------------------------------------------------------
+      subroutine initial_density(parts)
+!---------------------------------------------------------------------
+      implicit none
+
+      class(particles) parts
+
+      type(material), pointer :: water, soil
+      integer ntotal
+      
+      ntotal = parts%ntotal+parts%nvirt
+
+      if(parts%imaterial=='water')then
+
+         water => parts%material
+         parts%rho(1:ntotal) = water%rho0*(parts%p(1:ntotal)/water%b+1) &
+                            **(1/water%gamma)
+
+      elseif(parts%imaterial=='soil')then
+
+         soil => parts%material
+         !parts%rho(1:ntotal) = soil%rho0*(parts%p(1:ntotal)/soil%k+1)
+
+      endif
+ 
+      return
+      end subroutine
+
+!----------------------------------------------------------------------
+                      subroutine pressure(parts)
+!----------------------------------------------------------------------
+      implicit none
+
+      class(particles) parts
+      type(material), pointer :: water, soil
+      integer ntotal, i
+      
+      ntotal = parts%ntotal+parts%nvirt
+
+      if(parts%imaterial=='water')then
+
+         water => parts%material
+         parts%p(1:ntotal) = water%b*((parts%rho(1:ntotal)/(water%rho0  &
+                            *parts%vof(1:ntotal))) &   !!! False density
+                            **water%gamma-1)  
+
+! Tension instability
+!                              if(water_tension_instability==1)then
+!         do i = 1, ntotal
+!            if(parts%p(i)<0)then
+!               parts%p(i) = 0.d0
+!               parts%rho(i) = water%rho0*parts%vof(i)
+!            endif
+!         enddo
+!                              endif
+
+         !parts%c(1:ntotal) = water%c         
+         parts%c(1:ntotal) = water%c*(parts%rho(1:ntotal)/(water%rho0*parts%vof(1:ntotal)))**3.0         
+
+      elseif(parts%imaterial=='soil')then
+
+         soil => parts%material
+         if(parts%soil_pressure==1)          &
+         parts%p(1:ntotal) = soil%k*(parts%rho(1:ntotal)/soil%rho0-1)
+!         parts%p(1:ntotal) = parts%p(1:ntotal)
+!     &                      -soil%k*parts%vcc(1:ntotal)*0.000005   !*dt
+         parts%c(1:ntotal) = soil%c
+
+      endif
+
+      return      
+      end subroutine
+
+!--------------------------------------------------------------
+            subroutine pressure_water(parts)
+!--------------------------------------------------------------
+implicit none
+
+class(particles) parts
+type(material), pointer :: water, soil
+integer ntotal, i
+      
+ntotal = parts%ntotal+parts%nvirt
+
+water => parts%material
+parts%p(1:ntotal) = water%b*((parts%rho(1:ntotal)/(water%rho0  &
+                   *parts%vof(1:ntotal))) &   !!! False density
+                  **water%gamma-1)
+
+parts%c(1:ntotal) = water%c*(parts%rho(1:ntotal)/(water%rho0*parts%vof(1:ntotal)))**3.0         
+
+return
+end subroutine
+
+!--------------------------------------------------------------
+         subroutine tension_instability_water(parts)
+!--------------------------------------------------------------
+implicit none
+
+class(particles) parts
+type(material), pointer :: water, soil
+integer ntotal, i
+      
+ntotal = parts%ntotal+parts%nvirt
+water => parts%material
+
+do i = 1, ntotal
+   if(parts%p(i)<0)then
+      parts%p(i) = 0.d0
+      !parts%rho(i) = water%rho0*parts%vof(i)
+   endif
+enddo
+
+return
+end subroutine
+
+
+!------------------------------------------------------------
+              subroutine pressure_soil(parts)
+!------------------------------------------------------------
+implicit none
+
+class(particles) parts
+type(material), pointer :: water, soil
+integer ntotal, i
+      
+ntotal = parts%ntotal+parts%nvirt
+
+soil => parts%material
+parts%p(1:ntotal) = soil%k*(parts%rho(1:ntotal)/soil%rho0-1)
+! parts%p(1:ntotal) = parts%p(1:ntotal)  &
+!                    -soil%k*parts%vcc(1:ntotal)*0.000005   !*dt
+parts%c(1:ntotal) = soil%c
+
+return      
+end subroutine
+
 !Subroutine to calculate the density with SPH summation algorithm.
 !----------------------------------------------------------------------
       subroutine sum_density(parts) 
@@ -1850,6 +2044,25 @@ end function
         parts%drho(j) = parts%drho(j) + parts%mass(i)*vcc       
       enddo    
 
+      end subroutine
+
+!----------------------------------------------------------------------
+      subroutine newtonian_fluid(parts)
+!----------------------------------------------------------------------
+      implicit none
+
+      class(particles) parts
+      type(material), pointer :: liquid
+      integer ntotal
+
+      ntotal = parts%ntotal + parts%nvirt
+      liquid => parts%material
+
+      parts%sxx(1:ntotal) = liquid%viscosity*parts%txx(1:ntotal)
+      parts%syy(1:ntotal) = liquid%viscosity*parts%tyy(1:ntotal)
+      parts%sxy(1:ntotal) = liquid%viscosity*parts%txy(1:ntotal)
+
+      return
       end subroutine
 
 ! Subroutine to calculate the artificial viscosity (Monaghan, 1992) 
@@ -1992,6 +2205,724 @@ end function
 
       return
       end subroutine
+
+!----------------------------------------------------------------------
+      subroutine shear_strain_rate(parts)
+!----------------------------------------------------------------------
+      implicit none
+
+      class(particles) parts
+      real(dp) dvx(3), hxx, hyy, hzz, hxy, hxz, hyz
+      integer i, j, k, d, dim, ntotal, niac
+
+      ntotal = parts%ntotal + parts%nvirt
+      niac = parts%niac; dim = parts%dim
+
+      parts%txx(1:ntotal) = 0.e0
+      if(dim>=2)then
+         parts%tyy(1:ntotal) = 0.e0
+         parts%txy(1:ntotal) = 0.e0
+      endif
+      if(dim==3)then
+         parts%tzz(1:ntotal) = 0.e0
+         parts%txz(1:ntotal) = 0.e0
+         parts%tyz(1:ntotal) = 0.e0
+      endif
+      
+!     Calculate SPH sum for shear tensor Tab = va,b + vb,a - 2/3 delta_ab vc,c
+
+        do k=1,niac
+          i = parts%pair_i(k)
+          j = parts%pair_j(k)
+          do d=1,dim
+             dvx(d) = parts%vx(d,j) - parts%vx(d,i)
+          enddo
+          if (dim.eq.1) then 
+             hxx = 2.e0*dvx(1)*parts%dwdx(1,k)        
+          else if (dim.eq.2) then           
+             hxx = 2.e0*dvx(1)*parts%dwdx(1,k) - dvx(2)*parts%dwdx(2,k) 
+             hxy = dvx(1)*parts%dwdx(2,k) + dvx(2)*parts%dwdx(1,k)
+             hyy = 2.e0*dvx(2)*parts%dwdx(2,k) - dvx(1)*parts%dwdx(1,k)
+          else if (dim.eq.3) then
+             hxx = 2.e0*dvx(1)*parts%dwdx(1,k) - dvx(2)*parts%dwdx(2,k)   &
+                   - dvx(3)*parts%dwdx(3,k) 
+             hxy = dvx(1)*parts%dwdx(2,k) + dvx(2)*parts%dwdx(1,k)
+             hxz = dvx(1)*parts%dwdx(3,k) + dvx(3)*parts%dwdx(1,k)          
+             hyy = 2.e0*dvx(2)*parts%dwdx(2,k) - dvx(1)*parts%dwdx(1,k)   &    
+                   - dvx(3)*parts%dwdx(3,k)
+             hyz = dvx(2)*parts%dwdx(3,k) + dvx(3)*parts%dwdx(2,k)
+             hzz = 2.e0*dvx(3)*parts%dwdx(3,k) - dvx(1)*parts%dwdx(1,k)   &
+                   - dvx(2)*parts%dwdx(2,k)
+          endif                              
+          hxx = 2.e0/3.e0*hxx
+          hyy = 2.e0/3.e0*hyy
+          hzz = 2.e0/3.e0*hzz
+          if (dim.eq.1) then 
+             parts%txx(i) = parts%txx(i) + parts%mass(j)*hxx/parts%rho(j)
+             parts%txx(j) = parts%txx(j) + parts%mass(i)*hxx/parts%rho(i)               
+          else if (dim.eq.2) then           
+             parts%txx(i) = parts%txx(i) + parts%mass(j)*hxx/parts%rho(j)
+             parts%txx(j) = parts%txx(j) + parts%mass(i)*hxx/parts%rho(i)   
+             parts%txy(i) = parts%txy(i) + parts%mass(j)*hxy/parts%rho(j)
+             parts%txy(j) = parts%txy(j) + parts%mass(i)*hxy/parts%rho(i)            
+             parts%tyy(i) = parts%tyy(i) + parts%mass(j)*hyy/parts%rho(j)
+             parts%tyy(j) = parts%tyy(j) + parts%mass(i)*hyy/parts%rho(i)          
+          else if (dim.eq.3) then
+!             txx(i) = txx(i) + mass(j)*hxx/rho(j)
+!             txx(j) = txx(j) + mass(i)*hxx/rho(i)   
+!             txy(i) = txy(i) + mass(j)*hxy/rho(j)
+!             txy(j) = txy(j) + mass(i)*hxy/rho(i) 
+!             txz(i) = txz(i) + mass(j)*hxz/rho(j)
+!             txz(j) = txz(j) + mass(i)*hxz/rho(i)                     
+!             tyy(i) = tyy(i) + mass(j)*hyy/rho(j)
+!             tyy(j) = tyy(j) + mass(i)*hyy/rho(i)
+!             tyz(i) = tyz(i) + mass(j)*hyz/rho(j)
+!             tyz(j) = tyz(j) + mass(i)*hyz/rho(i)   
+!             tzz(i) = tzz(i) + mass(j)*hzz/rho(j)
+!             tzz(j) = tzz(j) + mass(i)*hzz/rho(i)                 
+          endif                              
+        enddo
+
+      return
+      end subroutine      
+
+!---------------------------------------------------------------------
+      subroutine Jaumann_rate(parts)
+!----------------------------------------------------------------------
+      implicit none
+
+      class(particles) parts
+      type(material), pointer :: soil
+      real(dp) dvx(3), hxx, hyy, hzz, hxy, hxz, hyz, G 
+      integer i, j, k, d, dim, ntotal, niac
+
+      ntotal = parts%ntotal + parts%nvirt
+      niac = parts%niac; dim = parts%dim
+      soil => parts%material
+      G = soil%e/(2.0*(1+soil%niu))
+
+!     Hook's law
+
+      do i = 1, ntotal
+         parts%dsxx(i) = parts%dsxx(i)+G*parts%txx(i)   ! No accumulation origionaly
+         parts%dsxy(i) = parts%dsxy(i)+G*parts%txy(i)
+         parts%dsyy(i) = parts%dsyy(i)+G*parts%tyy(i)
+      enddo
+
+         if(parts%soil_pressure==2)then
+      do i = 1, ntotal
+         parts%dp(i)   = parts%dp(i) - soil%k*parts%vcc(i)  !!! simultaneous pressure  
+      enddo
+         endif         
+     
+!     spin tensor
+
+      parts%wxy = 0.d0
+
+      do k=1,niac
+          i = parts%pair_i(k)
+          j = parts%pair_j(k)
+          do d=1,dim
+            dvx(d) = parts%vx(d,j) - parts%vx(d,i)
+          enddo
+          if (dim.eq.1) then 
+            !hxx = 0.5e0*dvx(1)*dwdx(1,k)        
+          else if (dim.eq.2) then           
+            hxy = 0.5e0*(dvx(1)*parts%dwdx(2,k) - dvx(2)*parts%dwdx(1,k))
+          else if (dim.eq.3) then
+!            hxy = dvx(1)*dwdx(2,k) + dvx(2)*dwdx(1,k)
+!            hxz = dvx(1)*dwdx(3,k) + dvx(3)*dwdx(1,k)          
+!            hyz = dvx(2)*dwdx(3,k) + dvx(3)*dwdx(2,k)
+          endif                              
+          if (dim.eq.1) then 
+!            txx(i) = txx(i) + mass(j)*hxx/rho(j)
+!            txx(j) = txx(j) + mass(i)*hxx/rho(i)                 
+          else if (dim.eq.2) then           
+            parts%wxy(i) = parts%wxy(i) + parts%mass(j)*hxy/parts%rho(j)
+            parts%wxy(j) = parts%wxy(j) + parts%mass(i)*hxy/parts%rho(i)            
+          else if (dim.eq.3) then
+!            txy(i) = txy(i) + mass(j)*hxy/rho(j)
+!            txy(j) = txy(j) + mass(i)*hxy/rho(i) 
+!            txz(i) = txz(i) + mass(j)*hxz/rho(j)
+!            txz(j) = txz(j) + mass(i)*hxz/rho(i)                     
+!            tyz(i) = tyz(i) + mass(j)*hyz/rho(j)
+!            tyz(j) = tyz(j) + mass(i)*hyz/rho(i)   
+          endif                              
+       enddo
+   
+!   Jaumann rate
+
+      do i = 1, ntotal
+         parts%dsxx(i) = parts%dsxx(i)+2.0*parts%sxy(i)*parts%wxy(i)
+         parts%dsxy(i) = parts%dsxy(i)-(parts%sxx(i)-parts%syy(i))*parts%wxy(i)
+         parts%dsyy(i) = parts%dsyy(i)-2.0*parts%sxy(i)*parts%wxy(i)
+      enddo         
+
+      return
+      end subroutine
+
+!------------------------------------------------------------
+      subroutine mohr_coulomb_failure_criterion(soil)
+!------------------------------------------------------------
+      implicit none
+
+      class(particles) soil
+      type(material), pointer :: property
+      double precision yield, phi, skale, cohesion, tmax
+      integer i, k, ntotal
+
+      ntotal = soil%ntotal+soil%nvirt
+      property => soil%material
+      cohesion = property%cohesion
+      phi      = property%phi
+   
+      k = 0
+      soil%fail = 0
+      do i = 1, ntotal
+         tmax  = sqrt(((soil%sxx(i)-soil%syy(i))/2)**2+soil%sxy(i)**2)
+         if(tmax<1.e-6)cycle
+         yield = cohesion*cos(phi)+soil%p(i)*sin(phi)
+
+         if(yield<=0.)then    ! <
+            yield=0.; soil%p(i)=-cohesion*tan(phi)**(-1.0)
+            soil%rho(i) = property%rho0
+         endif
+
+!         if(yield<=0.)then   ! Collapse
+!            sxx(i) = sxx(i)+p(i)-cohesion*tan(phi)**(-1.0)
+!            syy(i) = syy(i)+p(i)-cohesion*tan(phi)**(-1.0)
+!            p(i)   = 0.
+!         endif
+
+         if(tmax>yield)then
+!         if(yield>0.and.tmax>yield)then
+            k = k + 1
+            soil%fail(i) = 1 
+            skale = yield/tmax
+            soil%sxx(i) = skale * soil%sxx(i)
+            soil%sxy(i) = skale * soil%sxy(i)
+            soil%syy(i) = skale * soil%syy(i)
+         endif
+         !sxx(i) = 0.; sxy(i) = 0.; syy(i) = 0.
+      enddo
+      soil%nfail = k
+
+      return
+      end subroutine      
+
+!------------------------------------------------------------
+      subroutine drucker_prager_failure_criterion(soil)
+!------------------------------------------------------------
+      implicit none
+
+      class(particles) soil
+      type(material), pointer :: property
+      double precision yield, phi, skale, cohesion, tmax, alpha1,I1,J2
+      integer i, k, ntotal
+        
+      !if(soil%itimestep==82)write(*,*) 'in drucker...'
+ 
+      ntotal = soil%ntotal+soil%nvirt
+      property => soil%material
+      cohesion = property%cohesion
+      phi      = property%phi
+      alpha1   = tan(phi)/sqrt(9.+12.*tan(phi)**2.)
+   
+      k = 0
+      soil%fail = 0
+      do i = 1, ntotal
+         !tmax  = sqrt(((sxx(i)-syy(i))/2)**2+sxy(i)**2)
+         !if(tmax<1.e-6)cycle
+         !yield = cohesion*cos(phi)+p(i)*sin(phi)
+
+
+         if(soil%p(i)<0.)then    ! <
+            !k = k + 1
+            !soil%fail(i) = 1
+            soil%p(i)=0.d0
+            !soil%rho(i) = property%rho0
+         endif
+
+!         if(yield<=0.)then   ! Collapse
+!            sxx(i) = sxx(i)+p(i)-cohesion*tan(phi)**(-1.0)
+!            syy(i) = syy(i)+p(i)-cohesion*tan(phi)**(-1.0)
+!            p(i)   = 0.
+!         endif
+
+         I1 = 3.*soil%p(i) 
+
+         J2 = soil%sxx(i)**2.+2.*soil%sxy(i)**2.+soil%syy(i)**2.+(soil%sxx(i)+soil%syy(i))**2.
+         J2 = sqrt(J2/2.)+1.d-6
+         !if(J2<1.e-6)cycle
+
+         if(J2>alpha1*I1)then
+!         if(yield>0.and.tmax>yield)then
+            k = k + 1
+            soil%fail(i) = 1 
+            skale = alpha1*I1/J2
+            soil%sxx(i) = skale * soil%sxx(i)
+            soil%sxy(i) = skale * soil%sxy(i)
+            soil%syy(i) = skale * soil%syy(i)
+        endif
+
+      enddo
+      soil%nfail = k
+
+      return
+      end subroutine
+
+!------------------------------------------------------------
+      subroutine plastic_or_not(soil)
+!------------------------------------------------------------
+      implicit none
+
+      class(particles) soil
+      type(material), pointer :: property
+      real(dp) yield, phi, skale, cohesion, tmax, alpha1,I1,J2
+      integer i, k, ntotal
+        
+      !if(soil%itimestep==82)write(*,*) 'in drucker...'
+
+      ntotal = soil%ntotal+soil%nvirt
+      property => soil%material
+      cohesion = property%cohesion
+      phi      = property%phi
+      alpha1   = tan(phi)/sqrt(9.+12.*tan(phi)**2.)
+   
+      k = 0
+      soil%fail = 0
+      do i = 1, ntotal
+         !tmax  = sqrt(((sxx(i)-syy(i))/2)**2+sxy(i)**2)
+         !if(tmax<1.e-6)cycle
+         !yield = cohesion*cos(phi)+p(i)*sin(phi)
+
+
+         !if(p(i)<0.)then    ! <
+         !   !k = k + 1
+         !   !soil%fail(i) = 1
+         !   p(i)=0.d0
+         !   !soil%rho(i) = property%rho0
+         !endif
+
+!         if(yield<=0.)then   ! Collapse
+!            sxx(i) = sxx(i)+p(i)-cohesion*tan(phi)**(-1.0)
+!            syy(i) = syy(i)+p(i)-cohesion*tan(phi)**(-1.0)
+!            p(i)   = 0.
+!         endif
+
+         I1 = 3.*soil%p(i) 
+
+         J2 = soil%sxx(i)**2.+2.*soil%sxy(i)**2.+soil%syy(i)**2.+(soil%sxx(i)+soil%syy(i))**2.
+         J2 = sqrt(J2/2.)+1.d-6
+         !if(J2<1.e-6)cycle
+
+!         if(J2>alpha1*I1)then
+         if(abs(J2-alpha1*I1)<1.0e-5)then
+            k = k + 1
+            soil%fail(i) = 1 
+            !skale = alpha1*I1/J2
+            !sxx(i) = skale * sxx(i)
+            !sxy(i) = skale * sxy(i)
+            !syy(i) = skale * syy(i)
+        endif
+
+      enddo
+      soil%nfail = k
+
+      return
+      end subroutine
+
+!---------------------------------------------------------------------
+      subroutine plastic_flow_rule(parts)
+!---------------------------------------------------------------------
+      implicit none
+
+      class(particles) parts
+      double precision, pointer, dimension(:) :: dsxx,dsxy,dsyy,vcc
+      double precision, pointer, dimension(:) :: sxx, sxy, syy
+      type(material), pointer :: property
+      double precision alpha, phi, K, G,e,niu, J2, sde, dlambda
+      double precision exx, exy, eyy                ! total strain rate
+      double precision :: small_value = 1.d-10
+      integer i, ntotal
+
+      ntotal = parts%ntotal + parts%nvirt
+
+      dsxx => parts%dsxx
+      dsxy => parts%dsxy
+      dsyy => parts%dsyy
+      vcc  => parts%vcc
+      sxx => parts%sxx
+      sxy => parts%sxy
+      syy => parts%syy
+
+      property => parts%material
+      phi = property%phi
+      k   = property%k; e = property%E; niu = property%niu
+      alpha = tan(phi)/sqrt(9.+12.*tan(phi)**2.)
+      G = e/(2.0*(1+niu))
+      
+      do i = 1, ntotal
+                            !if(parts%fail(i)==1)then
+
+      exx = parts%txx(i)/2.+parts%vcc(i)/3.   ! Due to this, this should before Jaumman
+      exy = parts%txy(i)/2.
+      eyy = parts%tyy(i)/2.+parts%vcc(i)/3.
+
+      sde = sxx(i)*exx+2.*sxy(i)*exy+syy(i)*eyy
+      J2 = (sxx(i)**2.+2.*sxy(i)**2.+syy(i)**2.+(sxx(i)+syy(i))**2.)/2.
+      J2 = J2 + small_value
+
+      !G = parts%eta(i)
+      dlambda = (3.*alpha*K*vcc(i)+G/sqrt(J2)*sde)/(9.*alpha**2.*K+G)
+      !if(dlambda<0)write(*,*) 'dlambda = ',dlambda,i,parts%itimestep
+      if(dlambda<0)cycle
+      !dsxx(i) = dsxx(i)-dlambda*(3.*alpha*K+G/sqrt(J2)*sxx(i))
+      dsxx(i) = dsxx(i)-dlambda*(G/sqrt(J2)*sxx(i))
+      dsxy(i) = dsxy(i)-dlambda*(G/sqrt(J2)*sxy(i))
+      !dsyy(i) = dsyy(i)-dlambda*(3.*alpha*K+G/sqrt(J2)*syy(i))
+      dsyy(i) = dsyy(i)-dlambda*(G/sqrt(J2)*syy(i))
+
+      !parts%p(i) = parts%p(i) + 3.*k*alpha*dlambda*0.000005   !!! simultaneous pressure
+      parts%dp(i) = parts%dp(i) + 3.*k*alpha*dlambda
+
+! Accumulative deviatoric strain
+ 
+      parts%epsilon_p(i) = parts%epsilon_p(i)    &
+                         + dlambda*sxy(i)/(2*sqrt(J2))*0.000005
+
+                            !endif ! Fail
+      enddo
+      
+      return
+      end subroutine
+
+!---------------------------------------------------------------------
+      subroutine plastic_flow_rule2(parts)
+!---------------------------------------------------------------------
+      implicit none
+
+      class(particles) parts
+      double precision, pointer, dimension(:) :: dsxx2,dsxy2,dsyy2,vcc
+      double precision, pointer, dimension(:) :: sxx, sxy, syy
+      type(material), pointer :: property
+      double precision alpha, phi, K, G,e,niu, J2, sde, dlambda
+      double precision exx, exy, eyy                ! total strain rate
+      double precision :: small_value = 1.d-10
+      integer i, ntotal
+
+      ntotal = parts%ntotal + parts%nvirt
+
+      dsxx2 => parts%dsxx2
+      dsxy2 => parts%dsxy2
+      dsyy2 => parts%dsyy2
+      vcc  => parts%vcc
+      sxx => parts%sxx
+      sxy => parts%sxy
+      syy => parts%syy
+
+      property => parts%material
+      phi = property%phi
+      k   = property%k; e = property%E; niu = property%niu
+      alpha = tan(phi)/sqrt(9.+12.*tan(phi)**2.)
+      G = e/(2.0*(1+niu))
+      
+      do i = 1, ntotal
+                            !if(parts%fail(i)==1)then
+
+      exx = parts%txx(i)/2.+parts%vcc(i)/3.   ! Due to this, this should before Jaumman
+      exy = parts%txy(i)/2.
+      eyy = parts%tyy(i)/2.+parts%vcc(i)/3.
+
+      sde = sxx(i)*exx+2.*sxy(i)*exy+syy(i)*eyy
+      J2 = (sxx(i)**2.+2.*sxy(i)**2.+syy(i)**2.+(sxx(i)+syy(i))**2.)/2.
+      J2 = J2 + small_value
+
+      !G = parts%eta(i)
+      dlambda = (3.*alpha*K*vcc(i)+G/sqrt(J2)*sde)/(9.*alpha**2.*K+G)
+
+      !dsxx(i) = dsxx(i)-dlambda*(3.*alpha*K+G/sqrt(J2)*sxx(i))
+      dsxx2(i) = -dlambda*(G/sqrt(J2)*sxx(i))
+      dsxy2(i) = -dlambda*(G/sqrt(J2)*sxy(i))
+      !dsyy(i) = dsyy(i)-dlambda*(3.*alpha*K+G/sqrt(J2)*syy(i))
+      dsyy2(i) = -dlambda*(G/sqrt(J2)*syy(i))
+
+      !parts%p(i) = parts%p(i) + 3.*k*alpha*dlambda*0.000005   !!! simultaneous pressure
+      parts%dp2(i) =  3.*k*alpha*dlambda
+
+! Accumulative deviatoric strain
+ 
+!      parts%epsilon_p(i) = parts%epsilon_p(i) 
+!     &                   + dlambda*sxy(i)/(2*sqrt(J2))*0.000005
+
+                            !endif ! Fail
+      enddo
+      
+      return
+      end subroutine
+
+!---------------------------------------------------------------------
+      subroutine plastic_flow_rule3(parts)
+!---------------------------------------------------------------------
+      implicit none
+
+      class(particles) parts
+      double precision, pointer, dimension(:) :: dsxx,dsxy,dsyy,vcc
+      double precision, pointer, dimension(:) :: sxx, sxy, syy
+      type(material), pointer :: property
+      double precision alpha, phi, K, G,e,niu, J2, sde, dlambda
+      double precision exx, exy, eyy                ! total strain rate
+      double precision :: small_value = 1.d-10
+      integer i, ntotal
+
+      ntotal = parts%ntotal + parts%nvirt
+
+      dsxx => parts%dsxx
+      dsxy => parts%dsxy
+      dsyy => parts%dsyy
+      vcc  => parts%vcc
+      sxx => parts%sxx
+      sxy => parts%sxy
+      syy => parts%syy
+
+      property => parts%material
+      phi = property%phi
+      k   = property%k; e = property%E; niu = property%niu
+      alpha = tan(phi)/sqrt(9.+12.*tan(phi)**2.)
+      G = e/(2.0*(1+niu))
+      
+      do i = 1, ntotal
+                            if(parts%fail(i)==1)then
+
+      exx = parts%txx(i)/2.+parts%vcc(i)/3.   ! Due to this, this should before Jaumman
+      exy = parts%txy(i)/2.
+      eyy = parts%tyy(i)/2.+parts%vcc(i)/3.
+
+      sde = sxx(i)*exx+2.*sxy(i)*exy+syy(i)*eyy
+      J2 = (sxx(i)**2.+2.*sxy(i)**2.+syy(i)**2.+(sxx(i)+syy(i))**2.)/2.
+      J2 = J2 + small_value
+
+      !G = parts%eta(i)
+      dlambda = (3.*alpha*K*vcc(i)+G/sqrt(J2)*sde)/(9.*alpha**2.*K+G)
+      !if(dlambda<0)write(*,*) 'dlambda = ',dlambda,i,parts%itimestep
+      if(dlambda<0)cycle
+      !dsxx(i) = dsxx(i)-dlambda*(3.*alpha*K+G/sqrt(J2)*sxx(i))
+      dsxx(i) = dsxx(i)-dlambda*(G/sqrt(J2)*sxx(i))
+      dsxy(i) = dsxy(i)-dlambda*(G/sqrt(J2)*sxy(i))
+      !dsyy(i) = dsyy(i)-dlambda*(3.*alpha*K+G/sqrt(J2)*syy(i))
+      dsyy(i) = dsyy(i)-dlambda*(G/sqrt(J2)*syy(i))
+
+      !parts%p(i) = parts%p(i) + 3.*k*alpha*dlambda*0.000005   !!! simultaneous pressure
+      parts%dp(i) = parts%dp(i) + 3.*k*alpha*dlambda
+
+! Accumulative deviatoric strain
+ 
+      parts%epsilon_p(i) = parts%epsilon_p(i)       & 
+                         + dlambda*sxy(i)/(2*sqrt(J2))*0.000005
+
+                            endif ! Fail
+      enddo
+      
+      return
+      end subroutine
+
+!---------------------------------------------------------------
+      subroutine darcy_law(water, soil)
+!---------------------------------------------------------------
+!      use param, only: volume_fraction
+!      use m_particles
+      implicit none
+
+      type(particles) water, soil
+      double precision dx(3), ks, ns, gw, cf, sp, rrw
+      type(material), pointer :: h2o,sio2  
+      type(numerical), pointer :: numeric
+      double precision gravity   
+      integer i, j, k, d, dim
+
+      h2o => water%material
+      sio2=>  soil%material
+      numeric => water%numeric
+      gravity = numeric%gravity
+      dim = water%dim
+
+      gw = h2o%rho0*(-gravity); ns = sio2%porosity
+      ks = sio2%permeability
+      cf = gw*ns/ks
+      !cf = 6.e6
+       
+      do  k=1,water%niac
+          i = water%pair_i(k)
+          j = water%pair_j(k)  
+          rrw = water%w(k)/(water%rho(i)*soil%rho(j))
+
+! For staturated soil
+!        if(volume_fraction) cf = water%vof(i)*water%rho(i)*(-gravity)/ks
+        if(water%volume_fraction) cf = water%vof(i)*soil%vof(j)*water%rho(i)*(-gravity)/ks
+
+          do d=1,dim
+             sp = cf*(water%vx(d,i)-soil%vx(d,j))*rrw
+             water%dvx(d,i) = water%dvx(d,i) - soil%mass(j)*sp
+             soil%dvx(d,j)  = soil%dvx(d,j) + water%mass(i)*sp   
+          enddo
+      enddo
+
+      return
+      end subroutine 
+
+!-----------------------------------------------------
+      subroutine pore_water_pressure(water,soil)
+!-----------------------------------------------------
+!      use param
+!      use m_particles
+      implicit none
+      
+      type(particles) water, soil
+      double precision mprr
+      integer i, j, k, d
+      
+      do k = 1, water%niac
+         i = water%pair_i(k)   ! water
+         j = water%pair_j(k)   ! soil
+         mprr = water%mass(i)*water%p(i)/(water%rho(i)*soil%rho(j))
+!         mprr = water%mass(i)*(water%p(i)+soil%p(j))/       &      Bui2014
+!                (water%rho(i)*soil%rho(j))
+         do d = 1, water%dim
+            soil%dvx(d,j) = soil%dvx(d,j) + mprr*water%dwdx(d,k)  &  !+
+                            *soil%vof(j)  
+         enddo
+
+! saturated soil
+         if(water%volume_fraction)then
+         !do d = 1, dim
+            !water%dvx(d,i) = water%dvx(d,i) -                     & ! Must be -
+            !soil%mass(j)*water%p(i)*soil%vof(j)*water%dwdx(d,k)/  &
+            !(water%rho(i)*soil%rho(j))
+         !enddo
+         endif
+      enddo
+
+      return
+      end subroutine       
+
+!-------------------------------------------------------------
+      subroutine volume_fraction_water(water, soil)
+!-------------------------------------------------------------
+!      use param
+!      use m_particles
+      implicit none
+
+      type(particles) water, soil
+      integer i,j,k,d, ntotal
+      type(material), pointer :: sio2
+
+      sio2 => soil%material
+      ntotal = water%ntotal+water%nvirt
+
+      water%vof2 = 0.d0
+      do k = 1, water%niac
+         i = water%pair_i(k)
+         j = water%pair_j(k)
+         water%vof2(i) = water%vof2(i)+soil%mass(j)*water%w(k)
+      enddo
+
+      do k = 1, water%ntotal+water%nvirt
+         water%vof2(k) = 1.d0 - water%vof2(k)/sio2%rho0
+      enddo
+
+      return
+      end subroutine 
+
+!-------------------------------------------------------------
+      subroutine volume_fraction_water2(water, soil)
+!-------------------------------------------------------------
+!      use param
+!      use m_particles
+      implicit none
+
+      type(particles) water, soil
+      integer i,j,k,d, ntotal
+      type(material), pointer :: sio2
+      double precision dvx(3),tmp
+
+      sio2 => soil%material
+      ntotal = water%ntotal+water%nvirt
+
+!      water%dvof = 0.d0
+
+      do k = 1, water%niac
+         i = water%pair_i(k)
+         j = water%pair_j(k)
+         do d = 1, water%dim
+            dvx(d) = water%vx(d,i)-soil%vx(d,j)
+         enddo 
+         tmp = dvx(1)*water%dwdx(1,k)+dvx(2)*water%dwdx(2,k)
+         water%dvof(i) = water%dvof(i)-soil%mass(j)*tmp/sio2%rho0
+      enddo
+
+      return
+      end subroutine 
+
+!--------------------------------------------------------------------
+      subroutine volume_fraction_soil(parts)
+!--------------------------------------------------------------------
+!      use param
+!      use m_particles
+      implicit none
+
+      type(particles) parts
+      integer i,j,k, ntotal
+      type(material), pointer :: sio2
+
+      sio2 => parts%material
+      ntotal = parts%ntotal + parts%nvirt
+
+      do i = 1, ntotal
+         parts%vof(i) = parts%rho(i)/sio2%rho0
+      enddo
+
+      return
+      end subroutine
+
+!--------------------------------------------------------------------------
+      subroutine drag_force(water,soil)
+!--------------------------------------------------------------------------
+! For fixed porous media, drag force to fluid  
+
+      !use param
+!      use m_particles
+      implicit none
+
+      type(particles) water, soil
+      double precision dx(3), ks, ns, gw, cf, sp, rrw
+      type(material), pointer :: h2o,sio2  
+      type(numerical), pointer :: numeric
+      double precision gravity   
+      integer i, j, k, d, dim
+
+      h2o => water%material
+      sio2=>  soil%material
+      numeric => water%numeric
+      gravity = numeric%gravity
+      dim = water%dim
+
+      gw = h2o%rho0*(-gravity) 
+      !ns = sio2%porosity; ks = sio2%permeability
+      ns = 0.3; ks = 0.05      
+
+      cf = gw*ns/ks
+      !cf = 6.e6
+      !write(*,*) ns,ks
+       
+      do i=1,water%ntotal+water%nvirt
+         do d=1,dim
+      water%dvx(d,i) = water%dvx(d,i) - water%vx(d,i)*cf/water%rho(i)
+         enddo
+      enddo
+
+      return
+      end subroutine 
+
 
 !---------------------------------------------------------------------
 !   function find_particle_nearest2_point(parts,x,y ) result(index)

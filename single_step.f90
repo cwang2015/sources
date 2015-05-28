@@ -72,9 +72,9 @@ endif
 !---  Dynamic viscosity:
 
 if(trim(pl%imaterial)=='water')then
-   if (visc) call viscosity(pl)
+   !if (visc) call viscosity(pl)
 elseif(trim(pl%imaterial)=='soil')then
-   call shear_modulus(pl)
+   !call shear_modulus(pl)
 endif
        
 !---  Internal forces:
@@ -109,11 +109,16 @@ if(pl%imaterial=='water')then
    where (pl%rho.gt.0.0) pl%dvx(2,:) = pl%dvx(2,:)/pl%rho
 
 else      
-   call int_force(pl) 
+   !call int_force(pl)
+   pl%dvx(1,:) = -pl%df3(pl%vof*pl%p,'x') + pl%df3(pl%vof*pl%sxx,'x') + pl%df3(pl%vof*pl%sxy,'y')
+   pl%dvx(2,:) = -pl%df3(pl%vof*pl%p,'y') + pl%df3(pl%vof*pl%sxy,'x') + pl%df3(pl%vof*pl%syy,'y')
+
+   where (pl%rho.gt.0.0) pl%dvx(1,:) = pl%dvx(1,:)/pl%rho
+   where (pl%rho.gt.0.0) pl%dvx(2,:) = pl%dvx(2,:)/pl%rho 
 endif      
 
-if(trim(pl%imaterial)=='water'.and.water_tension_instability==2) &
-   call tension_instability(pl) 
+!if(trim(pl%imaterial)=='water'.and.water_tension_instability==2) &
+!   call tension_instability(pl) 
 
 ! --- Plasticity flow rule   ! This was done before Jaummann_rate, because we 
 !     we need txx,tyy,tzz, which was destroyed in Jaumann_rate!
@@ -164,7 +169,7 @@ pl%dvx(2,:) = pl%dvx(2,:) + gravity
 
 !     Calculating the neighboring particles and undating HSML
       
-if (sle.ne.0) call h_upgrade(pl)
+!if (sle.ne.0) call h_upgrade(pl)
 
 !     Calculating average velocity of each partile for avoiding penetration
 
@@ -310,7 +315,7 @@ pl%dvx(2,:) = pl%dvx(2,:) + gravity
 
 ! Calculating the neighboring particles and undating HSML
       
-if (sle.ne.0) call h_upgrade(pl)
+!if (sle.ne.0) call h_upgrade(pl)
      
 ! Calculating average velocity of each partile for avoiding penetration
 
@@ -371,7 +376,7 @@ if(artificial_density)then
    !endif
 endif
 
-call shear_modulus(pl)
+!call shear_modulus(pl)
        
 !---  Internal forces:
 
@@ -437,7 +442,7 @@ pl%dvx(2,:) = pl%dvx(2,:) + gravity
 
 ! Calculating the neighboring particles and undating HSML
       
-if (sle.ne.0) call h_upgrade(pl)
+!if (sle.ne.0) call h_upgrade(pl)
      
 ! Calculating average velocity of each partile for avoiding penetration
 

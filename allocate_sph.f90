@@ -126,7 +126,7 @@ allocate(parts%rho(maxn));     parts%rho = 0.d0
 allocate(parts%p(maxn));       parts%p   = 0.d0
 allocate(parts%u(maxn));       parts%u   = 0.d0
 allocate(parts%c(maxn));       parts%c   = 0.d0
-allocate(parts%eta(maxn));     parts%eta = 0.d0 
+!allocate(parts%eta(maxn));     parts%eta = 0.d0 
 
 ! Old value
 allocate(parts%v_min(dim,maxn));   parts%v_min   = 0.d0
