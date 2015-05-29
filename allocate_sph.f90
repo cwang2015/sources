@@ -50,6 +50,7 @@ if(trim(parts%imaterial)=='soil')  parts%material => SiO2
 ! Numerical parameters
 parts%numeric => numeric
 
+call parts%get_num_threads
 
 !--------------- Soil particles --------------------------------
 
@@ -81,6 +82,8 @@ soil%wxy => txy
 
 soil%material => SiO2
 soil%numeric => numeric
+
+call soil%get_num_threads
 
 return
 end subroutine

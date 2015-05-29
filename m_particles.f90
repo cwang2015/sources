@@ -494,7 +494,10 @@ integer :: save_step_from = 0, save_step_to = 100
 
    integer itimestep
 
-   integer niac_start(8), niac_end(8), nthreads
+   integer :: nthreads = 1
+   integer, pointer, dimension(:) :: niac_start, niac_end
+
+!   procedure(df),pointer :: diff => null() 
 
    contains
 
@@ -527,6 +530,7 @@ integer :: save_step_from = 0, save_step_to = 100
        procedure :: av_vel
        procedure :: repulsive_force
        procedure :: df
+       procedure :: df_omp
        procedure :: df2
        procedure :: df3
        procedure :: velocity_divergence
@@ -543,6 +547,10 @@ integer :: save_step_from = 0, save_step_to = 100
       procedure :: plastic_flow_rule
       procedure :: plastic_flow_rule2
       procedure :: plastic_flow_rule3
+
+      procedure :: get_num_threads
+      procedure :: get_niac_start_end
+
 end type 
 
 interface write_field
@@ -564,8 +572,6 @@ interface operator(*)
    module procedure :: array_mul_real
    module procedure :: array_mul_double_real
 end interface
-
-!private :: df, df2, df3
 
 !=======
 contains
@@ -1675,7 +1681,6 @@ enddo
 return
 end subroutine
 
-
 ! Calculate partial derivatives of a field
 !-------------------------------------------
           function df(parts,f,x)
@@ -1702,6 +1707,67 @@ do k=1,parts%niac
    df(i) = df(i) + parts%mass(j)/parts%rho(j)*fwx
    df(j) = df(j) - parts%mass(i)/parts%rho(i)*fwx
 enddo
+
+end function
+
+! Calculate partial derivatives of a field
+!-------------------------------------------
+          function df_omp(parts,f,x)
+!-------------------------------------------
+implicit none
+
+real(dp) f(:)
+character(len=1) x
+class(particles) parts
+real(dp), allocatable, dimension(:) :: df_omp, df_local(:,:)
+real(dp), pointer, dimension(:) :: dwdx
+real(dp) fwx
+integer i, j, k, ntotal, it, nthreads
+
+!write(*,*) 'In df_omp...'
+
+ntotal = parts%ntotal + parts%nvirt
+nthreads = parts%nthreads
+!write(*,*) 'sadf', nthreads
+
+allocate(df_omp(ntotal))
+if(nthreads>1)then
+   allocate(df_local(ntotal,nthreads))
+   call parts%get_niac_start_end
+endif   
+
+if(x=='x')dwdx=>parts%dwdx(1,:)
+if(x=='y')dwdx=>parts%dwdx(2,:)
+
+!$omp parallel
+!$omp do private(i,j,k,fwx)
+do it = 1, parts%nthreads
+   do i = 1, ntotal
+      df_local(i,it) = 0.d0
+   enddo
+   do k = parts%niac_start(it), parts%niac_end(it)
+
+
+!do k=1,parts%niac
+   i = parts%pair_i(k)
+   j = parts%pair_j(k)
+   fwx = (f(i)+f(j))*dwdx(k)
+   df_local(i,it) = df_local(i,it) + parts%mass(j)/parts%rho(j)*fwx
+   df_local(j,it) = df_local(j,it) - parts%mass(i)/parts%rho(i)*fwx
+   enddo !k
+enddo !it
+!$omp end do
+!$omp barrier
+
+!$omp do private(it)
+do i = 1, ntotal
+   df_omp(i) = 0.d0
+   do it = 1, nthreads
+      df_omp(i) = df_omp(i)+df_local(i,it)
+   enddo
+enddo   
+!$omp end do
+!$omp end parallel
 
 end function
 
@@ -3111,5 +3177,40 @@ c%r(1:ndim1) = r*a%r(1:ndim1)
 c%parts => a%parts
 
 end function
+
+!--------------------------------------------------
+    subroutine get_num_threads(this)
+!--------------------------------------------------
+implicit none
+class(particles) this
+integer i,j,k
+integer, external :: OMP_GET_NUM_THREADS
+
+!$omp parallel
+this%nthreads = OMP_GET_NUM_THREADS()
+!$omp end parallel
+
+allocate(this%niac_start(this%nthreads),this%niac_end(this%nthreads))
+
+end subroutine
+
+!--------------------------------------------------
+    subroutine get_niac_start_end(this)
+!--------------------------------------------------
+implicit none
+class(particles) this
+integer i,j,k,it
+
+i = this%niac/this%nthreads
+j = mod(this%niac,this%nthreads)
+
+do it = 1, this%nthreads
+   this%niac_start(it) = (it-1)*i + 1
+   this%niac_end(it) = it*i
+enddo
+
+this%niac_end(this%nthreads) = this%niac_end(this%nthreads)+j
+
+end subroutine
 
 end module

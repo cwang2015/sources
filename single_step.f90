@@ -98,12 +98,15 @@ elseif(trim(pl%imaterial)=='soil')then
             write(*,*) 'Failured points: ', pl%nfail
 endif
 
-
 !Calculate internal force for water phase !! -phi_f Grad(p)
 if(pl%imaterial=='water')then
-
+   if(pl%nthreads==1)then
    pl%dvx(1,:) = -pl%vof*pl%df(pl%p,'x') + pl%df(pl%vof*pl%sxx,'x') + pl%df(pl%vof*pl%sxy,'y')
    pl%dvx(2,:) = -pl%vof*pl%df(pl%p,'y') + pl%df(pl%vof*pl%sxy,'x') + pl%df(pl%vof*pl%syy,'y')
+   else
+   pl%dvx(1,:) = -pl%vof*pl%df_omp(pl%p,'x') + pl%df_omp(pl%vof*pl%sxx,'x') + pl%df_omp(pl%vof*pl%sxy,'y')
+   pl%dvx(2,:) = -pl%vof*pl%df_omp(pl%p,'y') + pl%df_omp(pl%vof*pl%sxy,'x') + pl%df_omp(pl%vof*pl%syy,'y')           
+   endif        
 
    where (pl%rho.gt.0.0) pl%dvx(1,:) = pl%dvx(1,:)/pl%rho
    where (pl%rho.gt.0.0) pl%dvx(2,:) = pl%dvx(2,:)/pl%rho
