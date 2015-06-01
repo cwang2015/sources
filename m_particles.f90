@@ -1328,9 +1328,9 @@ end function
       integer dnxgcell(3),dpxgcell(3)
       real(dp) hsml,dr,r,dx(3),tdwdx(3)
 
-      INTEGER nthreads,n_per_threads, niac_per_threads, it, n_start(8), n_end(8)
-      Integer niac_start(8),niac_end(8), last
-      INTEGER, EXTERNAL :: OMP_GET_THREAD_NUM, OMP_GET_NUM_THREADS
+      INTEGER nthreads,n_per_threads, niac_per_threads, it
+      integer,allocatable,dimension(:) :: n_start, n_end
+      integer last
       real(dp) t1,t2,t3
 
       ntotal  = parts%ntotal + parts%nvirt
@@ -1355,24 +1355,28 @@ end function
       enddo
 
 !     Determine interaction parameters:
-!$omp parallel
-      nthreads = omp_get_num_threads()
-!$omp end parallel
+!!!$omp parallel
+!!      nthreads = omp_get_num_threads()
+!!!$omp end parallel
+      nthreads = parts%nthreads
+      allocate(n_start(nthreads),n_end(nthreads))
+
       n_per_threads = ntotal/nthreads
       niac_per_threads = parts%max_interaction/nthreads
       do it = 1, nthreads
          n_start(it)=(it-1)*n_per_threads+1
          n_end(it) = it*n_per_threads
-         niac_start(it)=(it-1)*niac_per_threads
-         niac_end(it)=niac_start(it)
+         parts%niac_start(it)=(it-1)*niac_per_threads
+         parts%niac_end(it)=parts%niac_start(it)
       enddo   
+      n_end(nthreads) = n_end(nthreads) + mod(ntotal,nthreads)
 
       parts%pair_i = 0; parts%pair_j=0
 !      t1 = rtc()
 !$omp parallel 
 !$omp do private(niac,i,d,minxcell,maxxcell,dnxgcell,dpxgcell,xcell,ycell,zcell,j,dx,dr,r,tdwdx)
 do it = 1, nthreads
-       niac = niac_start(it)
+       niac = parts%niac_start(it)
        do i = n_start(it),n_end(it)
 
 !      niac = 0
@@ -1438,8 +1442,8 @@ do it = 1, nthreads
         enddo !zcell
       enddo !i
 
-      niac_start(it) = niac_start(it)+1
-      niac_end(it) = niac
+      parts%niac_start(it) = parts%niac_start(it)+1
+      parts%niac_end(it) = niac
       enddo !it      
 !$omp end do
 !$omp end parallel
@@ -1447,7 +1451,7 @@ do it = 1, nthreads
 !      write(*,*) t2-t1
       parts%niac = 0
       do it = 1, nthreads
-         parts%niac = parts%niac + niac_end(it)-niac_start(it)+1
+         parts%niac = parts%niac + parts%niac_end(it)-parts%niac_start(it)+1
       enddo
 
       last = parts%max_interaction
@@ -1719,7 +1723,8 @@ implicit none
 real(dp) f(:)
 character(len=1) x
 class(particles) parts
-real(dp), allocatable, dimension(:) :: df_omp, df_local(:,:)
+real(dp), allocatable, dimension(:) :: df_omp
+real(dp), allocatable, dimension(:,:) :: df_local
 real(dp), pointer, dimension(:) :: dwdx
 real(dp) fwx
 integer i, j, k, ntotal, it, nthreads
