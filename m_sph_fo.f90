@@ -38,6 +38,7 @@ do k=1,niac
    df(i) = df(i) + mass(j)/rho(j)*fwx
    df(j) = df(j) - mass(i)/rho(i)*fwx
 enddo
+
 end function
 
 ! Calculate partial derivatives of a field

@@ -37,12 +37,11 @@ c     and take contribution of particle itself:
       r=0.
       
 c     Firstly calculate the integration of the kernel over the space
-  !    !$omp parallel do
+
       do i=1,ntotal
-        call kernel(r,hv,hsml(i),selfdens,hv)
+        call parts%kernel(r,hv,hsml(i),selfdens,hv)
         wi(i)=selfdens*mass(i)/rho(i)
       enddo
- !     !$omp end parallel do
 
       do k=1,niac
         i = pair_i(k)
@@ -52,12 +51,11 @@ c     Firstly calculate the integration of the kernel over the space
       enddo
 
 c     Secondly calculate the rho integration over the space
- !     !$omp parallel do
+
       do i=1,ntotal
-        call kernel(r,hv,hsml(i),selfdens,hv)
+        call parts%kernel(r,hv,hsml(i),selfdens,hv)
         rho(i) = selfdens*mass(i)
       enddo
-   !   !$omp end parallel do
 
 c     Calculate SPH sum for rho:
       do k=1,niac
@@ -129,7 +127,7 @@ c     and take contribution of particle itself:
 c     Firstly calculate the integration of the kernel over the space
 
       do i=1,ntotal
-        call kernel(r,hv,hsml(i),selfdens,hv)
+        call parts%kernel(r,hv,hsml(i),selfdens,hv)
         wi(i)=selfdens*mass(i)/rho(i)
       enddo
 
@@ -206,13 +204,11 @@ c     drhodt : Density change rate of each particle                [out]
       vx     => parts%vx
       rho    => parts%rho
       drhodt => parts%drho
-      !$omp parallel
-      !$omp do
+
       do i = 1, ntotal
         drhodt(i) = 0.
       enddo
-      !$omp end do
-      !$omp do private(i,j,d,vcc)
+     
       do k=1,niac      
         i = pair_i(k)
         j = pair_j(k)
@@ -226,99 +222,5 @@ c     drhodt : Density change rate of each particle                [out]
         drhodt(i) = drhodt(i) + mass(j)*vcc
         drhodt(j) = drhodt(j) + mass(i)*vcc       
       enddo    
-      !$omp end do
-      !$omp end parallel
-      end
 
-            subroutine con_density1(parts)
-
-c----------------------------------------------------------------------
-c     Subroutine to calculate the density with SPH continuiity approach.
-
-c     ntotal : Number of particles                                  [in]
-c     mass   : Particle masses                                      [in]
-c     niac   : Number of interaction pairs                          [in]
-c     pair_i : List of first partner of interaction pair            [in]
-c     pair_j : List of second partner of interaction pair           [in]
-c     dwdx   : derivation of Kernel for all interaction pairs       [in]
-c     vx     : Velocities of all particles                          [in]
-c     itype   : type of particles                                   [in]
-c     x      : Coordinates of all particles                         [in]
-c     rho    : Density                                              [in]
-c     drhodt : Density change rate of each particle                [out]   
-
-      use param
-      use m_particles 
-      implicit none
-  
-      type(particles) parts      
-
-      integer ntotal,niac,nthreads,it
-      integer, pointer, dimension(:) :: pair_i, pair_j, itype
-      double precision, pointer, dimension(:) :: mass, rho, drhodt
-      double precision,allocatable,dimension(:) ::div_v,vol
-      double precision, pointer, dimension(:,:) :: x, dwdx, vx
-      double precision,allocatable,dimension(:,:) ::div_v_local
-      integer,  dimension(4)   ::    niac_start,niac_end
-      integer i,j,k,d    
-      double precision vcc, dvx(dim) ,divtemp
-      allocate(div_v_local(maxn,4)) 
-      allocate(div_v(maxn))
-      allocate(vol(maxn))
-      
-      ntotal = parts%ntotal + parts%nvirt
-      niac   = parts%niac
-      pair_i => parts%pair_i
-      pair_j => parts%pair_j
-      itype  => parts%itype
-      x      => parts%x
-      mass   => parts%mass
-      dwdx   => parts%dwdx
-      vx     => parts%vx
-      rho    => parts%rho
-      drhodt => parts%drho
-      
-      nthreads = 4
-      !$omp parallel
-      !$omp do
-      do i = 1, ntotal
-        drhodt(i) = 0.
-        vol(i) = mass(i)/rho(i)
-      enddo
-      !$omp end do
-      !$omp barrier
-      
-      !$omp do private(i,j,d,k,divtemp,dvx)
-      do it = 1,nthreads
-          do i = 1,ntotal
-              div_v_local(i,it) = 0
-          enddo
-       do k = niac_start(it),niac_end(it)
-        i = pair_i(k)
-        j = pair_j(k)
-        do d=1,dim
-          dvx(d) = vx(d,i) - vx(d,j) 
-        enddo        
-        do d=1,dim
-          divtemp = divtemp + dvx(d)*dwdx(d,k)
-        enddo    
-        div_v_local(i,it) = div_v_local(i,it) + divtemp*vol(j)
-        div_v_local(j,it) = div_v_local(j,it) + divtemp*vol(i)
-       enddo    
-      enddo
-      !$omp end do
-      !$omp barrier
-      !$omp do private(it)
-      do i = 1, ntotal
-          div_v(i) = 0
-          do it = 1,nthreads
-              div_v(i) = div_v(i) + div_v_local(i,it)
-          enddo
-      drhodt(i) = rho(i) *div_v(i)
-      enddo
-      !$omp end do
-      !$omp end parallel
-      deallocate(div_v_local)
-      deallocate(div_v)
-      deallocate(vol)
       end

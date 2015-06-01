@@ -6,7 +6,7 @@ c   of the Navier-Stokes equations, i.e. the pressure gradient and the
 c   gradient of the viscous stress tensor, used by the time integration. 
 c   Moreover the entropy production due to viscous dissipation, tds/dt, 
 c   and the change of internal energy per mass, de/dt, are calculated. 
-
+ 
       use param
       use m_particles
       implicit none
@@ -457,7 +457,6 @@ c   Jaumann rate
 
       return
       end subroutine
-
 c ---------------------------------------------------------------------
       subroutine shear_strain_rate(parts)
 c----------------------------------------------------------------------
@@ -559,6 +558,7 @@ c     Calculate SPH sum for shear tensor Tab = va,b + vb,a - 2/3 delta_ab vc,c
 
       return
       end subroutine
+
 
 c ---------------------------------------------------------------------
       subroutine newtonian_fluid(parts)

@@ -37,7 +37,7 @@ c     Subroutine to calculate the artificial viscosity (Monaghan, 1992)
       alpha = numeric%alpha; beta = numeric%beta; etq = numeric%etq
          
 c     Calculate SPH sum for artificial viscosity
-!      !$omp parallel do private(i,j,mhsml,vr,rr,d,muv,etq,mc,mrho,piv,h)
+      
       do k=1,niac
         i = pair_i(k)
         j = pair_j(k)
@@ -76,7 +76,6 @@ c     Calculate SPH sum for artificial viscous force
           enddo
         endif
       enddo
-!      !$omp end parallel do
 
 c     Change of specific internal energy:
 
@@ -128,7 +127,7 @@ c      write(*,*) 'In art_density...'
       numeric  => parts%numeric
 
       delta = numeric%delta
-   !   !$omp parallel do private(i,j,rr,muv,d,h)
+          
       do k=1,niac
         i = pair_i(k)
         j = pair_j(k)
@@ -148,8 +147,7 @@ c      write(*,*) 'In art_density...'
         drho(i) = drho(i) + delta*hsml(i)*c(i)*mass(j)*h/rho(j)
         drho(j) = drho(j) - delta*hsml(j)*c(j)*mass(i)*h/rho(i)
         
-        enddo
-    !    !$omp end parallel do
+      enddo
 
       return
       end subroutine
@@ -369,7 +367,7 @@ c     Parameter
       double precision, pointer, dimension(:) :: mass,hsml,rho,p,w,vof
       double precision, pointer, dimension(:,:) :: dvx,dwdx
       integer, pointer, dimension(:) :: pair_i, pair_j
-      double precision wi,dx(2),dwx(2),n,fij,eps,eps2, pa, pb
+      double precision wi,dx(3),dwx(3),n,fij,eps,eps2, pa, pb
       integer i,j,k,d, niac
 
 !      write(*,*) 'In tension_instability...'
@@ -390,7 +388,7 @@ c     Parameter
       n = 4       !4
       eps = 0.05  !0.35
       !eps2 = 0.01
-      call kernel(hsml(1),dx,hsml(1),wi,dwx)     ! hsml is assumed constant
+      call water%kernel(hsml(1),dx,hsml(1),wi,dwx)     ! hsml is assumed constant
 
       do k = 1, niac
          i = pair_i(k)

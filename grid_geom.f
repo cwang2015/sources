@@ -15,8 +15,8 @@ c     xgcell   : x-, y- and z-coordinte of sorting grid cell       [out]
       implicit none
 C      include 'param.inc'
 
-      integer i, ngridx(dim),xgcell(3)
-      double precision x(dim), maxgridx(dim), mingridx(dim), dgeomx(dim)
+      integer i, ngridx(3),xgcell(3)
+      double precision x(3), maxgridx(3), mingridx(3), dgeomx(3)
       integer d
 
       do d=1,3
@@ -29,16 +29,11 @@ C      include 'param.inc'
           print *,'    Particle position: x(',i,d,') = ',x(d)
           print *,'    Range: [xmin,xmax](',D,') = 
      &         [',mingridx(d),',',maxgridx(d),']'
-           stop
+          stop
         else
           xgcell(d) = int(real(ngridx(d))/dgeomx(d)*
      &         (x(d)-mingridx(d)) + 1.e0)
-  !       write(*,*)"x(d)",x(d)
-  !       write(*,*)"ngridx(d)",ngridx(d)
-  !       write(*,*)"dgeomx(d)",dgeomx(d)
-  !       write(*,*)"mingridx(d)",mingridx(d)
-  !       write(*,*) "xgcell(d)","d=",d,xgcell(d)
         endif
       enddo
-!         stop
+
       end

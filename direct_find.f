@@ -70,7 +70,7 @@ c     the interaction number for each particle
               countiac(j) = countiac(j) + 1
 
 c     Kernel and derivations of kernel
-              call kernel(r,dxiac,mhsml,w(niac),tdwdx)
+              call parts%kernel(r,dxiac,mhsml,w(niac),tdwdx)
               do d=1,dim
                 dwdx(d,niac) = tdwdx(d)
               enddo                                      
@@ -193,7 +193,7 @@ c     the interaction number for each particle
               part2%countiac(j) = part2%countiac(j) + 1
 
 c     Kernel and derivations of kernel
-              call kernel(r,dxiac,mhsml,w(niac),tdwdx)
+              call parts%kernel(r,dxiac,mhsml,w(niac),tdwdx)
               do d=1,dim
                 dwdx(d,niac) = tdwdx(d)
               enddo                                  	     

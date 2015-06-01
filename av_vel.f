@@ -51,8 +51,7 @@ c     for example, for the 1 dimensional shock tube problem, the E <= 0.3
 !      enddo
 
       av = 0.d0
-!      !$omp parallel 
-!      !$omp do private(k,i,j,d)
+     
       do k=1,niac       
          i = pair_i(k)
          j = pair_j(k)       
@@ -62,14 +61,12 @@ c     for example, for the 1 dimensional shock tube problem, the E <= 0.3
             av(d, j) = av(d,j) + 2*mass(i)*dvx(d)/(rho(i)+rho(j))*w(k)                      
          enddo                    
       enddo  
- !     !$omp end do
- !     !$omp do private(i,d)  
+        
       do i = 1, ntotal
          do d = 1, dim
             av(d,i) = epsilon * av(d,i)
          enddo 
       enddo             
- !     !$omp end do
- !     !$omp end parallel
+
       return
       end subroutine

@@ -1,22 +1,8 @@
 !---------------------------
     module m_particles
 !---------------------------
-use constants, ex_pi=>pi
 implicit none
-
-! Configuration of the water-jet problem; Problem specific
-!type geo
-
-! size of each dimension
-!  double precision dl,dr,dh,ds,dj,D,L,H,immerse
-! descrete intervals
-!  integer  mdl,mdr,mdh,mds,mdj,mD,mL,mH
-!  contains
-!    procedure :: set => set_geo_sub
-
-!end type
-
-! Rectangular area
+integer, parameter :: dp = kind(0.d0)
 
 type block             
      real(dp) xl, yl
@@ -59,7 +45,7 @@ real(dp) :: x_maxgeom = 10.e0, x_mingeom = -10.e0,  &
 
 !maxn: Maximum number of particles
 !max_interation : Maximum number of interaction pairs
-integer :: maxn = 12000, max_interaction = 100 * 12000
+integer :: maxn = 2000, max_interaction = 10 * 2000
   
 !SPH algorithm
 
@@ -218,10 +204,13 @@ integer :: nnps = 1
    real(dp) :: alpha=0.1d0, beta=0.d0, etq=0.1d0
 
 ! Leonard_Johns repulsive force
-   real(dp) :: rr0 = 0.005d0, dd = 0.1d0, p1 = 12, p2 = 4
+   real(dp) :: dd = 0.1d0, p1 = 12, p2 = 4
 
 ! Delta-SPH
    real(dp) :: delta = 0.1d0
+
+! Velocity average
+  real(dp) :: epsilon = 0.001
    
 end type
 
@@ -238,34 +227,199 @@ end type
 ! Particles in SPH method
 type particles
 
-   integer :: dim   = 2
-   integer :: maxn  = 0
+!Physics parameter
+real(dp) :: gravity = -9.8
+
+!Geometry parameters
+
+!dim : Dimension of the problem (1, 2 or 3)
+integer :: dim = 2        
+        
 !   integer :: nnps  = 1
    integer :: niac  = 0
-   integer :: max_interaction = 0
    integer :: ntotal = 0, nvirt = 0
-   integer :: max_zone = 10
+   real(dp) dspp  ! initial particle interval  
+
+
+
+!Parameters for the computational geometry,  
+!x_maxgeom : Upper limit of allowed x-regime 
+!x_mingeom : Lower limit of allowed x-regime 
+!y_maxgeom : Upper limit of allowed y-regime 
+!y_mingeom : Lower limit of allowed y-regime 
+!z_maxgeom : Upper limit of allowed z-regime 
+!z_mingeom : Lower limit of allowed z-regime 
+real(dp) :: x_maxgeom = 0.3e0, x_mingeom = -0.05e0,  &
+            y_maxgeom = 0.15e0, y_mingeom = -0.05e0,  &
+            z_maxgeom = 10.e0, z_mingeom = -10.e0
+
+!Parameter used for sorting grid cells in the link list algorithm
+!maxngx  : Maximum number of sorting grid cells in x-direction
+!maxngy  : Maximum number of sorting grid cells in y-direction
+!maxngz  : Maximum number of sorting grid cells in z-direction
+!Determining maximum number of sorting grid cells:
+!(For an homogeneous particle distribution:)
+!1-dim. problem: maxngx = maxn ,  maxngy = maxngz = 1
+!2-dim. problem: maxngx = maxngy ~ sqrt(maxn) ,  maxngz = 1
+!3-dim. problem: maxngx = maxngy = maxngz ~ maxn^(1/3)
+integer :: maxngx = 100,maxngy = 100, maxngz = 1
+
+integer, pointer, dimension(:,:,:) :: grid => null()
+integer, pointer, dimension(:,:) :: xgcell => null()
+integer, pointer, dimension(:) :: celldata => null() 
+integer  ngridx(3),ghsmlx(3)
+real(dp) mingridx(3),maxgridx(3),dgeomx(3)
+
+!Memory allocation
+
+!maxn: Maximum number of particles
+!max_interation : Maximum number of interaction pairs
+integer :: maxn = 2000, max_interaction = 10 * 2000
+  
+!SPH algorithm
+
+!Particle approximation (pa_sph)
+!pa_sph = 1 : (e.g. (p(i)+p(j))/(rho(i)*rho(j))
+!         2 : (e.g. (p(i)/rho(i)**2+p(j)/rho(j)**2)
+integer :: pa_sph = 2 
+
+!Nearest neighbor particle searching (nnps) method
+!nnps = 1 : Simplest and direct searching
+!       2 : Sorting grid linked list
+!       3 : Tree algorithm
+integer :: nnps = 1 
+
+!Smoothing length evolution (sle) algorithm
+!sle = 0 : Keep unchanged,
+!      1 : h = fac * (m/rho)^(1/dim)
+!      2 : dh/dt = (-1/dim)*(h/rho)*(drho/dt)
+!      3 : Other approaches (e.g. h = h_0 * (rho_0/rho)**(1/dim) ) 
+integer :: sle = 0 
+
+!Smoothing kernel function 
+!skf = 1, cubic spline kernel by W4 - Spline (Monaghan 1985)
+!    = 2, Gauss kernel   (Gingold and Monaghan 1981) 
+!    = 3, Quintic kernel (Morris 1997)
+!    = 4, Wendland    
+integer :: skf = 4 
+
+!Switches for different senarios
+
+!summation_density = .TRUE. : Use density summation model in the code, 
+!                    .FALSE.: Use continuiity equation
+!average_velocity = .TRUE. : Monaghan treatment on average velocity,
+!                   .FALSE.: No average treatment.
+!config_input = .TRUE. : Load initial configuration data,
+!               .FALSE.: Generate initial configuration.
+!virtual_part = .TRUE. : Use vritual particle,
+!               .FALSE.: No use of vritual particle.
+!vp_input = .TRUE. : Load virtual particle information,
+!           .FALSE.: Generate virtual particle information.
+!visc = .true. : Consider viscosity,
+!       .false.: No viscosity.
+!ex_force =.true. : Consider external force,
+!          .false.: No external force.
+!visc_artificial = .true. : Consider artificial viscosity,
+!                  .false.: No considering of artificial viscosity.
+!heat_artificial = .true. : Consider artificial heating,
+!                  .false.: No considering of artificial heating.
+!self_gravity = .true. : Considering self_gravity,
+!               .false.: No considering of self_gravity
+!nor_density =  .true. : Density normalization by using CSPM,
+!               .false.: No normalization.
+
+integer :: integrate_scheme = 1  ! =1, LF; =2, Verlet
+logical :: summation_density  = .false.         
+logical :: average_velocity  = .true.         
+logical :: config_input  = .false. 
+logical :: virtual_part  = .true. 
+logical :: vp_input  = .false.  
+logical :: visc  = .true.  
+logical :: ex_force  = .true.
+logical :: visc_artificial  = .true. 
+logical :: heat_artificial  = .false. 
+logical :: self_gravity  = .true.      
+logical :: nor_density  = .false.              
+
+integer :: soil_pressure = 2  ! =1, eos; =2, mean trace
+integer :: stress_integration = 1
+integer :: yield_criterion = 2
+integer :: plasticity = 3  ! =0 non; =1 Bui, =2 return mapping =3 Lopez
+logical :: artificial_density = .true.                  
+logical :: soil_artificial_stress = .true.
+
+logical :: volume_fraction = .true.
+logical :: water_artificial_volume = .true.
+logical :: volume_fraction_renorm = .true.
+
+! 0 ignor; 1 negative pressure to zero; 2 artficial stress
+integer :: water_tension_instability = 0
+
+! Symmetry of the problem
+! nsym = 0 : no symmetry,
+!      = 1 : axis symmetry,
+!      = 2 : center symmetry.     
+integer :: nsym = 0
+
+! Control parameters for output 
+! int_stat = .true. : Print statistics about SPH particle interactions.
+!                     including virtual particle information.
+! print_step: Print Timestep (On Screen)
+! save_step : Save Timestep    (To Disk File)
+! moni_particle: The particle number for information monitoring.
+logical :: int_stat = .true.
+integer :: print_step, save_step, moni_particle = 264
+
+!Recorde time interval
+integer :: save_step_from = 0, save_step_to = 100
+
+!Material parameters
+
+!For equation of state (EOS) of water
+
+!real(dp) rho0_f,b,gamma,cf,viscosity
+
+!For soil
+
+!real(dp) rho0_s,cs,k,porosity,permeability,G,E,niu,cohesion,phi
+   
+! Artificial viscosity
+! alpha: shear viscosity; beta: bulk viscosity; etq: to avoid sigularities   
+!real(dp) :: alpha=0.1d0, beta=0.d0, etq=0.1d0
+
+! Leonard_Johns repulsive force
+!real(dp) :: rr0 = 0.005d0, dd = 0.1d0, p1 = 12, p2 = 4
+
+! Delta-SPH
+!real(dp) :: delta = 0.1d0   
 
    class(parameters), pointer :: params => null()
 
    character(len=32) :: imaterial
    class(*), pointer :: material => null()
 
-! Background point
-  type(block), pointer :: backpoint => null()
-  integer nreal_zone, nvirtual_zone
-  integer, pointer, dimension(:) :: real_zone => null(), virtual_zone => null()
-
 ! Numerical parameters
    class(numerical), pointer :: numeric => null()
-   
+
+! Particle interaction pair
+   integer :: maxp = 0, minp = 0
+   integer :: maxiac = 0, miniac = 0
+   integer :: sumiac = 0, noiac  = 0
+   integer, pointer, dimension(:)  :: pair_i => null()
+   integer, pointer, dimension(:)  :: pair_j => null()
+   integer, pointer, dimension(:)  :: countiac=>null()
+
+! Kernel and its derivative
+   real(dp), pointer, dimension(:)   :: w    => null()
+   real(dp), pointer, dimension(:,:) :: dwdx => null()
+
 ! Particle fundamental data
    integer,  pointer, dimension(:)   :: itype=> null()
    real(dp), pointer, dimension(:,:) :: x    => null()
    real(dp), pointer, dimension(:)   :: vol  => null()
    real(dp), pointer, dimension(:)   :: mass => null()
    real(dp), pointer, dimension(:)   :: hsml => null()
-   double precision,  pointer, dimension(:)   :: zone => null()
+   integer,  pointer, dimension(:)   :: zone => null()
 
 ! Volume of Fraction
    real(dp), pointer, dimension(:)   :: vof  => null(), vof2=>null() ! phi_f= 1-phi_s
@@ -330,17 +484,7 @@ type particles
    integer :: nfail = 0
    integer, pointer, dimension(:) :: fail => null()
 
-! Kernel and its derivative
-   real(dp), pointer, dimension(:)   :: w    => null()
-   real(dp), pointer, dimension(:,:) :: dwdx => null()
 
-! Particle interaction pair
-   integer :: maxp = 0, minp = 0
-   integer :: maxiac = 0, miniac = 0
-   integer :: sumiac = 0, noiac  = 0
-   integer, pointer, dimension(:)  :: pair_i => null()
-   integer, pointer, dimension(:)  :: pair_j => null()
-   integer, pointer, dimension(:)  :: countiac=>null()
 
 ! Boundry particles defined as type particles
    type(particles), pointer :: bor
@@ -350,6 +494,8 @@ type particles
 
    integer itimestep
 
+   integer niac_start(4), niac_end(4), nthreads
+
    contains
 
        procedure :: write_particles
@@ -358,13 +504,26 @@ type particles
        procedure :: depend_virtual_particles
        procedure :: interaction_statistics
        procedure :: minimum_time_step
-       procedure :: take_real_points
        procedure :: take_real => take_real_points1
-       procedure :: take_virtual_points
        procedure :: take_virtual => take_virtual_points1
        procedure :: setup_itype
+       procedure :: get_scale_k
+       procedure :: direct_find
+       procedure :: init_grid
+       procedure :: grid_geom
+       procedure :: link_list
        procedure :: find_pairs
+       procedure :: kernel
+       procedure :: sum_density
+       procedure :: con_density
+       procedure :: art_visc
+       procedure :: delta_sph
+       procedure :: av_vel
        procedure :: repulsive_force
+       procedure :: df
+       procedure :: df2
+       procedure :: df3
+!       procedure :: time_integration_for_water
 
 !       procedure :: find_particle_nearest2_point
 !       procedure :: grad_scalar
@@ -392,6 +551,8 @@ interface operator(*)
    module procedure :: array_mul_real
    module procedure :: array_mul_double_real
 end interface
+
+!private :: df, df2, df3
 
 !=======
 contains
@@ -464,7 +625,6 @@ do i = 1, this%m
       this%y(k) = (j-1)*this%dy + this%dy/2.
    enddo
 enddo
-
 
 return
 end subroutine
@@ -541,21 +701,48 @@ end select
 return
 end subroutine
 
+! Statistics for the interaction
 !-------------------------------------------------
      subroutine interaction_statistics(parts)
 !-------------------------------------------------
 implicit none
 class(particles) parts
+integer ntotal, i,j,d
+integer  sumiac, maxiac, miniac, noiac, maxp, minp
+logical :: dbg = .false.
 
-          print *,' >> Statistics: interactions per particle:'
-          print *,'**** Particle:',parts%maxp,                 &
-                  ' maximal interactions:', parts%maxiac
-          print *,'**** Particle:',parts%minp,                 &
-                  ' minimal interactions:', parts%miniac
-          print *,'**** Average :',real(parts%sumiac)/         &
-                             real(parts%ntotal+parts%nvirt)
-          print *,'**** Total pairs : ',parts%niac
-          print *,'**** Particles with no interactions:',parts%noiac
+ntotal   =   parts%ntotal + parts%nvirt
+sumiac = 0
+maxiac = 0
+miniac = 1000
+noiac  = 0
+
+do i=1,ntotal
+   sumiac = sumiac + parts%countiac(i)
+   if (parts%countiac(i).gt.maxiac) then
+      maxiac = parts%countiac(i)
+      maxp = i
+   endif
+   if (parts%countiac(i).lt.miniac) then 
+      miniac = parts%countiac(i)
+      minp = i
+   endif
+   if (parts%countiac(i).eq.0) noiac  = noiac + 1
+enddo
+
+parts%maxp = maxp;        parts%minp = minp  
+parts%maxiac = maxiac;    parts%miniac = miniac
+parts%sumiac = sumiac;    parts%noiac = noiac
+
+print *,' >> Statistics: interactions per particle:'
+print *,'**** Particle:',parts%maxp,                 &
+        ' maximal interactions:', parts%maxiac
+print *,'**** Particle:',parts%minp,                 &
+        ' minimal interactions:', parts%miniac
+print *,'**** Average :',real(parts%sumiac)/         &
+                         real(parts%ntotal+parts%nvirt)
+print *,'**** Total pairs : ',parts%niac
+print *,'**** Particles with no interactions:',parts%noiac
 
 return
 end subroutine
@@ -736,6 +923,8 @@ end subroutine
 !return
 !end subroutine
 
+
+!DEC$IF(.FALSE.)
 !-----------------------------------------------
       subroutine take_real_points(this,tank)
 !-----------------------------------------------
@@ -763,6 +952,8 @@ this%ntotal = k
 
 return
 end subroutine
+
+!DEC$ENDIF
 
 !--------------------------------------------------
       subroutine take_real_points1(this,tank,zone)
@@ -793,6 +984,8 @@ this%ntotal = k
 return
 end subroutine
 
+
+!DEC$IF(.FALSE.)
 !-----------------------------------------------------
       subroutine take_virtual_points(this,tank)
 !-----------------------------------------------------
@@ -820,6 +1013,8 @@ this%nvirt = k-this%ntotal
 
 return
 end subroutine
+
+!DEC$ENDIF
 
 !-----------------------------------------------------
       subroutine take_virtual_points1(this,tank,zone)
@@ -868,7 +1063,609 @@ endif
 return
 end subroutine
 
-!--------------------------------------------
+!-------------------------------------------------
+     function get_scale_k(this) result(scale_k)
+!-------------------------------------------------
+implicit none
+class(particles) this
+integer scale_k
+
+select case (this%skf)
+  case(1)
+     scale_k = 2
+  case(2)
+     scale_k = 3
+  case(3)
+     scale_k = 3
+  case(4)
+     scale_k = 2
+  case default
+     stop 'get_scale_k: No such kernel function!'
+end select 
+
+end function
+
+!----------------------------------------------------------------------
+       subroutine direct_find(parts)
+!----------------------------------------------------------------------
+!   Subroutine to calculate the smoothing funciton for each particle and
+!   the interaction parameters used by the SPH algorithm. Interaction 
+!   pairs are determined by directly comparing the particle distance 
+!   with the corresponding smoothing length.
+!-----------------------------------------------------------------------
+      implicit none
+      
+      class(particles) parts
+
+      integer ntotal, niac,i,j,d,scale_k
+      real(dp) dxiac(3), driac, r, mhsml, tdwdx(3)
+      logical :: dbg = .false.
+
+      if(dbg) write(*,*) 'In direct_find...'
+
+      ntotal   =   parts%ntotal + parts%nvirt
+      scale_k = parts%get_scale_k()
+     
+      do i=1,ntotal
+        parts%countiac(i) = 0
+      enddo
+
+      niac = 0
+
+      do i=1,ntotal-1     
+        do j = i+1, ntotal
+          dxiac(1) = parts%x(1,i) - parts%x(1,j)
+          driac    = dxiac(1)*dxiac(1)
+          do d=2,parts%dim
+            dxiac(d) = parts%x(d,i) - parts%x(d,j)
+            driac    = driac + dxiac(d)*dxiac(d)
+          enddo
+          mhsml = (parts%hsml(i)+parts%hsml(j))/2.
+          if (sqrt(driac).lt.scale_k*mhsml) then
+            if (niac.lt.parts%max_interaction) then    
+
+!     Neighboring pair list, and totalinteraction number and
+!     the interaction number for each particle 
+
+              niac = niac + 1
+              parts%pair_i(niac) = i
+              parts%pair_j(niac) = j
+              r = sqrt(driac)
+              parts%countiac(i) = parts%countiac(i) + 1
+              parts%countiac(j) = parts%countiac(j) + 1
+
+!     Kernel and derivations of kernel
+              call parts%kernel(r,dxiac,mhsml,parts%w(niac),tdwdx)
+              do d=1,parts%dim
+                parts%dwdx(d,niac) = tdwdx(d)
+              enddo                                      
+            else
+              print *,  ' >>> ERROR <<< : Too many interactions' 
+              stop
+            endif
+          endif
+        enddo
+      enddo  
+
+      parts%niac = niac
+ 
+      end subroutine
+
+!----------------------------------------------------------------------
+       subroutine direct_find_2(parts,part2)
+!----------------------------------------------------------------------
+      implicit none
+      
+      class(particles) parts, part2
+      integer ntotal, niac,i,j,d, scale_k
+      real(dp) dxiac(3), driac, r, mhsml, tdwdx(3)
+      logical :: dbg = .false.
+
+      if(dbg) write(*,*) 'In direct_find2...'
+
+      ntotal   =   parts%ntotal + parts%nvirt
+      scale_k  =   parts%get_scale_k()
+     
+      do i=1,ntotal
+        parts%countiac(i) = 0
+      enddo
+      part2%countiac = 0
+
+      niac = 0
+
+      do i=1,ntotal     
+        do j = 1, part2%ntotal+part2%nvirt
+          dxiac(1) = parts%x(1,i) - part2%x(1,j)
+          driac    = dxiac(1)*dxiac(1)
+          do d=2,parts%dim
+            dxiac(d) = parts%x(d,i) - part2%x(d,j)
+            driac    = driac + dxiac(d)*dxiac(d)
+          enddo
+          mhsml = (parts%hsml(i)+part2%hsml(j))/2.
+          if (sqrt(driac).lt.scale_k*mhsml) then
+            if (niac.lt.parts%max_interaction) then    
+
+!     Neighboring pair list, and totalinteraction number and
+!     the interaction number for each particle 
+
+              niac = niac + 1
+              parts%pair_i(niac) = i
+              parts%pair_j(niac) = j
+              r = sqrt(driac)
+              parts%countiac(i) = parts%countiac(i) + 1
+              part2%countiac(j) = part2%countiac(j) + 1
+
+!     Kernel and derivations of kernel
+              call parts%kernel(r,dxiac,mhsml,parts%w(niac),tdwdx)
+              do d=1,parts%dim
+                parts%dwdx(d,niac) = tdwdx(d)
+              enddo                                     
+            else
+              print *, ' >>> ERROR <<< : Too many interactions' 
+              stop
+            endif
+          endif
+        enddo
+      enddo  
+
+      parts%niac = niac
+
+      end subroutine
+
+!   Subroutine to established a pair linked list by sorting grid cell.
+!   It is suitable for a homogeneous particle distribution with the 
+!   same smoothing length in an instant. A fixed number of particles
+!   lie in each cell.       
+!----------------------------------------------------------------------      
+      subroutine init_grid(parts)
+!----------------------------------------------------------------------      
+      implicit none
+      class(particles) parts
+      real(dp) hsml 
+      integer i, j, k, d, dim, ntotal
+!     Averaged number of particles per grid cell
+      real(dp), parameter :: nppg = 3.e0
+
+      hsml = parts%hsml(1)   !!! hsml is same for all particles
+      dim = parts%dim; ntotal = parts%ntotal + parts%nvirt
+      
+!     Range of sorting grid
+
+      parts%maxgridx(1) = parts%x_maxgeom;  parts%mingridx(1) = parts%x_mingeom
+      parts%maxgridx(2) = parts%y_maxgeom;  parts%mingridx(2) = parts%y_mingeom
+      parts%maxgridx(3) = parts%z_maxgeom;  parts%mingridx(3) = parts%z_mingeom
+      parts%dgeomx = parts%maxgridx - parts%mingridx
+
+!     Number of grid cells in x-, y- and z-direction:
+
+      if (dim.eq.1) then
+        parts%ngridx(1) = min(int(ntotal/nppg) + 1,parts%maxngx)
+      else if (dim.eq.2) then
+        parts%ngridx(1) = &
+        min(int(sqrt(ntotal*parts%dgeomx(1)/(parts%dgeomx(2)*nppg))) + 1,parts%maxngx)
+        parts%ngridx(2) = &
+        min(int(parts%ngridx(1)*parts%dgeomx(2)/parts%dgeomx(1)) + 1,parts%maxngy)
+      else if (dim.eq.3) then
+        parts%ngridx(1) = min(int((ntotal*parts%dgeomx(1)*parts%dgeomx(1)/   &
+           (parts%dgeomx(2)*parts%dgeomx(3)*nppg))**(1.e0/3.e0)) + 1,parts%maxngx)
+        parts%ngridx(2) =  &
+           min(int(parts%ngridx(1)*parts%dgeomx(2)/parts%dgeomx(1)) + 1,parts%maxngy)
+        parts%ngridx(3) =  &
+           min(int(parts%ngridx(1)*parts%dgeomx(3)/parts%dgeomx(1)) + 1,parts%maxngz)
+      endif
+
+!     Smoothing Length measured in grid cells:
+      do d=1,dim
+         parts%ghsmlx(d) = int(real(parts%ngridx(d))*hsml/parts%dgeomx(d)) + 1
+      enddo
+
+      parts%grid = 0   ! Initialize grid
+
+      end subroutine
+
+!   Subroutine to calculate the coordinates (xgcell) of the cell of 
+!   the sorting  grid, in which the particle with coordinates (x) lies.      
+!-----------------------------------------------------------------------      
+      subroutine grid_geom(parts,i,x,xgcell)
+!-----------------------------------------------------------------------
+      implicit none
+      class(particles) parts
+      integer i, xgcell(3)
+      real(dp) x(3)
+      integer d
+
+      do d=1,3
+        xgcell(d) = 1
+      enddo
+
+      do d=1,parts%dim
+        if ((x(d).gt.parts%maxgridx(d)).or.(x(d).lt.parts%mingridx(d))) then
+          print *,' >>> ERROR <<< : Particle out of range'
+          print *,'    Particle position: x(',i,d,') = ',x(d)
+          print *,'    Range: [xmin,xmax](',D,') =                    &
+                 [',parts%mingridx(d),',',parts%maxgridx(d),']'
+          stop
+        else
+          xgcell(d) = int(real(parts%ngridx(d))/parts%dgeomx(d)*      &
+                      (x(d)-parts%mingridx(d)) + 1.e0)
+        endif
+      enddo
+
+      end subroutine
+
+!----------------------------------------------------------------------      
+      subroutine link_list(parts)
+!----------------------------------------------------------------------
+!   Subroutine to calculate the smoothing funciton for each particle and
+!   the interaction parameters used by the SPH algorithm. Interaction 
+!   pairs are determined by using a sorting grid linked list  
+!----------------------------------------------------------------------
+      use ifport
+      implicit none
+
+      class(particles) parts
+      integer i, j, d, scale_k, ntotal, niac    
+      integer gcell(3),xcell,ycell,zcell,minxcell(3),maxxcell(3)
+      integer dnxgcell(3),dpxgcell(3)
+      real(dp) hsml,dr,r,dx(3),tdwdx(3)
+
+      INTEGER n_per_threads, niac_per_threads, it, n_start(8), n_end(8)
+      Integer  last
+      INTEGER, EXTERNAL :: OMP_GET_THREAD_NUM, OMP_GET_NUM_THREADS
+      real(dp) t1,t2,t3
+
+      ntotal  = parts%ntotal + parts%nvirt
+      scale_k = parts%get_scale_k()
+      hsml = parts%hsml(1)             !!! hsml is same for all particles!
+
+      do i=1,ntotal
+         parts%countiac(i) = 0
+      enddo
+
+      call parts%init_grid
+      
+!     Position particles on grid and create linked list:
+      
+      do i=1,ntotal
+        call parts%grid_geom(i,parts%x(:,i),gcell)
+        do d=1,parts%dim
+          parts%xgcell(d,i) = gcell(d)
+        enddo
+        parts%celldata(i) = parts%grid(gcell(1),gcell(2),gcell(3))
+        parts%grid(gcell(1),gcell(2),gcell(3)) = i
+      enddo
+
+!     Determine interaction parameters:
+!$omp parallel
+      parts%nthreads = omp_get_num_threads()
+!$omp end parallel
+      n_per_threads = ntotal/parts%nthreads
+      niac_per_threads = parts%max_interaction/parts%nthreads
+      do it = 1, parts%nthreads
+         n_start(it)=(it-1)*n_per_threads+1
+         n_end(it) = it*n_per_threads
+         parts%niac_start(it)=(it-1)*niac_per_threads
+         parts%niac_end(it)=parts%niac_start(it)
+      enddo   
+
+      parts%pair_i = 0; parts%pair_j=0
+!      t1 = rtc()
+!$omp parallel 
+!$omp do private(niac,i,d,minxcell,maxxcell,dnxgcell,dpxgcell,xcell,ycell,zcell,j,dx,dr,r,tdwdx)
+do it = 1, parts%nthreads
+       niac = parts%niac_start(it)
+       do i = n_start(it),n_end(it)
+
+!      niac = 0
+!      do i=1,ntotal-1
+
+!     Determine range of grid to go through:
+         
+        do d=1,3
+          minxcell(d) = 1
+          maxxcell(d) = 1
+        enddo
+        do d=1,parts%dim
+          dnxgcell(d) = parts%xgcell(d,i) - parts%ghsmlx(d)
+          dpxgcell(d) = parts%xgcell(d,i) + parts%ghsmlx(d)
+          minxcell(d) = max(dnxgcell(d),1)
+          maxxcell(d) = min(dpxgcell(d),parts%ngridx(d))
+        enddo
+
+!     Search grid:
+      
+        do zcell=minxcell(3),maxxcell(3)
+          do ycell=minxcell(2),maxxcell(2)
+            do xcell=minxcell(1),maxxcell(1)
+              j = parts%grid(xcell,ycell,zcell)
+ 1            if (j.gt.i) then
+                dx(1) = parts%x(1,i) - parts%x(1,j)
+                dr    = dx(1)*dx(1)
+                do d=2,parts%dim
+                  dx(d) = parts%x(d,i) - parts%x(d,j)
+                  dr    = dr + dx(d)*dx(d)
+                enddo
+                if (sqrt(dr).lt.scale_k*hsml) then
+                  if (niac.lt.parts%max_interaction) then
+                  !if (niac.lt.niac_per_threads) then
+
+!     Neighboring pair list, and totalinteraction number and
+!     the interaction number for each particle 
+
+                    niac = niac + 1
+                    parts%pair_i(niac) = i
+                    parts%pair_j(niac) = j
+                    r = sqrt(dr)
+                    !parts%countiac(i) = parts%countiac(i) + 1
+                    !parts%countiac(j) = parts%countiac(j) + 1
+                           
+!--- Kernel and derivations of kernel
+
+                    call parts%kernel(r,dx,hsml,parts%w(niac),tdwdx)  !!!!!!!!
+                    do d = 1, parts%dim
+                       parts%dwdx(d,niac)=tdwdx(d)
+                    enddo                  
+                  else
+                    print *, ' >>> Error <<< : too many interactions', &
+                    it,niac,niac_per_threads
+                    stop
+                  endif
+                endif
+                j = parts%celldata(j)
+                goto 1
+              endif
+            enddo !xcell
+          enddo !ycell
+        enddo !zcell
+      enddo !i
+
+      parts%niac_start(it) = parts%niac_start(it)+1
+      parts%niac_end(it) = niac
+      enddo !it      
+!$omp end do
+!$omp end parallel
+!      t2 = rtc()
+!      write(*,*) t2-t1
+      parts%niac = 0
+      do it = 1, parts%nthreads
+         parts%niac = parts%niac + parts%niac_end(it)-parts%niac_start(it)+1
+      enddo
+
+      last = parts%max_interaction
+      do while(parts%pair_i(last)==0)
+         last = last - 1
+      enddo  
+      i = 1 
+      do while(i<last)
+         if(parts%pair_i(i)/=0)then
+            i = i + 1
+            cycle
+         endif        
+         parts%pair_i(i) = parts%pair_i(last)
+         parts%pair_j(i) = parts%pair_j(last)
+         parts%w(i)      = parts%w(last)
+         parts%dwdx(1,i) = parts%dwdx(1,last)
+         parts%dwdx(2,i) = parts%dwdx(2,last)
+         last = last - 1
+         do while(parts%pair_i(last)==0)
+            last = last - 1
+         enddo
+         i = i + 1
+      enddo 
+ !     write(*,*) parts%niac
+      do it = 1,parts%nthreads
+          parts%niac_start(it) = parts%niac*(it-1)/4+1
+          parts%niac_end(it) = parts%niac*it/4
+ !         write(*,*)parts%niac_start(it),parts%niac_end(it)
+      enddo
+
+!      t3 = rtc()
+!      write(*,*) t1,t2,t3
+!      write(*,*) t2-t1,t3-t2
+!      pause
+!      if(last/=parts%niac) stop 'adfasdf'
+!      do i = 1, last
+!         if(parts%pair_i(i)==0) stop 'adf'
+!      enddo   
+
+      end subroutine
+
+      
+
+!----------------------------------------------------------------------      
+      subroutine link_list2(parts)
+!----------------------------------------------------------------------
+!   Subroutine to calculate the smoothing funciton for each particle and
+!   the interaction parameters used by the SPH algorithm. Interaction 
+!   pairs are determined by using a sorting grid linked list  
+!----------------------------------------------------------------------
+      use ifport
+      implicit none
+
+      class(particles) parts
+      integer i, j, d, scale_k, ntotal, niac,temp1,temp2,temp3,temp4    
+      integer gcell(3),xcell,ycell,zcell,minxcell(3),maxxcell(3)
+      integer dnxgcell(3),dpxgcell(3)
+      real(dp) hsml,dr,r,dx(3),tdwdx(3)
+
+      INTEGER nthreads,n_per_threads, niac_per_threads, it, n_start(8), n_end(8)
+      Integer niac_start(8),niac_end(8), last
+      INTEGER, EXTERNAL :: OMP_GET_THREAD_NUM, OMP_GET_NUM_THREADS
+      real(dp) t1,t2,t3
+
+      ntotal  = parts%ntotal + parts%nvirt
+      scale_k = parts%get_scale_k()
+      hsml = parts%hsml(1)             !!! hsml is same for all particles!
+
+      do i=1,ntotal
+         parts%countiac(i) = 0
+      enddo
+
+      call parts%init_grid
+      
+!     Position particles on grid and create linked list:
+      
+      do i=1,ntotal
+        call parts%grid_geom(i,parts%x(:,i),gcell)
+        do d=1,parts%dim
+          parts%xgcell(d,i) = gcell(d)
+        enddo
+        parts%celldata(i) = parts%grid(gcell(1),gcell(2),gcell(3))
+        parts%grid(gcell(1),gcell(2),gcell(3)) = i
+      enddo
+
+!     Determine interaction parameters:
+!$omp parallel private(dr,r,niac,dx,tdwdx,minxcell,maxxcell,it,i,d,j,xcell,ycell)
+        nthreads = OMP_GET_NUM_THREADS()
+        n_per_threads =ntotal/nthreads
+        niac_per_threads = parts%max_interaction/nthreads
+        it = omp_get_thread_num()+1
+          n_start(it) = (it-1)*n_per_threads + 1
+          n_end(it) = it*n_per_threads
+          parts%niac_start(it) = (it-1)*niac_per_threads
+          parts%niac_end(it) = (it-1)*niac_per_threads
+
+!      parts%pair_i = 0; parts%pair_j=0
+!      t1 = rtc() 
+!$omp do 
+do it = 1, nthreads
+       niac = parts%niac_start(it)
+       do i = n_start(it),n_end(it)
+
+!      niac = 0
+!      do i=1,ntotal-1
+
+!     Determine range of grid to go through:
+          minxcell(3) = 1
+          maxxcell(3) = 1
+
+        do d=1,parts%dim
+          minxcell(d) = max(parts%xgcell(d,i) - parts%ghsmlx(d),1)
+          maxxcell(d) = min(parts%xgcell(d,i) + parts%ghsmlx(d),parts%ngridx(d))
+        enddo
+
+!     Search grid:
+      
+        do zcell=minxcell(3),maxxcell(3)
+          do ycell=minxcell(2),maxxcell(2)
+            do xcell=minxcell(1),maxxcell(1)
+              j = parts%grid(xcell,ycell,zcell)
+ 1            if (j.gt.i) then
+                dx(1) = parts%x(1,i) - parts%x(1,j)
+                dr    = dx(1)*dx(1)
+                do d=2,parts%dim
+                  dx(d) = parts%x(d,i) - parts%x(d,j)
+                  dr    = dr + dx(d)*dx(d)
+                enddo
+                if (sqrt(dr).lt.scale_k*hsml) then
+                  if (niac.lt.parts%max_interaction) then
+                  !if (niac.lt.niac_per_threads) then
+
+!     Neighboring pair list, and totalinteraction number and
+!     the interaction number for each particle 
+
+                    niac = niac + 1
+                    parts%pair_i(niac) = i
+                    parts%pair_j(niac) = j
+                    r = sqrt(dr)
+                    !parts%countiac(i) = parts%countiac(i) + 1
+                    !parts%countiac(j) = parts%countiac(j) + 1
+                           
+!--- Kernel and derivations of kernel
+
+                    call parts%kernel(r,dx,hsml,parts%w(niac),tdwdx)  !!!!!!!!
+                    do d = 1, parts%dim
+                       parts%dwdx(d,niac)=tdwdx(d)
+                    enddo                  
+                  else
+                    print *, ' >>> Error <<< : too many interactions', &
+                    it,niac,niac_per_threads
+                    stop
+                  endif
+                endif
+                j = parts%celldata(j)
+                goto 1
+              endif
+            enddo !xcell
+          enddo !ycell
+        enddo !zcell
+      enddo !i
+
+      parts%niac_start(it) = parts%niac_start(it)+1
+      parts%niac_end(it) = niac
+      enddo !it      
+!$omp end do
+!$omp end parallel
+         temp1 = parts%niac_end(1)-parts%niac_start(1) + 1 
+         temp2 = parts%niac_end(2)-parts%niac_start(2) + 1 
+         temp3 = parts%niac_end(3)-parts%niac_start(3) + 1
+         temp4 = parts%niac_end(4)-parts%niac_start(4) + 1
+         do niac = parts%niac_start(2),parts%niac_end(2)
+          parts%pair_i(niac - niac_per_threads + temp1) = parts%pair_i(niac)
+          parts%pair_j(niac - niac_per_threads + temp1) = parts%pair_j(niac)
+          parts%w(niac - niac_per_threads + temp1) = parts%w(niac)
+          do d = 1,parts%dim
+          parts%dwdx(d,niac - niac_per_threads + temp1) = parts%dwdx(d,niac)
+          enddo
+         enddo
+         do niac = parts%niac_start(3),parts%niac_end(3)
+          parts%pair_i(niac - 2*niac_per_threads + temp1+temp2)=parts%pair_i(niac)
+          parts%pair_j(niac - 2*niac_per_threads + temp1+temp2)=parts%pair_j(niac)
+          parts%w(niac - 2*niac_per_threads + temp1 + temp2) = parts%w(niac)
+          do d = 1,parts%dim 
+          parts%dwdx(d,niac - 2*niac_per_threads + temp1+temp2)=parts%dwdx(d,niac)
+          enddo
+         enddo
+         do niac = parts%niac_start(4),parts%niac_end(4)
+          parts%pair_i(niac-3*niac_per_threads+temp1+temp2+temp3)=parts%pair_i(niac)
+          parts%pair_j(niac-3*niac_per_threads+temp1+temp2+temp3)=parts%pair_j(niac)
+          parts%w(niac - 3*niac_per_threads + temp1+temp2+temp3)=parts%w(niac)
+          do d = 1,parts%dim 
+          parts%dwdx(d,niac-3*niac_per_threads+temp1+temp2+temp3)=parts%dwdx(d,niac)
+          enddo
+         enddo
+        parts%niac = temp1 + temp2 +temp3 +temp4
+
+!      t2 = rtc()
+!      write(*,*) t2-t1
+ !     parts%niac = 0
+!      do it = 1, nthreads
+!         parts%niac = parts%niac + niac_end(it)-niac_start(it)+1
+!      enddo
+
+!      last = parts%max_interaction
+!      do while(parts%pair_i(last)==0)
+!         last = last - 1
+!      enddo  
+!      i = 1 
+ !     do while(i<last)
+ !        if(parts%pair_i(i)/=0)then
+!            i = i + 1
+!            cycle
+!         endif        
+ !        parts%pair_i(i) = parts%pair_i(last)
+!         parts%pair_j(i) = parts%pair_j(last)
+!         parts%w(i)      = parts%w(last)
+ !        parts%dwdx(1,i) = parts%dwdx(1,last)
+!         parts%dwdx(2,i) = parts%dwdx(2,last)
+!         last = last - 1
+!         do while(parts%pair_i(last)==0)
+!            last = last - 1
+!         enddo
+!         i = i + 1
+!      enddo   
+!      t3 = rtc()
+!      write(*,*) t1,t2,t3
+!      write(*,*) t2-t1,t3-t2
+!      pause
+!      if(last/=parts%niac) stop 'adfasdf'
+!      do i = 1, last
+!         if(parts%pair_i(i)==0) stop 'adf'
+!      enddo   
+
+      end subroutine
+      
+!-------------------------------------------
      subroutine find_pairs(parts)
 !--------------------------------------------
 implicit none
@@ -877,13 +1674,12 @@ integer nnps
 
 nnps = parts%numeric%nnps
 if(nnps == 1)then
-
    call direct_find(parts)
 elseif(nnps == 2)then
-   call link_list3(parts%itimestep,parts%ntotal+parts%nvirt,parts%hsml(1),parts%x,parts%niac,parts%pair_i,parts%pair_j,parts%w,parts%dwdx,parts%countiac)
-   !print *,parts%niac,parts%pair_i,parts%pair_j,parts%w,parts%dwdx
-   !   stop 'find_pairs: link_list method not implemented yet!'
-
+   call link_list(parts)
+!   call link_list(parts%itimestep, parts%ntotal+parts%nvirt,parts%hsml(1),  &
+!   parts%x,parts%niac,parts%pair_i,parts%pair_j,parts%w,parts%dwdx,parts%countiac)
+!   stop 'find_pairs: link_list method not implemented yet!'
 elseif(nnps == 3)then
 !    call tree_search(parts)
    stop 'find_pairs: tree_search method not implemented yet!'
@@ -891,6 +1687,142 @@ endif
 
 return
 end subroutine
+
+!----------------------------------------------------------------------
+        subroutine kernel(this,r,dx,hsml,w,dwdx)   
+!----------------------------------------------------------------------
+!   Subroutine to calculate the smoothing kernel wij and its 
+!   derivatives dwdxij.
+!     if skf = 1, cubic spline kernel by W4 - Spline (Monaghan 1985)
+!            = 2, Gauss kernel   (Gingold and Monaghan 1981) 
+!            = 3, Quintic kernel (Morris 1997)
+!            = 4, Wendland kernel
+!----------------------------------------------------------------------
+      implicit none
+      class(particles) this
+      real(dp) r, dx(3), hsml, w, dwdx(3)
+      integer i, j, d, dim, skf      
+      real(dp) q, dw, factor
+      real(dp), parameter :: pi = 3.14159265358979323846 
+      logical :: dbg = .false.
+
+      if(dbg) write(*,*) 'In kernel...'
+
+      dim = this%dim; skf = this%skf
+
+      q = r/hsml 
+      w = 0.e0
+      do d=1,dim         
+        dwdx(d) = 0.e0
+      enddo   
+
+      if (skf.eq.1) then     
+        if (dim.eq.1) then
+          factor = 1.e0/hsml
+        elseif (dim.eq.2) then
+          factor = 15.e0/(7.e0*pi*hsml*hsml)
+        elseif (dim.eq.3) then
+          factor = 3.e0/(2.e0*pi*hsml*hsml*hsml)
+        else
+         print *,' >>> Error <<< : Wrong dimension: Dim =',dim
+         stop
+        endif                                           
+        if (q.ge.0.and.q.le.1.e0) then          
+          w = factor * (2./3. - q*q + q**3 / 2.)
+          do d = 1, dim
+            dwdx(d) = factor * (-2.+3./2.*q)/hsml**2 * dx(d)       
+          enddo   
+        else if (q.gt.1.e0.and.q.le.2) then          
+          w = factor * 1.e0/6.e0 * (2.-q)**3 
+          do d = 1, dim
+            dwdx(d) =-factor * 1.e0/6.e0 * 3.*(2.-q)**2/hsml * (dx(d)/r)        
+          enddo              
+	else
+	  w=0.
+          do d= 1, dim
+            dwdx(d) = 0.
+          enddo             
+        endif     
+                                    
+      else if (skf.eq.2) then
+      
+        factor = 1.e0 / (hsml**dim * pi**(dim/2.))      
+	if(q.ge.0.and.q.le.3) then
+	  w = factor * exp(-q*q)
+          do d = 1, dim
+            dwdx(d) = w * ( -2.* dx(d)/hsml/hsml)
+          enddo 
+	else
+	  w = 0.
+          do d = 1, dim
+            dwdx(d) = 0.
+          enddo 	   
+	endif	       
+	
+      else if (skf.eq.3) then	
+      
+        if (dim.eq.1) then
+          factor = 1.e0 / (120.e0*hsml)
+        elseif (dim.eq.2) then
+          factor = 7.e0 / (478.e0*pi*hsml*hsml)
+        elseif (dim.eq.3) then
+          factor = 1.e0 / (120.e0*pi*hsml*hsml*hsml)
+        else
+         print *,' >>> Error <<< : Wrong dimension: Dim =',dim
+         stop
+        endif              
+	if(q.ge.0.and.q.le.1) then
+          w = factor * ( (3-q)**5 - 6*(2-q)**5 + 15*(1-q)**5 )
+          do d= 1, dim
+            dwdx(d) = factor * ( (-120 + 120*q - 50*q**2)      &
+                              / hsml**2 * dx(d) )
+          enddo 
+	else if(q.gt.1.and.q.le.2) then
+          w = factor * ( (3-q)**5 - 6*(2-q)**5 )
+          do d= 1, dim
+            dwdx(d) = factor * (-5*(3-q)**4 + 30*(2-q)**4)     &
+                             / hsml * (dx(d)/r) 
+          enddo 
+        else if(q.gt.2.and.q.le.3) then
+          w = factor * (3-q)**5 
+          do d= 1, dim
+            dwdx(d) = factor * (-5*(3-q)**4) / hsml * (dx(d)/r) 
+          enddo 
+        else   
+	  w = 0.
+          do d = 1, dim
+            dwdx(d) = 0.
+          enddo  
+        endif                      
+     
+      elseif(skf.eq.4)then    ! Wendland. refer to SPHysic manual
+
+        if (dim.eq.1) then
+          factor = 0.
+        elseif (dim.eq.2) then
+          factor = 7.e0 / (4.e0*pi*hsml*hsml)
+        elseif (dim.eq.3) then
+          factor = 0.
+        else
+         print *,' >>> Error <<< : Wrong dimension: Dim =',dim
+         stop
+        endif              
+	if(q.ge.0.and.q.le.2) then
+          w = factor * ( (1-q/2)**4 *(1+2*q) )
+          do d= 1, dim
+            dwdx(d) = factor*(-5+15*q/2-15*q**2/4+5*q**3/8)/    &
+                      hsml**2*dx(d)
+          enddo 
+	else   
+	  w = 0.
+          do d = 1, dim
+            dwdx(d) = 0.
+          enddo  
+        endif 
+           
+      endif 
+		
+      end subroutine
 
 !--------------------------------------------------------------------------
       subroutine repulsive_force(parts)
@@ -901,35 +1833,442 @@ class(particles) parts
 double precision dx(3), rr, f, rr0, dd, p1, p2     
 integer i, j, k, d, ii
            
-rr0 = parts%numeric%rr0; dd = parts%numeric%dd
+rr0 = parts%dspp; dd = parts%numeric%dd
 p1 = parts%numeric%p1; p2 = parts%numeric%p2
       
 do k=1,parts%niac
    i = parts%pair_i(k)
-   j = parts%pair_j(k)  
-   if(parts%itype(i)*parts%itype(j)>0)cycle 
+   j = parts%pair_j(k)
+   if(parts%itype(i)*parts%itype(j)>0)cycle  
+!   if(parts%itype(i).gt.0.and.parts%itype(j).lt.0)then  
       rr = 0.      
       do d=1,parts%dim
          dx(d) =  parts%x(d,i) -  parts%x(d,j)
          rr = rr + dx(d)*dx(d)
       enddo  
       rr = sqrt(rr)
-!      if(rr.lt.rr0)then
+      !if(rr.lt.rr0)then
       if(rr.gt.rr0)cycle
          f = ((rr0/rr)**p1-(rr0/rr)**p2)/rr**2
          
          ii = i
          if(parts%itype(i)<0)ii=j 
-         
+
          do d = 1, parts%dim
             parts%dvx(d, ii) = parts%dvx(d, ii) + dd*dx(d)*f
          enddo
-!      endif
-!   endif        
+      !endif
+   !endif        
 enddo   
        
 return
 end subroutine
+
+
+!-------------------------------------------
+          function df(parts,f,x)
+!-------------------------------------------
+
+implicit none
+
+real(dp) f(:)
+character(len=1) x
+class(particles) parts
+real(dp), allocatable, dimension(:) :: df
+real(dp) df_local(parts%maxn,4)
+real(dp), pointer, dimension(:) :: dwdx
+real(dp) fwx
+integer i, j, k, ntotal, it, nthreads
+
+!write(*,*) 'In df_omp...'
+
+ntotal = parts%ntotal + parts%nvirt
+nthreads = parts%nthreads
+!write(*,*) 'sadf', nthreads
+
+allocate(df(ntotal))
+!if(nthreads>1)then
+!   call parts%get_niac_start_end
+!endif   
+
+if(x=='x')dwdx=>parts%dwdx(1,:)
+if(x=='y')dwdx=>parts%dwdx(2,:)
+
+!$omp parallel
+!$omp do private(i,j,k,fwx)
+do it = 1, parts%nthreads
+   do i = 1, ntotal
+      df_local(i,it) = 0.d0
+   enddo
+   do k = parts%niac_start(it), parts%niac_end(it)
+
+
+!do k=1,parts%niac
+   i = parts%pair_i(k)
+   j = parts%pair_j(k)
+   fwx = (f(i)+f(j))*dwdx(k)
+   df_local(i,it) = df_local(i,it) + parts%mass(j)/parts%rho(j)*fwx
+   df_local(j,it) = df_local(j,it) - parts%mass(i)/parts%rho(i)*fwx
+   enddo !k
+enddo !it
+!$omp end do
+!$omp barrier
+
+!$omp do private(it)
+do i = 1, ntotal
+   df(i) = 0.d0
+   do it = 1, nthreads
+      df(i) = df(i)+df_local(i,it)
+   enddo
+enddo   
+!$omp end do
+!$omp end parallel
+end function
+
+
+
+
+! Calculate partial derivatives of a field
+!-------------------------------------------
+          function df2(parts,f,x)
+!-------------------------------------------
+implicit none
+
+real(dp) f(:)
+character(len=1) x
+class(particles) parts
+real(dp), allocatable :: df2(:)
+real(dp), pointer, dimension(:) :: dwdx
+real(dp) fwx
+integer i, j, k
+
+allocate(df2(size(f))); df2 = 0.
+
+if(x=='x')dwdx=>parts%dwdx(1,:)
+if(x=='y')dwdx=>parts%dwdx(2,:)
+
+do k=1,parts%niac
+   i = parts%pair_i(k)
+   j = parts%pair_j(k)
+   fwx = (f(j)-f(i))*dwdx(k)
+   df2(i) = df2(i) + parts%mass(j)*fwx
+   df2(j) = df2(j) + parts%mass(i)*fwx
+enddo
+
+do i = 1, parts%ntotal + parts%nvirt 
+   df2(i) = df2(i)/parts%rho(i)
+enddo   
+
+end function
+
+
+! Calculate partial derivatives of a field
+!-------------------------------------------
+          function df3(parts,f,x)
+!------------------------------------------- 
+implicit none
+
+real(dp) f(:)
+character(len=1) x
+class(particles) parts
+real(dp),allocatable :: df3(:)
+real(dp), pointer, dimension(:) :: dwdx
+real(dp) fwx
+integer i,j,k
+
+allocate(df3(size(f))); df3 = 0.
+
+if(x=='x')dwdx=>parts%dwdx(1,:)
+if(x=='y')dwdx=>parts%dwdx(2,:)
+
+do k=1,parts%niac
+   i = parts%pair_i(k)
+   j = parts%pair_j(k)
+   fwx = ((f(i)/parts%rho(i)**2)+(f(j)/parts%rho(j)**2))*dwdx(k)
+   df3(i) = df3(i) + parts%mass(j)*fwx
+   df3(j) = df3(j) - parts%mass(i)*fwx
+enddo
+
+do i = 1, parts%ntotal + parts%nvirt
+   df3(i) = df3(i)*parts%rho(i)
+enddo
+
+end function
+
+!Subroutine to calculate the density with SPH summation algorithm.
+!----------------------------------------------------------------------
+      subroutine sum_density(parts) 
+!----------------------------------------------------------------------
+      implicit none
+
+      class(particles) parts
+      integer ntotal, i, j, k, d      
+      real(dp) selfdens, hv(3), r, wi(parts%maxn)     
+
+      ntotal = parts%ntotal + parts%nvirt
+
+!     wi(maxn)---integration of the kernel itself
+        
+      hv = 0.d0
+
+!     Self density of each particle: Wii (Kernel for distance 0)
+!     and take contribution of particle itself:
+
+      r=0.d0
+      
+!     Firstly calculate the integration of the kernel over the space
+
+      do i=1,ntotal
+        call parts%kernel(r,hv,parts%hsml(i),selfdens,hv)
+        wi(i)=selfdens*parts%mass(i)/parts%rho(i)
+      enddo
+
+      do k=1,parts%niac
+        i = parts%pair_i(k)
+        j = parts%pair_j(k)
+        wi(i) = wi(i) + parts%mass(j)/parts%rho(j)*parts%w(k)
+        wi(j) = wi(j) + parts%mass(i)/parts%rho(i)*parts%w(k)
+      enddo
+
+!     Secondly calculate the rho integration over the space
+
+      do i=1,ntotal
+        call parts%kernel(r,hv,parts%hsml(i),selfdens,hv)
+        parts%rho(i) = selfdens*parts%mass(i)
+      enddo
+
+!     Calculate SPH sum for rho:
+      do k=1,parts%niac
+        i = parts%pair_i(k)
+        j = parts%pair_j(k)
+        parts%rho(i) = parts%rho(i) + parts%mass(j)*parts%w(k)
+        parts%rho(j) = parts%rho(j) + parts%mass(i)*parts%w(k)
+      enddo
+
+!     Thirdly, calculate the normalized rho, rho=sum(rho)/sum(w)
+!      if (nor_density) then 
+        do i=1, ntotal
+          parts%rho(i)=parts%rho(i)/wi(i)
+        enddo
+!      endif 
+ 
+      end subroutine
+
+
+! Subroutine to calculate the density with SPH continuiity approach.
+!----------------------------------------------------------------------      
+      subroutine con_density(parts)
+!----------------------------------------------------------------------
+      implicit none
+  
+      class(particles) parts      
+
+      integer ntotal,i,j,k,d,it
+      real  div_v_local(parts%maxn,8)
+!      real, allocatable, dimension(:,:) :: div_v_local
+      double precision vcc, dvx(3) 
+ !     allocate(div_v_local(parts%maxn,8))
+      ntotal = parts%ntotal + parts%nvirt
+
+      do i = 1, ntotal
+        parts%drho(i) = 0.
+      enddo
+     !$omp parallel 
+     !$omp do private(i,it,j,d,k,vcc,dvx)
+     do it = 1,parts%nthreads
+         do i =1,ntotal
+            div_v_local(i,it) = 0.
+         enddo
+      do k=parts%niac_start(it),parts%niac_end(it)      
+        i = parts%pair_i(k)
+        j = parts%pair_j(k)
+        do d=1, parts%dim
+          dvx(d) = parts%vx(d,i) - parts%vx(d,j) 
+        enddo        
+        vcc = dvx(1)* parts%dwdx(1,k)        
+        do d=2, parts%dim
+          vcc = vcc + dvx(d)*parts%dwdx(d,k)
+        enddo    
+        div_v_local(i,it) = div_v_local(i,it) + parts%mass(j)*vcc
+        div_v_local(j,it) = div_v_local(j,it) + parts%mass(i)*vcc       
+      enddo    
+     enddo
+     !$omp end do
+     !$omp barrier
+     !$omp do private(i,it)
+     do i = 1,ntotal
+         do it = 1,parts%nthreads
+             parts%drho(i) = parts%drho(i) + div_v_local(i,it)
+         enddo
+     enddo
+     !$omp end do
+     !$omp end parallel
+ !    deallocate(div_v_local)
+      end subroutine
+
+! Subroutine to calculate the artificial viscosity (Monaghan, 1992) 
+!----------------------------------------------------------------------      
+      subroutine art_visc(parts)
+!----------------------------------------------------------------------
+      implicit none
+
+      class(particles) parts
+
+      type(numerical), pointer :: numeric
+      real(dp) dx, dvx(3), alpha, beta, etq, piv, muv, vr, rr, h, mc, mrho, mhsml
+      integer i,j,k,d,dim,ntotal,niac
+
+      ntotal   =  parts%ntotal + parts%nvirt
+      niac     =  parts%niac; dim = parts%dim
+            
+      numeric  => parts%numeric      
+      alpha = numeric%alpha; beta = numeric%beta; etq = numeric%etq
+         
+!     Calculate SPH sum for artificial viscosity
+      
+      do k=1,niac
+        i = parts%pair_i(k)
+        j = parts%pair_j(k)
+        mhsml= (parts%hsml(i)+parts%hsml(j))/2.
+        vr = 0.e0
+        rr = 0.e0
+        do d=1,dim
+          dvx(d) = parts%vx(d,i) - parts%vx(d,j)
+          dx     = parts%x(d,i)  - parts%x(d,j)
+          vr     = vr + dvx(d)*dx
+          rr     = rr + dx*dx
+        enddo
+
+!     Artificial viscous force only if v_ij * r_ij < 0
+
+        if (vr.lt.0.e0) then
+
+!     Calculate muv_ij = hsml v_ij * r_ij / ( r_ij^2 + hsml^2 etq^2 )
+            
+          muv = mhsml*vr/(rr + mhsml*mhsml*etq*etq)
+          
+!     Calculate PIv_ij = (-alpha muv_ij c_ij + beta muv_ij^2) / rho_ij
+
+          mc   = 0.5e0*(parts%c(i) + parts%c(j))
+          mrho = 0.5e0*(parts%rho(i) + parts%rho(j))
+          piv  = (beta*muv - alpha*mc)*muv/mrho              
+
+!     Calculate SPH sum for artificial viscous force
+
+          do d=1,dim
+            h = -piv*parts%dwdx(d,k)
+            parts%dvx(d,i) = parts%dvx(d,i) + parts%mass(j)*h
+            parts%dvx(d,j) = parts%dvx(d,j) - parts%mass(i)*h
+!            dedt(i) = dedt(i) - mass(j)*dvx(d)*h
+!            dedt(j) = dedt(j) - mass(i)*dvx(d)*h
+          enddo
+        endif
+      enddo
+
+!     Change of specific internal energy:
+
+      return
+      end subroutine
+
+!-------------------------------------------------------------------
+      subroutine delta_sph(parts,f,df)
+!-------------------------------------------------------------------
+      implicit none
+
+      class(particles) parts
+      real(dp), dimension(:) :: f,df
+      real local(parts%maxn,4)
+      real(dp) dx(3),delta, muv, rr, h
+      integer i,j,k,d,ntotal,niac,dim,it
+
+!      write(*,*) 'In art_density...'
+
+      ntotal   =  parts%ntotal + parts%nvirt
+      niac     =  parts%niac; dim = parts%dim            
+      delta    = parts%numeric%delta
+!     !$omp parallel 
+!     !$omp do private(i,it,j,d,k,rr,muv,dx,h)    
+!     do it = 1,parts%nthreads
+!         do i =1,ntotal
+!             write(*,*) "dsa",ntotal
+!             local(i,it) = 0.
+!         enddo
+!      do k=parts%niac_start(it),parts%niac_end(it)
+!          write(*,*)parts%niac_start(it),parts%niac_end(it)
+       do k = 1,parts%niac
+         i = parts%pair_i(k)
+         j = parts%pair_j(k)
+         rr = 0.e0
+         do d=1,dim
+            dx(d)  =  parts%x(d,i) -  parts%x(d,j)
+            rr     = rr + dx(d)*dx(d)
+         enddo
+            
+         muv = 2.0*(f(i)-f(j))/rr
+
+         h = 0.d0
+         do d=1,dim
+            !h = h + (dx(d)*muv - (drhodx(d,i)+drhodx(d,j)))*dwdx(d,k)
+            h = h + dx(d)*muv*parts%dwdx(d,k)
+         enddo
+ !        write(*,*) df(100)"asd"
+!         stop         
+          df(i) = df(i) + delta*parts%hsml(i)*parts%c(i)*parts%mass(j)*h/parts%rho(j)
+          df(j) = df(j) - delta*parts%hsml(j)*parts%c(j)*parts%mass(i)*h/parts%rho(i)
+  !       local(i,it) = local(i,it) + delta*parts%hsml(i)*parts%c(i)*parts%mass(j)*h/parts%rho(j)
+ !        local(j,it) = local(j,it) - delta*parts%hsml(j)*parts%c(j)*parts%mass(i)*h/parts%rho(i)
+ !     enddo
+ !    enddo
+ !    !$omp enddo
+ !    !$omp barrier
+ !    !$omp do private(it,i)
+  !   do i = 1,ntotal
+ !        do it = 1,parts%nthreads
+ !            df(i) = df(i) + local(i,it)
+ !            df(j) = df(j) + local(j,it)
+ !        enddo
+     enddo
+ !    !$omp end do
+!     !$omp end parallel
+      return
+      end subroutine
+
+!     Subroutine to calculate the average velocity to correct velocity
+!     for preventing.penetration (monaghan, 1992)      
+!----------------------------------------------------------------------      
+      subroutine av_vel(parts)
+!----------------------------------------------------------------------   
+      implicit none
+
+      class(particles),target :: parts
+      real(dp) vcc, dvx(3), epsilon, mrho
+      integer i,j,k,d,ntotal,niac    
+
+      ntotal = parts%ntotal
+      niac   = parts%niac
+      epsilon = parts%numeric%epsilon
+      
+      parts%av = 0.d0
+     
+      do k=1,niac       
+         i = parts%pair_i(k)
+         j = parts%pair_j(k)       
+         mrho = (parts%rho(i)+parts%rho(j))/2.0
+         do d=1,parts%dim
+            dvx(d) = parts%vx(d,i) - parts%vx(d,j)            
+            parts%av(d, i) = parts%av(d,i) - parts%mass(j)*dvx(d)/mrho*parts%w(k)
+            parts%av(d, j) = parts%av(d,j) + parts%mass(i)*dvx(d)/mrho*parts%w(k)       
+         enddo                    
+      enddo  
+        
+      do i = 1, ntotal
+         do d = 1, parts%dim
+            parts%av(d,i) = epsilon * parts%av(d,i)
+         enddo 
+      enddo             
+
+      return
+      end subroutine
 
 !---------------------------------------------------------------------
 !   function find_particle_nearest2_point(parts,x,y ) result(index)
@@ -1120,3 +2459,4 @@ c%parts => a%parts
 end function
 
 end module
+

@@ -11,7 +11,7 @@ integer :: dim = 2
 
 !     maxn    : Maximum number of particles
 !     max_interation : Maximum number of interaction pairs
-integer :: maxn = 12000, max_interaction = 100 * 12000
+integer :: maxn = 2000, max_interaction = 10 * 2000
 
 !     Parameters for the computational geometry,  
 !     x_maxgeom : Upper limit of allowed x-regime 
