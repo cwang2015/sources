@@ -523,6 +523,7 @@ integer :: save_step_from = 0, save_step_to = 100
        procedure :: pressure_soil
        procedure :: tension_instability_water 
        procedure :: sum_density
+       procedure :: sum_density_omp
        procedure :: con_density
        procedure :: con_density_omp
        procedure :: newtonian_fluid
@@ -2226,6 +2227,7 @@ return
 end subroutine
 
 !Subroutine to calculate the density with SPH summation algorithm.
+
 !----------------------------------------------------------------------
       subroutine sum_density(parts) 
 !----------------------------------------------------------------------
@@ -2283,6 +2285,105 @@ end subroutine
 !      endif 
  
       end subroutine
+
+!----------------------------------------------------------------------
+      subroutine sum_density_omp(parts) 
+!----------------------------------------------------------------------
+      implicit none
+
+      class(particles) parts
+      integer ntotal, i, j, k, d,it 
+      real(dp) selfdens, hv(3), r, wi(parts%maxn)     
+      real local(parts%maxn,4)
+      ntotal = parts%ntotal + parts%nvirt
+
+!     wi(maxn)---integration of the kernel itself
+        
+      hv = 0.d0
+
+!     Self density of each particle: Wii (Kernel for distance 0)
+!     and take contribution of particle itself:
+
+      r=0.d0
+      
+!     Firstly calculate the integration of the kernel over the space
+     !$omp parallel
+     !$omp do
+      do i=1,ntotal
+        call parts%kernel(r,hv,parts%hsml(i),selfdens,hv)
+        wi(i)=selfdens*parts%mass(i)/parts%rho(i)
+      enddo
+      !$omp end do
+
+     !$omp do private(i,it,j,d,k)    
+     do it = 1,parts%nthreads
+         do i =1,ntotal
+             local(i,it) = 0.
+         enddo
+      do k=parts%niac_start(it),parts%niac_end(it)
+        i = parts%pair_i(k)
+        j = parts%pair_j(k)
+        local(i,it) = local(i,it) + parts%mass(j)/parts%rho(j)*parts%w(k)
+        local(j,it) = local(j,it) + parts%mass(i)/parts%rho(i)*parts%w(k)
+!        wi(i) = wi(i) + parts%mass(j)/parts%rho(j)*parts%w(k)
+!        wi(j) = wi(j) + parts%mass(i)/parts%rho(i)*parts%w(k)
+      enddo
+     enddo
+     !$omp enddo
+     !$omp barrier
+     !$omp do private(it)
+     do i = 1,ntotal
+         do it = 1,parts%nthreads
+             wi(i) = wi(i) + local(i,it)
+         enddo
+     enddo
+     !$omp end do
+
+
+!     Secondly calculate the rho integration over the space
+     !$omp do
+      do i=1,ntotal
+        call parts%kernel(r,hv,parts%hsml(i),selfdens,hv)
+        parts%rho(i) = selfdens*parts%mass(i)
+      enddo
+     !$omp end do
+!     Calculate SPH sum for rho:
+
+     !$omp do private(i,it,j,d,k)   
+     do it = 1,parts%nthreads
+         do i =1,ntotal
+             local(i,it) = 0.
+         enddo
+      do k=parts%niac_start(it),parts%niac_end(it)
+        i = parts%pair_i(k)
+        j = parts%pair_j(k)
+        local(i,it) = local(i,it) + parts%mass(j)*parts%w(k)
+        local(j,it) = local(j,it) + parts%mass(i)*parts%w(k)
+!        parts%rho(i) = parts%rho(i) + parts%mass(j)*parts%w(k)
+!        parts%rho(j) = parts%rho(j) + parts%mass(i)*parts%w(k)
+      enddo
+     enddo
+     !$omp enddo
+     !$omp barrier
+     !$omp do private(it)
+     do i = 1,ntotal
+         do it = 1,parts%nthreads
+             parts%rho(i) = parts%rho(i) + local(i,it)
+         enddo
+     enddo
+     !$omp end do
+
+!     Thirdly, calculate the normalized rho, rho=sum(rho)/sum(w)
+!      if (nor_density) then 
+     !$omp do
+        do i=1, ntotal
+          parts%rho(i)=parts%rho(i)/wi(i)
+        enddo
+!      endif 
+     !$omp end do
+     !$omp end parallel
+     
+end subroutine
 
 
 ! Subroutine to calculate the density with SPH continuiity approach.
