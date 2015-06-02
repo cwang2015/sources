@@ -50,6 +50,7 @@ if(trim(parts%imaterial)=='soil')  parts%material => SiO2
 ! Numerical parameters
 parts%numeric => numeric
 
+call parts%get_num_threads
 
 !--------------- Soil particles --------------------------------
 
@@ -81,6 +82,8 @@ soil%wxy => txy
 
 soil%material => SiO2
 soil%numeric => numeric
+
+call soil%get_num_threads
 
 return
 end subroutine
@@ -126,7 +129,7 @@ allocate(parts%rho(maxn));     parts%rho = 0.d0
 allocate(parts%p(maxn));       parts%p   = 0.d0
 allocate(parts%u(maxn));       parts%u   = 0.d0
 allocate(parts%c(maxn));       parts%c   = 0.d0
-allocate(parts%eta(maxn));     parts%eta = 0.d0 
+!allocate(parts%eta(maxn));     parts%eta = 0.d0 
 
 ! Old value
 allocate(parts%v_min(dim,maxn));   parts%v_min   = 0.d0

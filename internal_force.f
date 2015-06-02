@@ -1,3 +1,5 @@
+
+!DEC$IF(.FALSE.)
       subroutine int_force(parts)
 
 c----------------------------------------------------------------------
@@ -164,6 +166,9 @@ c     z-coordinate of acceleration
       return
       end subroutine
 
+!DEC$ENDIF
+
+!DEC$IF(.FALSE.)
 c---------------------------------------------------------------------
       subroutine Jaumann_rate(parts)
 c----------------------------------------------------------------------
@@ -181,7 +186,7 @@ c----------------------------------------------------------------------
       double precision, pointer, dimension(:) :: txx,tyy,tzz,txy,txz,tyz 
       type(material), pointer :: soil
 
-      double precision  dvx(dim), hxx, hyy, hzz, hxy, hxz, hyz 
+      double precision  dvx(dim), hxx, hyy, hzz, hxy, hxz, hyz, G 
       integer i, j, k, d
 
       ntotal = parts%ntotal + parts%nvirt
@@ -193,19 +198,20 @@ c----------------------------------------------------------------------
       dwdx     => parts%dwdx
       vx       => parts%vx
       rho      => parts%rho
-      eta      => parts%eta
+      !eta      => parts%eta
       sxx      => parts%sxx;  txx => parts%txx
       syy      => parts%syy;  tyy => parts%tyy
       sxy      => parts%sxy;  txy => parts%txy
       wxy      => parts%wxy
       soil     => parts%material
+      G = soil%e/(2.0*(1+soil%niu))
 
 c     Hook's law
 
       do i = 1, ntotal
-         parts%dsxx(i) = parts%dsxx(i)+eta(i)*txx(i)   ! No accumulation origionaly
-         parts%dsxy(i) = parts%dsxy(i)+eta(i)*txy(i)
-         parts%dsyy(i) = parts%dsyy(i)+eta(i)*tyy(i)
+         parts%dsxx(i) = parts%dsxx(i)+G*txx(i)   ! No accumulation origionaly
+         parts%dsxy(i) = parts%dsxy(i)+G*txy(i)
+         parts%dsyy(i) = parts%dsyy(i)+G*tyy(i)
       enddo
 
          if(soil_pressure==2)then
@@ -260,6 +266,9 @@ c   Jaumann rate
       return
       end subroutine
 
+!DEC$ENDIF
+
+!DEC$IF(.FALSE.)
 !------------------------------------------------------------
       subroutine mohr_coulomb_failure_criterion(soil)
 !------------------------------------------------------------
@@ -318,6 +327,9 @@ c   Jaumann rate
       return
       end subroutine
 
+!DEC$ENDIF
+
+!DEC$IF(.FALSE.)
 !------------------------------------------------------------
       subroutine drucker_prager_failure_criterion(soil)
 !------------------------------------------------------------
@@ -388,6 +400,8 @@ c   Jaumann rate
       return
       end subroutine
 
+!DEC$ENDIF
+!DEC$IF(.FALSE.)
 !------------------------------------------------------------
       subroutine plastic_or_not(soil)
 !------------------------------------------------------------
@@ -403,7 +417,7 @@ c   Jaumann rate
       integer i, k, ntotal
         
       !if(soil%itimestep==82)write(*,*) 'in drucker...'
- 
+
       ntotal = soil%ntotal+soil%nvirt
       sxx => soil%sxx
       syy => soil%syy
@@ -457,6 +471,9 @@ c   Jaumann rate
 
       return
       end subroutine
+
+!DEC$ENDIF
+!DEC$IF(.FALSE.)
 c ---------------------------------------------------------------------
       subroutine shear_strain_rate(parts)
 c----------------------------------------------------------------------
@@ -559,7 +576,8 @@ c     Calculate SPH sum for shear tensor Tab = va,b + vb,a - 2/3 delta_ab vc,c
       return
       end subroutine
 
-
+!DEC$ENDIF
+!DEC$IF(.FALSE.)
 c ---------------------------------------------------------------------
       subroutine newtonian_fluid(parts)
 c----------------------------------------------------------------------
@@ -579,6 +597,8 @@ c----------------------------------------------------------------------
       return
       end subroutine
 
+!DEC$ENDIF
+!DEC$IF(.FALSE.)
 !---------------------------------------------------------------------
       subroutine plastic_flow_rule(parts)
 !---------------------------------------------------------------------
@@ -589,7 +609,7 @@ c----------------------------------------------------------------------
       double precision, pointer, dimension(:) :: dsxx,dsxy,dsyy,vcc
       double precision, pointer, dimension(:) :: sxx, sxy, syy
       type(material), pointer :: property
-      double precision alpha, phi, K, G, J2, sde, dlambda
+      double precision alpha, phi, K, G,e,niu, J2, sde, dlambda
       double precision exx, exy, eyy                ! total strain rate
       double precision :: small_value = 1.d-10
       integer i, ntotal
@@ -606,8 +626,9 @@ c----------------------------------------------------------------------
 
       property => parts%material
       phi = property%phi
-      k   = property%k
+      k   = property%k; e = property%E; niu = property%niu
       alpha = tan(phi)/sqrt(9.+12.*tan(phi)**2.)
+      G = e/(2.0*(1+niu))
       
       do i = 1, ntotal
                             !if(parts%fail(i)==1)then
@@ -620,7 +641,7 @@ c----------------------------------------------------------------------
       J2 = (sxx(i)**2.+2.*sxy(i)**2.+syy(i)**2.+(sxx(i)+syy(i))**2.)/2.
       J2 = J2 + small_value
 
-      G = parts%eta(i)
+      !G = parts%eta(i)
       dlambda = (3.*alpha*K*vcc(i)+G/sqrt(J2)*sde)/(9.*alpha**2.*K+G)
       !if(dlambda<0)write(*,*) 'dlambda = ',dlambda,i,parts%itimestep
       if(dlambda<0)cycle
@@ -644,7 +665,8 @@ c Accumulative deviatoric strain
       return
       end subroutine
 
-!!DEC$IF(.FALSE.)
+!DEC$ENDIF
+!DEC$IF(.FALSE.)
 !---------------------------------------------------------------------
       subroutine plastic_flow_rule2(parts)
 !---------------------------------------------------------------------
@@ -655,7 +677,7 @@ c Accumulative deviatoric strain
       double precision, pointer, dimension(:) :: dsxx2,dsxy2,dsyy2,vcc
       double precision, pointer, dimension(:) :: sxx, sxy, syy
       type(material), pointer :: property
-      double precision alpha, phi, K, G, J2, sde, dlambda
+      double precision alpha, phi, K, G,e,niu, J2, sde, dlambda
       double precision exx, exy, eyy                ! total strain rate
       double precision :: small_value = 1.d-10
       integer i, ntotal
@@ -672,8 +694,9 @@ c Accumulative deviatoric strain
 
       property => parts%material
       phi = property%phi
-      k   = property%k
+      k   = property%k; e = property%E; niu = property%niu
       alpha = tan(phi)/sqrt(9.+12.*tan(phi)**2.)
+      G = e/(2.0*(1+niu))
       
       do i = 1, ntotal
                             !if(parts%fail(i)==1)then
@@ -686,7 +709,7 @@ c Accumulative deviatoric strain
       J2 = (sxx(i)**2.+2.*sxy(i)**2.+syy(i)**2.+(sxx(i)+syy(i))**2.)/2.
       J2 = J2 + small_value
 
-      G = parts%eta(i)
+      !G = parts%eta(i)
       dlambda = (3.*alpha*K*vcc(i)+G/sqrt(J2)*sde)/(9.*alpha**2.*K+G)
 
       !dsxx(i) = dsxx(i)-dlambda*(3.*alpha*K+G/sqrt(J2)*sxx(i))
@@ -709,8 +732,9 @@ c Accumulative deviatoric strain
       return
       end subroutine
 
-!!DEC$ENDIF
+!DEC$ENDIF
 
+!DEC$IF(.FALSE.)
 !---------------------------------------------------------------------
       subroutine plastic_flow_rule3(parts)
 !---------------------------------------------------------------------
@@ -721,7 +745,7 @@ c Accumulative deviatoric strain
       double precision, pointer, dimension(:) :: dsxx,dsxy,dsyy,vcc
       double precision, pointer, dimension(:) :: sxx, sxy, syy
       type(material), pointer :: property
-      double precision alpha, phi, K, G, J2, sde, dlambda
+      double precision alpha, phi, K, G,e,niu, J2, sde, dlambda
       double precision exx, exy, eyy                ! total strain rate
       double precision :: small_value = 1.d-10
       integer i, ntotal
@@ -738,8 +762,9 @@ c Accumulative deviatoric strain
 
       property => parts%material
       phi = property%phi
-      k   = property%k
+      k   = property%k; e = property%E; niu = property%niu
       alpha = tan(phi)/sqrt(9.+12.*tan(phi)**2.)
+      G = e/(2.0*(1+niu))
       
       do i = 1, ntotal
                             if(parts%fail(i)==1)then
@@ -752,7 +777,7 @@ c Accumulative deviatoric strain
       J2 = (sxx(i)**2.+2.*sxy(i)**2.+syy(i)**2.+(sxx(i)+syy(i))**2.)/2.
       J2 = J2 + small_value
 
-      G = parts%eta(i)
+      !G = parts%eta(i)
       dlambda = (3.*alpha*K*vcc(i)+G/sqrt(J2)*sde)/(9.*alpha**2.*K+G)
       !if(dlambda<0)write(*,*) 'dlambda = ',dlambda,i,parts%itimestep
       if(dlambda<0)cycle
@@ -777,7 +802,9 @@ c Accumulative deviatoric strain
       end subroutine
 
 
+!DEC$ENDIF
 
+!DEC$IF(.FALSE.)
 !-----------------------------------------------------------------------
       subroutine velocity_divergence(parts)
 !-----------------------------------------------------------------------
@@ -824,6 +851,7 @@ c Accumulative deviatoric strain
       return
       end subroutine
 
+!DEC$ENDIF
 c ---------------------------------------------------------------------
       subroutine damping_stress(parts)
 c----------------------------------------------------------------------
@@ -1116,38 +1144,5 @@ c   Subroutine to calculate the partial derivatives of function
       return
       end function
 
-      subroutine test
-      use m_particles
-      implicit none 
-      type(array) diff
 
-      type(array) dvx,p,txx,txy
-!      dvx = -diff(p,'x')+diff(txx,'x')+diff(txy,'y')*(-1.d0)
-
-      allocate(dvx%r(3),txx%r(3),txy%r(3))
-      dvx%ndim1 = 3; txx%ndim1=3; txy%ndim1 =3
-      dvx%r = 1.0; txx%r = 2.0; txy%r = 3.0
-      dvx = txx + txy
-      write(*,*) dvx%r
-
-      dvx = txx - txy
-      write(*,*) dvx%r
-
-      dvx = - txy
-      write(*,*)  dvx%r
-
-      dvx = txy*3.d0
-      write(*,*) dvx%r
-
-      !dvx = -dvx*3.d0
-      !write(*,*) dvx%r
- 
-      dvx = txy*txy
-      write(*,*) 'txy*txy', dvx%r
-
-      txy%r=txy%r/dvx%r
-      write(*,*) txy%r
-
-      return
-      end subroutine
 

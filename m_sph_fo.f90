@@ -121,7 +121,6 @@ do k=1,niac
    df3(i) = df3(i) + mass(j)*fwx
    df3(j) = df3(j) - mass(i)*fwx
 enddo
-
 where (rho>0.d0) df3 = df3*rho
 
 end function

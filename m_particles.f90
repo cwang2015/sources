@@ -393,7 +393,7 @@ integer :: save_step_from = 0, save_step_to = 100
 ! Delta-SPH
 !real(dp) :: delta = 0.1d0   
 
-   class(parameters), pointer :: params => null()
+!   class(parameters), pointer :: params => null()
 
    character(len=32) :: imaterial
    class(*), pointer :: material => null()
@@ -430,7 +430,7 @@ integer :: save_step_from = 0, save_step_to = 100
    real(dp), pointer, dimension(:)   :: rho  => null()
    real(dp), pointer, dimension(:,:) :: vx   => null()   
    real(dp), pointer, dimension(:)   :: p    => null()
-   real(dp), pointer, dimension(:)   :: eta  => null()   
+   !real(dp), pointer, dimension(:)   :: eta  => null()   
    real(dp), pointer, dimension(:)   :: c    => null()   
    real(dp), pointer, dimension(:)   :: u    => null()
 
@@ -494,7 +494,10 @@ integer :: save_step_from = 0, save_step_to = 100
 
    integer itimestep
 
-   integer niac_start(4), niac_end(4), nthreads
+   integer :: nthreads = 1
+   integer, pointer, dimension(:) :: niac_start, niac_end
+
+!   procedure(df),pointer :: diff => null() 
 
    contains
 
@@ -514,22 +517,42 @@ integer :: save_step_from = 0, save_step_to = 100
        procedure :: link_list
        procedure :: find_pairs
        procedure :: kernel
+       procedure :: initial_density
+       procedure :: pressure
+       procedure :: pressure_water
+       procedure :: pressure_soil
+       procedure :: tension_instability_water 
        procedure :: sum_density
        procedure :: con_density
+       procedure :: newtonian_fluid
        procedure :: art_visc
        procedure :: delta_sph
        procedure :: av_vel
        procedure :: repulsive_force
        procedure :: df
+       procedure :: df_omp
        procedure :: df2
+       procedure :: df2_omp
        procedure :: df3
+       procedure :: df3_omp
+       procedure :: velocity_divergence
 !       procedure :: time_integration_for_water
-
 !       procedure :: find_particle_nearest2_point
 !       procedure :: grad_scalar
 !       procedure :: grad_tensor
 !       generic :: grad => grad_scalar, grad_tensor
- 
+      procedure :: shear_strain_rate 
+      procedure :: Jaumann_rate
+      procedure :: mohr_coulomb_failure_criterion
+      procedure :: drucker_prager_failure_criterion
+      procedure :: plastic_or_not
+      procedure :: plastic_flow_rule
+      procedure :: plastic_flow_rule2
+      procedure :: plastic_flow_rule3
+
+      procedure :: get_num_threads
+      procedure :: get_niac_start_end
+
 end type 
 
 interface write_field
@@ -551,8 +574,6 @@ interface operator(*)
    module procedure :: array_mul_real
    module procedure :: array_mul_double_real
 end interface
-
-!private :: df, df2, df3
 
 !=======
 contains
@@ -1309,8 +1330,8 @@ end function
       integer dnxgcell(3),dpxgcell(3)
       real(dp) hsml,dr,r,dx(3),tdwdx(3)
 
-      INTEGER n_per_threads, niac_per_threads, it, n_start(8), n_end(8)
-      Integer  last
+      INTEGER nthreads,n_per_threads, niac_per_threads, it, n_start(8), n_end(8)
+      Integer niac_start(8),niac_end(8), last
       INTEGER, EXTERNAL :: OMP_GET_THREAD_NUM, OMP_GET_NUM_THREADS
       real(dp) t1,t2,t3
 
@@ -1337,23 +1358,23 @@ end function
 
 !     Determine interaction parameters:
 !$omp parallel
-      parts%nthreads = omp_get_num_threads()
+      nthreads = omp_get_num_threads()
 !$omp end parallel
-      n_per_threads = ntotal/parts%nthreads
-      niac_per_threads = parts%max_interaction/parts%nthreads
-      do it = 1, parts%nthreads
+      n_per_threads = ntotal/nthreads
+      niac_per_threads = parts%max_interaction/nthreads
+      do it = 1, nthreads
          n_start(it)=(it-1)*n_per_threads+1
          n_end(it) = it*n_per_threads
-         parts%niac_start(it)=(it-1)*niac_per_threads
-         parts%niac_end(it)=parts%niac_start(it)
+         niac_start(it)=(it-1)*niac_per_threads
+         niac_end(it)=niac_start(it)
       enddo   
 
       parts%pair_i = 0; parts%pair_j=0
 !      t1 = rtc()
 !$omp parallel 
 !$omp do private(niac,i,d,minxcell,maxxcell,dnxgcell,dpxgcell,xcell,ycell,zcell,j,dx,dr,r,tdwdx)
-do it = 1, parts%nthreads
-       niac = parts%niac_start(it)
+do it = 1, nthreads
+       niac = niac_start(it)
        do i = n_start(it),n_end(it)
 
 !      niac = 0
@@ -1419,16 +1440,16 @@ do it = 1, parts%nthreads
         enddo !zcell
       enddo !i
 
-      parts%niac_start(it) = parts%niac_start(it)+1
-      parts%niac_end(it) = niac
+      niac_start(it) = niac_start(it)+1
+      niac_end(it) = niac
       enddo !it      
 !$omp end do
 !$omp end parallel
 !      t2 = rtc()
 !      write(*,*) t2-t1
       parts%niac = 0
-      do it = 1, parts%nthreads
-         parts%niac = parts%niac + parts%niac_end(it)-parts%niac_start(it)+1
+      do it = 1, nthreads
+         parts%niac = parts%niac + niac_end(it)-niac_start(it)+1
       enddo
 
       last = parts%max_interaction
@@ -1451,14 +1472,7 @@ do it = 1, parts%nthreads
             last = last - 1
          enddo
          i = i + 1
-      enddo 
- !     write(*,*) parts%niac
-      do it = 1,parts%nthreads
-          parts%niac_start(it) = parts%niac*(it-1)/4+1
-          parts%niac_end(it) = parts%niac*it/4
- !         write(*,*)parts%niac_start(it),parts%niac_end(it)
-      enddo
-
+      enddo   
 !      t3 = rtc()
 !      write(*,*) t1,t2,t3
 !      write(*,*) t2-t1,t3-t2
@@ -1470,202 +1484,7 @@ do it = 1, parts%nthreads
 
       end subroutine
 
-      
-
-!----------------------------------------------------------------------      
-      subroutine link_list2(parts)
-!----------------------------------------------------------------------
-!   Subroutine to calculate the smoothing funciton for each particle and
-!   the interaction parameters used by the SPH algorithm. Interaction 
-!   pairs are determined by using a sorting grid linked list  
-!----------------------------------------------------------------------
-      use ifport
-      implicit none
-
-      class(particles) parts
-      integer i, j, d, scale_k, ntotal, niac,temp1,temp2,temp3,temp4    
-      integer gcell(3),xcell,ycell,zcell,minxcell(3),maxxcell(3)
-      integer dnxgcell(3),dpxgcell(3)
-      real(dp) hsml,dr,r,dx(3),tdwdx(3)
-
-      INTEGER nthreads,n_per_threads, niac_per_threads, it, n_start(8), n_end(8)
-      Integer niac_start(8),niac_end(8), last
-      INTEGER, EXTERNAL :: OMP_GET_THREAD_NUM, OMP_GET_NUM_THREADS
-      real(dp) t1,t2,t3
-
-      ntotal  = parts%ntotal + parts%nvirt
-      scale_k = parts%get_scale_k()
-      hsml = parts%hsml(1)             !!! hsml is same for all particles!
-
-      do i=1,ntotal
-         parts%countiac(i) = 0
-      enddo
-
-      call parts%init_grid
-      
-!     Position particles on grid and create linked list:
-      
-      do i=1,ntotal
-        call parts%grid_geom(i,parts%x(:,i),gcell)
-        do d=1,parts%dim
-          parts%xgcell(d,i) = gcell(d)
-        enddo
-        parts%celldata(i) = parts%grid(gcell(1),gcell(2),gcell(3))
-        parts%grid(gcell(1),gcell(2),gcell(3)) = i
-      enddo
-
-!     Determine interaction parameters:
-!$omp parallel private(dr,r,niac,dx,tdwdx,minxcell,maxxcell,it,i,d,j,xcell,ycell)
-        nthreads = OMP_GET_NUM_THREADS()
-        n_per_threads =ntotal/nthreads
-        niac_per_threads = parts%max_interaction/nthreads
-        it = omp_get_thread_num()+1
-          n_start(it) = (it-1)*n_per_threads + 1
-          n_end(it) = it*n_per_threads
-          parts%niac_start(it) = (it-1)*niac_per_threads
-          parts%niac_end(it) = (it-1)*niac_per_threads
-
-!      parts%pair_i = 0; parts%pair_j=0
-!      t1 = rtc() 
-!$omp do 
-do it = 1, nthreads
-       niac = parts%niac_start(it)
-       do i = n_start(it),n_end(it)
-
-!      niac = 0
-!      do i=1,ntotal-1
-
-!     Determine range of grid to go through:
-          minxcell(3) = 1
-          maxxcell(3) = 1
-
-        do d=1,parts%dim
-          minxcell(d) = max(parts%xgcell(d,i) - parts%ghsmlx(d),1)
-          maxxcell(d) = min(parts%xgcell(d,i) + parts%ghsmlx(d),parts%ngridx(d))
-        enddo
-
-!     Search grid:
-      
-        do zcell=minxcell(3),maxxcell(3)
-          do ycell=minxcell(2),maxxcell(2)
-            do xcell=minxcell(1),maxxcell(1)
-              j = parts%grid(xcell,ycell,zcell)
- 1            if (j.gt.i) then
-                dx(1) = parts%x(1,i) - parts%x(1,j)
-                dr    = dx(1)*dx(1)
-                do d=2,parts%dim
-                  dx(d) = parts%x(d,i) - parts%x(d,j)
-                  dr    = dr + dx(d)*dx(d)
-                enddo
-                if (sqrt(dr).lt.scale_k*hsml) then
-                  if (niac.lt.parts%max_interaction) then
-                  !if (niac.lt.niac_per_threads) then
-
-!     Neighboring pair list, and totalinteraction number and
-!     the interaction number for each particle 
-
-                    niac = niac + 1
-                    parts%pair_i(niac) = i
-                    parts%pair_j(niac) = j
-                    r = sqrt(dr)
-                    !parts%countiac(i) = parts%countiac(i) + 1
-                    !parts%countiac(j) = parts%countiac(j) + 1
-                           
-!--- Kernel and derivations of kernel
-
-                    call parts%kernel(r,dx,hsml,parts%w(niac),tdwdx)  !!!!!!!!
-                    do d = 1, parts%dim
-                       parts%dwdx(d,niac)=tdwdx(d)
-                    enddo                  
-                  else
-                    print *, ' >>> Error <<< : too many interactions', &
-                    it,niac,niac_per_threads
-                    stop
-                  endif
-                endif
-                j = parts%celldata(j)
-                goto 1
-              endif
-            enddo !xcell
-          enddo !ycell
-        enddo !zcell
-      enddo !i
-
-      parts%niac_start(it) = parts%niac_start(it)+1
-      parts%niac_end(it) = niac
-      enddo !it      
-!$omp end do
-!$omp end parallel
-         temp1 = parts%niac_end(1)-parts%niac_start(1) + 1 
-         temp2 = parts%niac_end(2)-parts%niac_start(2) + 1 
-         temp3 = parts%niac_end(3)-parts%niac_start(3) + 1
-         temp4 = parts%niac_end(4)-parts%niac_start(4) + 1
-         do niac = parts%niac_start(2),parts%niac_end(2)
-          parts%pair_i(niac - niac_per_threads + temp1) = parts%pair_i(niac)
-          parts%pair_j(niac - niac_per_threads + temp1) = parts%pair_j(niac)
-          parts%w(niac - niac_per_threads + temp1) = parts%w(niac)
-          do d = 1,parts%dim
-          parts%dwdx(d,niac - niac_per_threads + temp1) = parts%dwdx(d,niac)
-          enddo
-         enddo
-         do niac = parts%niac_start(3),parts%niac_end(3)
-          parts%pair_i(niac - 2*niac_per_threads + temp1+temp2)=parts%pair_i(niac)
-          parts%pair_j(niac - 2*niac_per_threads + temp1+temp2)=parts%pair_j(niac)
-          parts%w(niac - 2*niac_per_threads + temp1 + temp2) = parts%w(niac)
-          do d = 1,parts%dim 
-          parts%dwdx(d,niac - 2*niac_per_threads + temp1+temp2)=parts%dwdx(d,niac)
-          enddo
-         enddo
-         do niac = parts%niac_start(4),parts%niac_end(4)
-          parts%pair_i(niac-3*niac_per_threads+temp1+temp2+temp3)=parts%pair_i(niac)
-          parts%pair_j(niac-3*niac_per_threads+temp1+temp2+temp3)=parts%pair_j(niac)
-          parts%w(niac - 3*niac_per_threads + temp1+temp2+temp3)=parts%w(niac)
-          do d = 1,parts%dim 
-          parts%dwdx(d,niac-3*niac_per_threads+temp1+temp2+temp3)=parts%dwdx(d,niac)
-          enddo
-         enddo
-        parts%niac = temp1 + temp2 +temp3 +temp4
-
-!      t2 = rtc()
-!      write(*,*) t2-t1
- !     parts%niac = 0
-!      do it = 1, nthreads
-!         parts%niac = parts%niac + niac_end(it)-niac_start(it)+1
-!      enddo
-
-!      last = parts%max_interaction
-!      do while(parts%pair_i(last)==0)
-!         last = last - 1
-!      enddo  
-!      i = 1 
- !     do while(i<last)
- !        if(parts%pair_i(i)/=0)then
-!            i = i + 1
-!            cycle
-!         endif        
- !        parts%pair_i(i) = parts%pair_i(last)
-!         parts%pair_j(i) = parts%pair_j(last)
-!         parts%w(i)      = parts%w(last)
- !        parts%dwdx(1,i) = parts%dwdx(1,last)
-!         parts%dwdx(2,i) = parts%dwdx(2,last)
-!         last = last - 1
-!         do while(parts%pair_i(last)==0)
-!            last = last - 1
-!         enddo
-!         i = i + 1
-!      enddo   
-!      t3 = rtc()
-!      write(*,*) t1,t2,t3
-!      write(*,*) t2-t1,t3-t2
-!      pause
-!      if(last/=parts%niac) stop 'adfasdf'
-!      do i = 1, last
-!         if(parts%pair_i(i)==0) stop 'adf'
-!      enddo   
-
-      end subroutine
-      
-!-------------------------------------------
+!--------------------------------------------
      subroutine find_pairs(parts)
 !--------------------------------------------
 implicit none
@@ -1864,17 +1683,45 @@ enddo
 return
 end subroutine
 
-
+! Calculate partial derivatives of a field
 !-------------------------------------------
           function df(parts,f,x)
 !-------------------------------------------
-
 implicit none
 
 real(dp) f(:)
 character(len=1) x
 class(particles) parts
-real(dp), allocatable, dimension(:) :: df
+real(dp), allocatable :: df(:)
+real(dp), pointer, dimension(:) :: dwdx
+real(dp) fwx
+integer i, j, k
+
+allocate(df(size(f))); df = 0.
+
+if(x=='x')dwdx=>parts%dwdx(1,:)
+if(x=='y')dwdx=>parts%dwdx(2,:)
+
+do k=1,parts%niac
+   i = parts%pair_i(k)
+   j = parts%pair_j(k)
+   fwx = (f(i)+f(j))*dwdx(k)
+   df(i) = df(i) + parts%mass(j)/parts%rho(j)*fwx
+   df(j) = df(j) - parts%mass(i)/parts%rho(i)*fwx
+enddo
+
+end function
+
+! Calculate partial derivatives of a field
+!-------------------------------------------
+          function df_omp(parts,f,x)
+!-------------------------------------------
+implicit none
+
+real(dp) f(:)
+character(len=1) x
+class(particles) parts
+real(dp), allocatable, dimension(:) :: df_omp
 real(dp) df_local(parts%maxn,4)
 real(dp), pointer, dimension(:) :: dwdx
 real(dp) fwx
@@ -1886,10 +1733,11 @@ ntotal = parts%ntotal + parts%nvirt
 nthreads = parts%nthreads
 !write(*,*) 'sadf', nthreads
 
-allocate(df(ntotal))
-!if(nthreads>1)then
-!   call parts%get_niac_start_end
-!endif   
+allocate(df_omp(ntotal))
+if(nthreads>1)then
+!   allocate(df_local(ntotal,nthreads))
+   call parts%get_niac_start_end
+endif   
 
 if(x=='x')dwdx=>parts%dwdx(1,:)
 if(x=='y')dwdx=>parts%dwdx(2,:)
@@ -1916,17 +1764,15 @@ enddo !it
 
 !$omp do private(it)
 do i = 1, ntotal
-   df(i) = 0.d0
+   df_omp(i) = 0.d0
    do it = 1, nthreads
-      df(i) = df(i)+df_local(i,it)
+      df_omp(i) = df_omp(i)+df_local(i,it)
    enddo
 enddo   
 !$omp end do
 !$omp end parallel
+
 end function
-
-
-
 
 ! Calculate partial derivatives of a field
 !-------------------------------------------
@@ -1963,6 +1809,72 @@ end function
 
 
 ! Calculate partial derivatives of a field
+
+!-------------------------------------------
+          function df2_omp(parts,f,x)
+!-------------------------------------------
+implicit none
+
+real(dp) f(:)
+character(len=1) x
+class(particles) parts
+real(dp), allocatable :: df2_omp(:)
+real(dp) df_local(parts%maxn,4)
+real(dp), pointer, dimension(:) :: dwdx
+real(dp) fwx
+integer i, j, k,ntotal,nthreads,it
+
+ntotal = parts%ntotal + parts%nvirt
+nthreads = parts%nthreads
+
+allocate(df2_omp(size(f))); df2_omp = 0.
+if(nthreads>1)then
+!   allocate(df_local(ntotal,nthreads))
+   call parts%get_niac_start_end
+endif  
+
+if(x=='x')dwdx=>parts%dwdx(1,:)
+if(x=='y')dwdx=>parts%dwdx(2,:)
+
+!$omp parallel
+!$omp do private(i,j,k,fwx)
+do it = 1, parts%nthreads
+   do i = 1, ntotal
+      df_local(i,it) = 0.d0
+   enddo
+   
+   do k = parts%niac_start(it), parts%niac_end(it)
+   i = parts%pair_i(k)
+   j = parts%pair_j(k)
+   fwx = (f(j)-f(i))*dwdx(k)
+   df_local (i,it) = df_local(i,it) + parts%mass(j)*fwx
+   df_local (j,it) = df_local(j,it) + parts%mass(i)*fwx
+   enddo
+enddo
+!$omp end do
+!$omp barrier
+
+!$omp do private(it)
+do i = 1, ntotal
+   df2_omp(i) = 0.d0
+   do it = 1, nthreads
+      df2_omp(i) = df2_omp(i)+df_local(i,it)
+   enddo
+enddo   
+!$omp end do
+!$omp end parallel
+!   df2(i) = df2(i) + parts%mass(j)*fwx
+!   df2(j) = df2(j) + parts%mass(i)*fwx
+
+
+do i = 1, parts%ntotal + parts%nvirt 
+   df2_omp(i) = df2_omp(i)/parts%rho(i)
+enddo   
+
+end function
+
+
+! Calculate partial derivatives of a field
 !-------------------------------------------
           function df3(parts,f,x)
 !------------------------------------------- 
@@ -1988,12 +1900,278 @@ do k=1,parts%niac
    df3(i) = df3(i) + parts%mass(j)*fwx
    df3(j) = df3(j) - parts%mass(i)*fwx
 enddo
-
 do i = 1, parts%ntotal + parts%nvirt
    df3(i) = df3(i)*parts%rho(i)
 enddo
+end function
+
+!-------------------------------------------
+          function df3_omp(parts,f,x)
+!------------------------------------------- 
+implicit none
+
+real(dp) f(:)
+character(len=1) x
+class(particles) parts
+real(dp), allocatable, dimension(:) :: df3_omp
+real(dp) df3_local(parts%maxn,4)
+real(dp), pointer, dimension(:) :: dwdx
+real(dp) fwx
+integer i,j,k,it,ntotal,nthreads
+
+ntotal = parts%ntotal + parts%nvirt
+nthreads = parts%nthreads
+
+allocate(df3_omp(ntotal))
+
+!if(nthreads>1)then
+!   allocate(df3_local(ntotal,nthreads))
+   call parts%get_niac_start_end
+!endif 
+
+if(x=='x')dwdx=>parts%dwdx(1,:)
+if(x=='y')dwdx=>parts%dwdx(2,:)
+
+!$omp parallel
+!$omp do private(i,j,k,fwx)
+do it = 1, parts%nthreads
+   do i = 1, ntotal
+      df3_local(i,it) = 0.d0
+   enddo
+   
+   do k = parts%niac_start(it), parts%niac_end(it)
+   i = parts%pair_i(k)
+   j = parts%pair_j(k)
+   fwx = ((f(i)/parts%rho(i)**2)+(f(j)/parts%rho(j)**2))*dwdx(k)
+   df3_local (i,it)= df3_local (i,it) + parts%mass(j)*fwx
+   df3_local (j,it)= df3_local (j,it) - parts%mass(i)*fwx
+!   df3_omp(i) = df3_omp(i) + parts%mass(j)*fwx
+!   df3_omp(j) = df3_omp(j) - parts%mass(i)*fwx
+   enddo
+enddo
+!$omp end do
+!$omp barrier
+
+!$omp do private(it)
+do i = 1, ntotal
+   df3_omp(i) = 0.d0
+   do it = 1, nthreads
+      df3_omp(i) = df3_omp(i)+df3_local(i,it)
+   enddo
+enddo   
+!$omp end do
+!$omp end parallel
+
+do i = 1, parts%ntotal + parts%nvirt
+   df3_omp(i) = df3_omp(i)*parts%rho(i)
+enddo
+
 
 end function
+
+
+!-----------------------------------------------------------------------
+      subroutine velocity_divergence(parts)
+!-----------------------------------------------------------------------
+      implicit none
+
+      class(particles) parts      
+      integer, pointer, dimension(:) :: pair_i, pair_j
+      double precision, pointer, dimension(:) :: mass, rho, vcc
+      double precision, pointer, dimension(:,:) :: vx, dwdx
+      real local(parts%maxn,4)
+      integer i,j,k,d, dim, ntotal, niac,it
+      double precision dvx(3), hvcc
+      
+      pair_i => parts%pair_i
+      pair_j => parts%pair_j
+      mass   => parts%mass
+      rho    => parts%rho
+      vcc    => parts%vcc
+      vx     => parts%vx
+      dwdx   => parts%dwdx
+
+      ntotal = parts%ntotal + parts%nvirt
+      niac   = parts%niac; dim = parts%dim 
+
+      do i=1,ntotal
+        vcc(i) = 0.e0         
+      enddo
+    
+     !$omp parallel 
+     !$omp do private(i,it,j,d,k,dvx,hvcc)    
+     do it = 1,parts%nthreads
+         do i =1,ntotal
+             local(i,it) = 0.
+         enddo
+      do k=parts%niac_start(it),parts%niac_end(it)
+        i = pair_i(k)
+        j = pair_j(k)
+        do d=1,dim
+          dvx(d) = vx(d,j) - vx(d,i) 
+        enddo        
+        hvcc = dvx(1)*dwdx(1,k)
+        do d=2,dim
+          hvcc = hvcc + dvx(d)*dwdx(d,k)
+        enddo    
+        local(i,it) = local(i,it) + mass(j)*hvcc/rho(j)
+        local(j,it) = local(j,it) + mass(i)*hvcc/rho(i)
+!         vcc(i) = vcc(i) + mass(j)*hvcc/rho(j)
+!         vcc(j) = vcc(j) + mass(i)*hvcc/rho(i)
+      enddo  
+     enddo
+     !$omp end do
+     !$omp barrier
+     !$omp do private(it,i)
+     do i = 1,ntotal
+         do it = 1,parts%nthreads
+             vcc(i) = vcc(i) + local(i,it)
+         enddo
+     enddo
+     !$omp end do
+     !$omp end parallel
+
+
+   
+      return
+      end subroutine
+
+!---------------------------------------------------------------------
+      subroutine initial_density(parts)
+!---------------------------------------------------------------------
+      implicit none
+
+      class(particles) parts
+
+      type(material), pointer :: water, soil
+      integer ntotal
+      
+      ntotal = parts%ntotal+parts%nvirt
+
+      if(parts%imaterial=='water')then
+
+         water => parts%material
+         parts%rho(1:ntotal) = water%rho0*(parts%p(1:ntotal)/water%b+1) &
+                            **(1/water%gamma)
+
+      elseif(parts%imaterial=='soil')then
+
+         soil => parts%material
+         !parts%rho(1:ntotal) = soil%rho0*(parts%p(1:ntotal)/soil%k+1)
+
+      endif
+ 
+      return
+      end subroutine
+
+!----------------------------------------------------------------------
+                      subroutine pressure(parts)
+!----------------------------------------------------------------------
+      implicit none
+
+      class(particles) parts
+      type(material), pointer :: water, soil
+      integer ntotal, i
+      
+      ntotal = parts%ntotal+parts%nvirt
+
+      if(parts%imaterial=='water')then
+
+         water => parts%material
+         parts%p(1:ntotal) = water%b*((parts%rho(1:ntotal)/(water%rho0  &
+                            *parts%vof(1:ntotal))) &   !!! False density
+                            **water%gamma-1)  
+
+! Tension instability
+!                              if(water_tension_instability==1)then
+!         do i = 1, ntotal
+!            if(parts%p(i)<0)then
+!               parts%p(i) = 0.d0
+!               parts%rho(i) = water%rho0*parts%vof(i)
+!            endif
+!         enddo
+!                              endif
+
+         !parts%c(1:ntotal) = water%c         
+         parts%c(1:ntotal) = water%c*(parts%rho(1:ntotal)/(water%rho0*parts%vof(1:ntotal)))**3.0         
+
+      elseif(parts%imaterial=='soil')then
+
+         soil => parts%material
+         if(parts%soil_pressure==1)          &
+         parts%p(1:ntotal) = soil%k*(parts%rho(1:ntotal)/soil%rho0-1)
+!         parts%p(1:ntotal) = parts%p(1:ntotal)
+!     &                      -soil%k*parts%vcc(1:ntotal)*0.000005   !*dt
+         parts%c(1:ntotal) = soil%c
+
+      endif
+
+      return      
+      end subroutine
+
+!--------------------------------------------------------------
+            subroutine pressure_water(parts)
+!--------------------------------------------------------------
+implicit none
+
+class(particles) parts
+type(material), pointer :: water, soil
+integer ntotal, i
+      
+ntotal = parts%ntotal+parts%nvirt
+
+water => parts%material
+parts%p(1:ntotal) = water%b*((parts%rho(1:ntotal)/(water%rho0  &
+                   *parts%vof(1:ntotal))) &   !!! False density
+                  **water%gamma-1)
+
+parts%c(1:ntotal) = water%c*(parts%rho(1:ntotal)/(water%rho0*parts%vof(1:ntotal)))**3.0         
+
+return
+end subroutine
+
+!--------------------------------------------------------------
+         subroutine tension_instability_water(parts)
+!--------------------------------------------------------------
+implicit none
+
+class(particles) parts
+type(material), pointer :: water, soil
+integer ntotal, i
+      
+ntotal = parts%ntotal+parts%nvirt
+water => parts%material
+
+do i = 1, ntotal
+   if(parts%p(i)<0)then
+      parts%p(i) = 0.d0
+      !parts%rho(i) = water%rho0*parts%vof(i)
+   endif
+enddo
+
+return
+end subroutine
+
+
+!------------------------------------------------------------
+              subroutine pressure_soil(parts)
+!------------------------------------------------------------
+implicit none
+
+class(particles) parts
+type(material), pointer :: water, soil
+integer ntotal, i
+      
+ntotal = parts%ntotal+parts%nvirt
+
+soil => parts%material
+parts%p(1:ntotal) = soil%k*(parts%rho(1:ntotal)/soil%rho0-1)
+! parts%p(1:ntotal) = parts%p(1:ntotal)  &
+!                    -soil%k*parts%vcc(1:ntotal)*0.000005   !*dt
+parts%c(1:ntotal) = soil%c
+
+return      
+end subroutine
 
 !Subroutine to calculate the density with SPH summation algorithm.
 !----------------------------------------------------------------------
@@ -2064,17 +2242,17 @@ end function
       class(particles) parts      
 
       integer ntotal,i,j,k,d,it
-      real  div_v_local(parts%maxn,8)
+      real  div_v_local(parts%maxn,4)
 !      real, allocatable, dimension(:,:) :: div_v_local
       double precision vcc, dvx(3) 
  !     allocate(div_v_local(parts%maxn,8))
       ntotal = parts%ntotal + parts%nvirt
-
+       call parts%get_niac_start_end
       do i = 1, ntotal
         parts%drho(i) = 0.
       enddo
      !$omp parallel 
-     !$omp do private(i,it,j,d,k,vcc,dvx)
+     !$omp do private(i,j,d,k,vcc,dvx)
      do it = 1,parts%nthreads
          do i =1,ntotal
             div_v_local(i,it) = 0.
@@ -2095,7 +2273,7 @@ end function
      enddo
      !$omp end do
      !$omp barrier
-     !$omp do private(i,it)
+     !$omp do private(it)
      do i = 1,ntotal
          do it = 1,parts%nthreads
              parts%drho(i) = parts%drho(i) + div_v_local(i,it)
@@ -2104,6 +2282,26 @@ end function
      !$omp end do
      !$omp end parallel
  !    deallocate(div_v_local)
+      end subroutine
+
+
+!----------------------------------------------------------------------
+      subroutine newtonian_fluid(parts)
+!----------------------------------------------------------------------
+      implicit none
+
+      class(particles) parts
+      type(material), pointer :: liquid
+      integer ntotal
+
+      ntotal = parts%ntotal + parts%nvirt
+      liquid => parts%material
+
+      parts%sxx(1:ntotal) = liquid%viscosity*parts%txx(1:ntotal)
+      parts%syy(1:ntotal) = liquid%viscosity*parts%tyy(1:ntotal)
+      parts%sxy(1:ntotal) = liquid%viscosity*parts%txy(1:ntotal)
+
+      return
       end subroutine
 
 ! Subroutine to calculate the artificial viscosity (Monaghan, 1992) 
@@ -2186,16 +2384,14 @@ end function
       ntotal   =  parts%ntotal + parts%nvirt
       niac     =  parts%niac; dim = parts%dim            
       delta    = parts%numeric%delta
-!     !$omp parallel 
-!     !$omp do private(i,it,j,d,k,rr,muv,dx,h)    
-!     do it = 1,parts%nthreads
-!         do i =1,ntotal
-!             write(*,*) "dsa",ntotal
-!             local(i,it) = 0.
-!         enddo
-!      do k=parts%niac_start(it),parts%niac_end(it)
-!          write(*,*)parts%niac_start(it),parts%niac_end(it)
-       do k = 1,parts%niac
+          
+     !$omp parallel 
+     !$omp do private(i,it,j,d,k,rr,muv,dx,h)    
+     do it = 1,parts%nthreads
+         do i =1,ntotal
+             local(i,it) = 0.
+         enddo
+      do k=parts%niac_start(it),parts%niac_end(it)
          i = parts%pair_i(k)
          j = parts%pair_j(k)
          rr = 0.e0
@@ -2211,28 +2407,24 @@ end function
             !h = h + (dx(d)*muv - (drhodx(d,i)+drhodx(d,j)))*dwdx(d,k)
             h = h + dx(d)*muv*parts%dwdx(d,k)
          enddo
- !        write(*,*) df(100)"asd"
-!         stop         
-          df(i) = df(i) + delta*parts%hsml(i)*parts%c(i)*parts%mass(j)*h/parts%rho(j)
-          df(j) = df(j) - delta*parts%hsml(j)*parts%c(j)*parts%mass(i)*h/parts%rho(i)
-  !       local(i,it) = local(i,it) + delta*parts%hsml(i)*parts%c(i)*parts%mass(j)*h/parts%rho(j)
- !        local(j,it) = local(j,it) - delta*parts%hsml(j)*parts%c(j)*parts%mass(i)*h/parts%rho(i)
- !     enddo
- !    enddo
- !    !$omp enddo
- !    !$omp barrier
- !    !$omp do private(it,i)
-  !   do i = 1,ntotal
- !        do it = 1,parts%nthreads
- !            df(i) = df(i) + local(i,it)
- !            df(j) = df(j) + local(j,it)
- !        enddo
+!          df(i) = df(i) + delta*parts%hsml(i)*parts%c(i)*parts%mass(j)*h/parts%rho(j)
+!          df(j) = df(j) - delta*parts%hsml(j)*parts%c(j)*parts%mass(i)*h/parts%rho(i)
+         local(i,it) = local(i,it) + delta*parts%hsml(i)*parts%c(i)*parts%mass(j)*h/parts%rho(j)
+         local(j,it) = local(j,it) - delta*parts%hsml(j)*parts%c(j)*parts%mass(i)*h/parts%rho(i)
+      enddo
      enddo
- !    !$omp end do
-!     !$omp end parallel
+     !$omp enddo
+     !$omp barrier
+     !$omp do private(it,i)
+     do i = 1,ntotal
+         do it = 1,parts%nthreads
+             df(i) = df(i) + local(i,it)
+         enddo
+     enddo
+     !$omp end do
+     !$omp end parallel
       return
       end subroutine
-
 !     Subroutine to calculate the average velocity to correct velocity
 !     for preventing.penetration (monaghan, 1992)      
 !----------------------------------------------------------------------      
@@ -2242,7 +2434,8 @@ end function
 
       class(particles),target :: parts
       real(dp) vcc, dvx(3), epsilon, mrho
-      integer i,j,k,d,ntotal,niac    
+      integer i,j,k,d,ntotal,niac,it
+      real local(2,parts%maxn,4)
 
       ntotal = parts%ntotal
       niac   = parts%niac
@@ -2250,17 +2443,40 @@ end function
       
       parts%av = 0.d0
      
-      do k=1,niac       
+     !$omp parallel 
+     !$omp do private(i,it,j,d,k,mrho,dvx)    
+     do it = 1,parts%nthreads
+         do d = 1,parts%dim
+          do i =1,ntotal
+             local(d,i,it) = 0.
+          enddo
+         enddo
+      do k=parts%niac_start(it),parts%niac_end(it)
+    
          i = parts%pair_i(k)
          j = parts%pair_j(k)       
          mrho = (parts%rho(i)+parts%rho(j))/2.0
          do d=1,parts%dim
             dvx(d) = parts%vx(d,i) - parts%vx(d,j)            
-            parts%av(d, i) = parts%av(d,i) - parts%mass(j)*dvx(d)/mrho*parts%w(k)
-            parts%av(d, j) = parts%av(d,j) + parts%mass(i)*dvx(d)/mrho*parts%w(k)       
+            local(d,i,it) = local(d,i,it) - parts%mass(j)*dvx(d)/mrho*parts%w(k)
+            local(d,j,it) = local(d,j,it) + parts%mass(i)*dvx(d)/mrho*parts%w(k)
+!            parts%av(d, i) = parts%av(d,i) - parts%mass(j)*dvx(d)/mrho*parts%w(k)
+!            parts%av(d, j) = parts%av(d,j) + parts%mass(i)*dvx(d)/mrho*parts%w(k)       
          enddo                    
       enddo  
-        
+     enddo
+     !$omp enddo
+     !$omp barrier
+     !$omp do private(it)
+     do i = 1,ntotal
+         do d = 1,parts%dim
+           do it = 1,parts%nthreads
+             parts%av(d, i) = parts%av(d, i) + local(d,i,it)
+           enddo
+         enddo
+     enddo
+     !$omp end do
+     !$omp end parallel
       do i = 1, ntotal
          do d = 1, parts%dim
             parts%av(d,i) = epsilon * parts%av(d,i)
@@ -2269,6 +2485,784 @@ end function
 
       return
       end subroutine
+
+!----------------------------------------------------------------------
+      subroutine shear_strain_rate(parts)
+!----------------------------------------------------------------------
+      implicit none
+
+      class(particles) parts
+      real(dp) dvx(3), hxx, hyy, hzz, hxy, hxz, hyz
+      integer i, j, k, d, dim, ntotal, niac,it
+      real local_xx(parts%maxn,4)
+      real local_xy(parts%maxn,4)
+      real local_yy(parts%maxn,4)
+
+      ntotal = parts%ntotal + parts%nvirt
+      niac = parts%niac; dim = parts%dim
+
+      parts%txx(1:ntotal) = 0.e0
+      if(dim>=2)then
+         parts%tyy(1:ntotal) = 0.e0
+         parts%txy(1:ntotal) = 0.e0
+      endif
+      if(dim==3)then
+         parts%tzz(1:ntotal) = 0.e0
+         parts%txz(1:ntotal) = 0.e0
+         parts%tyz(1:ntotal) = 0.e0
+      endif
+      
+!     Calculate SPH sum for shear tensor Tab = va,b + vb,a - 2/3 delta_ab vc,c
+      
+     !$omp parallel 
+     !$omp do private(i,j,it,d,k,dvx,hxx,hxy,hyy)    
+     do it = 1,parts%nthreads
+         do i =1,ntotal 
+             local_xx(i,it) = 0.
+             local_xy(i,it) = 0.
+             local_yy(i,it) = 0.
+         enddo
+      do k=parts%niac_start(it),parts%niac_end(it)
+
+          i = parts%pair_i(k)
+          j = parts%pair_j(k)
+          do d=1,dim
+             dvx(d) = parts%vx(d,j) - parts%vx(d,i)
+          enddo
+          if (dim.eq.1) then 
+             hxx = 2.e0*dvx(1)*parts%dwdx(1,k)        
+          else if (dim.eq.2) then           
+             hxx = 2.e0*dvx(1)*parts%dwdx(1,k) - dvx(2)*parts%dwdx(2,k) 
+             hxy = dvx(1)*parts%dwdx(2,k) + dvx(2)*parts%dwdx(1,k)
+             hyy = 2.e0*dvx(2)*parts%dwdx(2,k) - dvx(1)*parts%dwdx(1,k)
+          else if (dim.eq.3) then
+             hxx = 2.e0*dvx(1)*parts%dwdx(1,k) - dvx(2)*parts%dwdx(2,k)   &
+                   - dvx(3)*parts%dwdx(3,k) 
+             hxy = dvx(1)*parts%dwdx(2,k) + dvx(2)*parts%dwdx(1,k)
+             hxz = dvx(1)*parts%dwdx(3,k) + dvx(3)*parts%dwdx(1,k)          
+             hyy = 2.e0*dvx(2)*parts%dwdx(2,k) - dvx(1)*parts%dwdx(1,k)   &    
+                   - dvx(3)*parts%dwdx(3,k)
+             hyz = dvx(2)*parts%dwdx(3,k) + dvx(3)*parts%dwdx(2,k)
+             hzz = 2.e0*dvx(3)*parts%dwdx(3,k) - dvx(1)*parts%dwdx(1,k)   &
+                   - dvx(2)*parts%dwdx(2,k)
+          endif                              
+          hxx = 2.e0/3.e0*hxx
+          hyy = 2.e0/3.e0*hyy
+          hzz = 2.e0/3.e0*hzz
+          if (dim.eq.1) then 
+             parts%txx(i) = parts%txx(i) + parts%mass(j)*hxx/parts%rho(j)
+             parts%txx(j) = parts%txx(j) + parts%mass(i)*hxx/parts%rho(i)               
+          else if (dim.eq.2) then           
+             local_xx(i,it) = local_xx(i,it) + parts%mass(j)*hxx/parts%rho(j)
+             local_xx(j,it) = local_xx(j,it) + parts%mass(i)*hxx/parts%rho(i)   
+             local_xy(i,it) = local_xy(i,it) + parts%mass(j)*hxy/parts%rho(j)
+             local_xy(j,it) = local_xy(j,it) + parts%mass(i)*hxy/parts%rho(i)            
+             local_yy(i,it) = local_yy(i,it) + parts%mass(j)*hyy/parts%rho(j)
+             local_yy(j,it) = local_yy(j,it) + parts%mass(i)*hyy/parts%rho(i) 
+!             parts%txx(i) = parts%txx(i) + parts%mass(j)*hxx/parts%rho(j)
+!             parts%txx(j) = parts%txx(j) + parts%mass(i)*hxx/parts%rho(i)   
+!             parts%txy(i) = parts%txy(i) + parts%mass(j)*hxy/parts%rho(j)
+!             parts%txy(j) = parts%txy(j) + parts%mass(i)*hxy/parts%rho(i)            
+!             parts%tyy(i) = parts%tyy(i) + parts%mass(j)*hyy/parts%rho(j)
+!             parts%tyy(j) = parts%tyy(j) + parts%mass(i)*hyy/parts%rho(i)          
+          else if (dim.eq.3) then
+!             txx(i) = txx(i) + mass(j)*hxx/rho(j)
+!             txx(j) = txx(j) + mass(i)*hxx/rho(i)   
+!             txy(i) = txy(i) + mass(j)*hxy/rho(j)
+!             txy(j) = txy(j) + mass(i)*hxy/rho(i) 
+!             txz(i) = txz(i) + mass(j)*hxz/rho(j)
+!             txz(j) = txz(j) + mass(i)*hxz/rho(i)                     
+!             tyy(i) = tyy(i) + mass(j)*hyy/rho(j)
+!             tyy(j) = tyy(j) + mass(i)*hyy/rho(i)
+!             tyz(i) = tyz(i) + mass(j)*hyz/rho(j)
+!             tyz(j) = tyz(j) + mass(i)*hyz/rho(i)   
+!             tzz(i) = tzz(i) + mass(j)*hzz/rho(j)
+!             tzz(j) = tzz(j) + mass(i)*hzz/rho(i)                 
+          endif                              
+      enddo
+     enddo
+     !$omp end do
+     !$omp barrier
+     !$omp do private(it)
+     do i =1,ntotal
+         do it = 1, parts%nthreads
+             parts%txx(i) = parts%txx(i) + local_xx(i,it)
+             parts%txy(i) = parts%txy(i) + local_xy(i,it)
+             parts%tyy(i) = parts%tyy(i) + local_yy(i,it)
+         enddo
+     enddo
+     !$omp end do
+     !$omp end parallel
+
+      return
+      end subroutine      
+
+!---------------------------------------------------------------------
+      subroutine Jaumann_rate(parts)
+!----------------------------------------------------------------------
+      implicit none
+
+      class(particles) parts
+      type(material), pointer :: soil
+      real(dp) dvx(3), hxx, hyy, hzz, hxy, hxz, hyz, G 
+      real local(parts%maxn,4)
+      integer i, j, k, d, dim, ntotal, niac,it
+
+      ntotal = parts%ntotal + parts%nvirt
+      niac = parts%niac; dim = parts%dim
+      soil => parts%material
+      G = soil%e/(2.0*(1+soil%niu))
+
+!     Hook's law
+      !$omp parallel do
+      do i = 1, ntotal
+         parts%dsxx(i) = parts%dsxx(i)+G*parts%txx(i)   ! No accumulation origionaly
+         parts%dsxy(i) = parts%dsxy(i)+G*parts%txy(i)
+         parts%dsyy(i) = parts%dsyy(i)+G*parts%tyy(i)
+      enddo
+      !$omp end parallel do
+         if(parts%soil_pressure==2)then
+      do i = 1, ntotal
+         parts%dp(i)   = parts%dp(i) - soil%k*parts%vcc(i)  !!! simultaneous pressure  
+      enddo
+         endif         
+     
+!     spin tensor
+
+      parts%wxy = 0.d0
+   call parts%get_niac_start_end
+   
+     !$omp parallel 
+     !$omp do private(i,it,j,d,k,dvx,hxy)    
+     do it = 1,parts%nthreads
+         do i =1,ntotal
+             local(i,it) = 0.
+         enddo
+       do k=parts%niac_start(it),parts%niac_end(it)
+
+          i = parts%pair_i(k)
+          j = parts%pair_j(k)
+          do d=1,dim
+            dvx(d) = parts%vx(d,j) - parts%vx(d,i)
+          enddo
+          if (dim.eq.1) then 
+            !hxx = 0.5e0*dvx(1)*dwdx(1,k)        
+          else if (dim.eq.2) then           
+            hxy = 0.5e0*(dvx(1)*parts%dwdx(2,k) - dvx(2)*parts%dwdx(1,k))
+          else if (dim.eq.3) then
+!            hxy = dvx(1)*dwdx(2,k) + dvx(2)*dwdx(1,k)
+!            hxz = dvx(1)*dwdx(3,k) + dvx(3)*dwdx(1,k)          
+!            hyz = dvx(2)*dwdx(3,k) + dvx(3)*dwdx(2,k)
+          endif                              
+          if (dim.eq.1) then 
+!            txx(i) = txx(i) + mass(j)*hxx/rho(j)
+!            txx(j) = txx(j) + mass(i)*hxx/rho(i)                 
+          else if (dim.eq.2) then     
+              local(i,it) = local(i,it) + parts%mass(j)*hxy/parts%rho(j)
+              local(j,it) = local(j,it) + parts%mass(i)*hxy/parts%rho(i)    
+!            parts%wxy(i) = parts%wxy(i) + parts%mass(j)*hxy/parts%rho(j)
+!            parts%wxy(j) = parts%wxy(j) + parts%mass(i)*hxy/parts%rho(i)            
+          else if (dim.eq.3) then
+!            txy(i) = txy(i) + mass(j)*hxy/rho(j)
+!            txy(j) = txy(j) + mass(i)*hxy/rho(i) 
+!            txz(i) = txz(i) + mass(j)*hxz/rho(j)
+!            txz(j) = txz(j) + mass(i)*hxz/rho(i)                     
+!            tyz(i) = tyz(i) + mass(j)*hyz/rho(j)
+!            tyz(j) = tyz(j) + mass(i)*hyz/rho(i)   
+          endif                              
+       enddo
+      enddo
+       !$omp end do
+       !$omp barrier
+       !$omp do private(it,i)
+       do i = 1,ntotal
+          do it = 1,parts%nthreads
+             parts%wxy(i) = parts%wxy(i) + local(i,it)
+          enddo
+       enddo
+      !$omp end do
+      !$omp end parallel
+   
+!   Jaumann rate
+      !$omp parallel do
+      do i = 1, ntotal
+         parts%dsxx(i) = parts%dsxx(i)+2.0*parts%sxy(i)*parts%wxy(i)
+         parts%dsxy(i) = parts%dsxy(i)-(parts%sxx(i)-parts%syy(i))*parts%wxy(i)
+         parts%dsyy(i) = parts%dsyy(i)-2.0*parts%sxy(i)*parts%wxy(i)
+      enddo         
+      !$omp end parallel do
+      return
+      end subroutine
+
+!------------------------------------------------------------
+      subroutine mohr_coulomb_failure_criterion(soil)
+!------------------------------------------------------------
+      implicit none
+
+      class(particles) soil
+      type(material), pointer :: property
+      double precision yield, phi, skale, cohesion, tmax
+      integer i, k, ntotal
+
+      ntotal = soil%ntotal+soil%nvirt
+      property => soil%material
+      cohesion = property%cohesion
+      phi      = property%phi
+   
+      k = 0
+      soil%fail = 0
+     !$omp parallel do reduction(+:k)
+      do i = 1, ntotal
+         tmax  = sqrt(((soil%sxx(i)-soil%syy(i))/2)**2+soil%sxy(i)**2)
+         if(tmax<1.e-6)cycle
+         yield = cohesion*cos(phi)+soil%p(i)*sin(phi)
+
+         if(yield<=0.)then    ! <
+            yield=0.; soil%p(i)=-cohesion*tan(phi)**(-1.0)
+            soil%rho(i) = property%rho0
+         endif
+
+!         if(yield<=0.)then   ! Collapse
+!            sxx(i) = sxx(i)+p(i)-cohesion*tan(phi)**(-1.0)
+!            syy(i) = syy(i)+p(i)-cohesion*tan(phi)**(-1.0)
+!            p(i)   = 0.
+!         endif
+
+         if(tmax>yield)then
+!         if(yield>0.and.tmax>yield)then
+
+            k = k + 1
+
+            soil%fail(i) = 1 
+            skale = yield/tmax
+            soil%sxx(i) = skale * soil%sxx(i)
+            soil%sxy(i) = skale * soil%sxy(i)
+            soil%syy(i) = skale * soil%syy(i)
+         endif
+         !sxx(i) = 0.; sxy(i) = 0.; syy(i) = 0.
+      enddo
+      !$omp end parallel do
+
+      soil%nfail = k
+
+      return
+      end subroutine      
+
+!------------------------------------------------------------
+      subroutine drucker_prager_failure_criterion(soil)
+!------------------------------------------------------------
+      implicit none
+
+      class(particles) soil
+      type(material), pointer :: property
+      double precision yield, phi, skale, cohesion, tmax, alpha1,I1,J2
+      integer i, k, ntotal
+        
+      !if(soil%itimestep==82)write(*,*) 'in drucker...'
+ 
+      ntotal = soil%ntotal+soil%nvirt
+      property => soil%material
+      cohesion = property%cohesion
+      phi      = property%phi
+      alpha1   = tan(phi)/sqrt(9.+12.*tan(phi)**2.)
+   
+      k = 0
+      soil%fail = 0
+      !$omp parallel do reduction(+:k)
+      do i = 1, ntotal
+         !tmax  = sqrt(((sxx(i)-syy(i))/2)**2+sxy(i)**2)
+         !if(tmax<1.e-6)cycle
+         !yield = cohesion*cos(phi)+p(i)*sin(phi)
+
+
+         if(soil%p(i)<0.)then    ! <
+            !k = k + 1
+            !soil%fail(i) = 1
+            soil%p(i)=0.d0
+            !soil%rho(i) = property%rho0
+         endif
+
+!         if(yield<=0.)then   ! Collapse
+!            sxx(i) = sxx(i)+p(i)-cohesion*tan(phi)**(-1.0)
+!            syy(i) = syy(i)+p(i)-cohesion*tan(phi)**(-1.0)
+!            p(i)   = 0.
+!         endif
+
+         I1 = 3.*soil%p(i) 
+
+         J2 = soil%sxx(i)**2.+2.*soil%sxy(i)**2.+soil%syy(i)**2.+(soil%sxx(i)+soil%syy(i))**2.
+         J2 = sqrt(J2/2.)+1.d-6
+         !if(J2<1.e-6)cycle
+
+         if(J2>alpha1*I1)then
+!         if(yield>0.and.tmax>yield)then
+            k = k + 1
+            soil%fail(i) = 1 
+            skale = alpha1*I1/J2
+            soil%sxx(i) = skale * soil%sxx(i)
+            soil%sxy(i) = skale * soil%sxy(i)
+            soil%syy(i) = skale * soil%syy(i)
+        endif
+
+      enddo
+      !$omp end parallel do
+      soil%nfail = k
+
+      return
+      end subroutine
+
+!------------------------------------------------------------
+      subroutine plastic_or_not(soil)
+!------------------------------------------------------------
+      implicit none
+
+      class(particles) soil
+      type(material), pointer :: property
+      real(dp) yield, phi, skale, cohesion, tmax, alpha1,I1,J2
+      integer i, k, ntotal
+        
+      !if(soil%itimestep==82)write(*,*) 'in drucker...'
+
+      ntotal = soil%ntotal+soil%nvirt
+      property => soil%material
+      cohesion = property%cohesion
+      phi      = property%phi
+      alpha1   = tan(phi)/sqrt(9.+12.*tan(phi)**2.)
+   
+      k = 0
+      soil%fail = 0
+      do i = 1, ntotal
+         !tmax  = sqrt(((sxx(i)-syy(i))/2)**2+sxy(i)**2)
+         !if(tmax<1.e-6)cycle
+         !yield = cohesion*cos(phi)+p(i)*sin(phi)
+
+
+         !if(p(i)<0.)then    ! <
+         !   !k = k + 1
+         !   !soil%fail(i) = 1
+         !   p(i)=0.d0
+         !   !soil%rho(i) = property%rho0
+         !endif
+
+!         if(yield<=0.)then   ! Collapse
+!            sxx(i) = sxx(i)+p(i)-cohesion*tan(phi)**(-1.0)
+!            syy(i) = syy(i)+p(i)-cohesion*tan(phi)**(-1.0)
+!            p(i)   = 0.
+!         endif
+
+         I1 = 3.*soil%p(i) 
+
+         J2 = soil%sxx(i)**2.+2.*soil%sxy(i)**2.+soil%syy(i)**2.+(soil%sxx(i)+soil%syy(i))**2.
+         J2 = sqrt(J2/2.)+1.d-6
+         !if(J2<1.e-6)cycle
+
+!         if(J2>alpha1*I1)then
+         if(abs(J2-alpha1*I1)<1.0e-5)then
+            k = k + 1
+            soil%fail(i) = 1 
+            !skale = alpha1*I1/J2
+            !sxx(i) = skale * sxx(i)
+            !sxy(i) = skale * sxy(i)
+            !syy(i) = skale * syy(i)
+        endif
+
+      enddo
+      soil%nfail = k
+
+      return
+      end subroutine
+
+!---------------------------------------------------------------------
+      subroutine plastic_flow_rule(parts)
+!---------------------------------------------------------------------
+      implicit none
+
+      class(particles) parts
+      double precision, pointer, dimension(:) :: dsxx,dsxy,dsyy,vcc
+      double precision, pointer, dimension(:) :: sxx, sxy, syy
+      type(material), pointer :: property
+      double precision alpha, phi, K, G,e,niu, J2, sde, dlambda
+      double precision exx, exy, eyy                ! total strain rate
+      double precision :: small_value = 1.d-10
+      integer i, ntotal
+
+      ntotal = parts%ntotal + parts%nvirt
+
+      dsxx => parts%dsxx
+      dsxy => parts%dsxy
+      dsyy => parts%dsyy
+      vcc  => parts%vcc
+      sxx => parts%sxx
+      sxy => parts%sxy
+      syy => parts%syy
+
+      property => parts%material
+      phi = property%phi
+      k   = property%k; e = property%E; niu = property%niu
+      alpha = tan(phi)/sqrt(9.+12.*tan(phi)**2.)
+      G = e/(2.0*(1+niu))
+      
+      do i = 1, ntotal
+                            !if(parts%fail(i)==1)then
+
+      exx = parts%txx(i)/2.+parts%vcc(i)/3.   ! Due to this, this should before Jaumman
+      exy = parts%txy(i)/2.
+      eyy = parts%tyy(i)/2.+parts%vcc(i)/3.
+
+      sde = sxx(i)*exx+2.*sxy(i)*exy+syy(i)*eyy
+      J2 = (sxx(i)**2.+2.*sxy(i)**2.+syy(i)**2.+(sxx(i)+syy(i))**2.)/2.
+      J2 = J2 + small_value
+
+      !G = parts%eta(i)
+      dlambda = (3.*alpha*K*vcc(i)+G/sqrt(J2)*sde)/(9.*alpha**2.*K+G)
+      !if(dlambda<0)write(*,*) 'dlambda = ',dlambda,i,parts%itimestep
+      if(dlambda<0)cycle
+      !dsxx(i) = dsxx(i)-dlambda*(3.*alpha*K+G/sqrt(J2)*sxx(i))
+      dsxx(i) = dsxx(i)-dlambda*(G/sqrt(J2)*sxx(i))
+      dsxy(i) = dsxy(i)-dlambda*(G/sqrt(J2)*sxy(i))
+      !dsyy(i) = dsyy(i)-dlambda*(3.*alpha*K+G/sqrt(J2)*syy(i))
+      dsyy(i) = dsyy(i)-dlambda*(G/sqrt(J2)*syy(i))
+
+      !parts%p(i) = parts%p(i) + 3.*k*alpha*dlambda*0.000005   !!! simultaneous pressure
+      parts%dp(i) = parts%dp(i) + 3.*k*alpha*dlambda
+
+! Accumulative deviatoric strain
+ 
+      parts%epsilon_p(i) = parts%epsilon_p(i)    &
+                         + dlambda*sxy(i)/(2*sqrt(J2))*0.000005
+
+                            !endif ! Fail
+      enddo
+      
+      return
+      end subroutine
+
+!---------------------------------------------------------------------
+      subroutine plastic_flow_rule2(parts)
+!---------------------------------------------------------------------
+      implicit none
+
+      class(particles) parts
+      double precision, pointer, dimension(:) :: dsxx2,dsxy2,dsyy2,vcc
+      double precision, pointer, dimension(:) :: sxx, sxy, syy
+      type(material), pointer :: property
+      double precision alpha, phi, K, G,e,niu, J2, sde, dlambda
+      double precision exx, exy, eyy                ! total strain rate
+      double precision :: small_value = 1.d-10
+      integer i, ntotal
+
+      ntotal = parts%ntotal + parts%nvirt
+
+      dsxx2 => parts%dsxx2
+      dsxy2 => parts%dsxy2
+      dsyy2 => parts%dsyy2
+      vcc  => parts%vcc
+      sxx => parts%sxx
+      sxy => parts%sxy
+      syy => parts%syy
+
+      property => parts%material
+      phi = property%phi
+      k   = property%k; e = property%E; niu = property%niu
+      alpha = tan(phi)/sqrt(9.+12.*tan(phi)**2.)
+      G = e/(2.0*(1+niu))
+      
+      do i = 1, ntotal
+                            !if(parts%fail(i)==1)then
+
+      exx = parts%txx(i)/2.+parts%vcc(i)/3.   ! Due to this, this should before Jaumman
+      exy = parts%txy(i)/2.
+      eyy = parts%tyy(i)/2.+parts%vcc(i)/3.
+
+      sde = sxx(i)*exx+2.*sxy(i)*exy+syy(i)*eyy
+      J2 = (sxx(i)**2.+2.*sxy(i)**2.+syy(i)**2.+(sxx(i)+syy(i))**2.)/2.
+      J2 = J2 + small_value
+
+      !G = parts%eta(i)
+      dlambda = (3.*alpha*K*vcc(i)+G/sqrt(J2)*sde)/(9.*alpha**2.*K+G)
+
+      !dsxx(i) = dsxx(i)-dlambda*(3.*alpha*K+G/sqrt(J2)*sxx(i))
+      dsxx2(i) = -dlambda*(G/sqrt(J2)*sxx(i))
+      dsxy2(i) = -dlambda*(G/sqrt(J2)*sxy(i))
+      !dsyy(i) = dsyy(i)-dlambda*(3.*alpha*K+G/sqrt(J2)*syy(i))
+      dsyy2(i) = -dlambda*(G/sqrt(J2)*syy(i))
+
+      !parts%p(i) = parts%p(i) + 3.*k*alpha*dlambda*0.000005   !!! simultaneous pressure
+      parts%dp2(i) =  3.*k*alpha*dlambda
+
+! Accumulative deviatoric strain
+ 
+!      parts%epsilon_p(i) = parts%epsilon_p(i) 
+!     &                   + dlambda*sxy(i)/(2*sqrt(J2))*0.000005
+
+                            !endif ! Fail
+      enddo
+      
+      return
+      end subroutine
+
+!---------------------------------------------------------------------
+      subroutine plastic_flow_rule3(parts)
+!---------------------------------------------------------------------
+      implicit none
+
+      class(particles) parts
+      double precision, pointer, dimension(:) :: dsxx,dsxy,dsyy,vcc
+      double precision, pointer, dimension(:) :: sxx, sxy, syy
+      type(material), pointer :: property
+      double precision alpha, phi, K, G,e,niu, J2, sde, dlambda
+      double precision exx, exy, eyy                ! total strain rate
+      double precision :: small_value = 1.d-10
+      integer i, ntotal
+
+      ntotal = parts%ntotal + parts%nvirt
+
+      dsxx => parts%dsxx
+      dsxy => parts%dsxy
+      dsyy => parts%dsyy
+      vcc  => parts%vcc
+      sxx => parts%sxx
+      sxy => parts%sxy
+      syy => parts%syy
+
+      property => parts%material
+      phi = property%phi
+      k   = property%k; e = property%E; niu = property%niu
+      alpha = tan(phi)/sqrt(9.+12.*tan(phi)**2.)
+      G = e/(2.0*(1+niu))
+      
+      do i = 1, ntotal
+                            if(parts%fail(i)==1)then
+
+      exx = parts%txx(i)/2.+parts%vcc(i)/3.   ! Due to this, this should before Jaumman
+      exy = parts%txy(i)/2.
+      eyy = parts%tyy(i)/2.+parts%vcc(i)/3.
+
+      sde = sxx(i)*exx+2.*sxy(i)*exy+syy(i)*eyy
+      J2 = (sxx(i)**2.+2.*sxy(i)**2.+syy(i)**2.+(sxx(i)+syy(i))**2.)/2.
+      J2 = J2 + small_value
+
+      !G = parts%eta(i)
+      dlambda = (3.*alpha*K*vcc(i)+G/sqrt(J2)*sde)/(9.*alpha**2.*K+G)
+      !if(dlambda<0)write(*,*) 'dlambda = ',dlambda,i,parts%itimestep
+      if(dlambda<0)cycle
+      !dsxx(i) = dsxx(i)-dlambda*(3.*alpha*K+G/sqrt(J2)*sxx(i))
+      dsxx(i) = dsxx(i)-dlambda*(G/sqrt(J2)*sxx(i))
+      dsxy(i) = dsxy(i)-dlambda*(G/sqrt(J2)*sxy(i))
+      !dsyy(i) = dsyy(i)-dlambda*(3.*alpha*K+G/sqrt(J2)*syy(i))
+      dsyy(i) = dsyy(i)-dlambda*(G/sqrt(J2)*syy(i))
+
+      !parts%p(i) = parts%p(i) + 3.*k*alpha*dlambda*0.000005   !!! simultaneous pressure
+      parts%dp(i) = parts%dp(i) + 3.*k*alpha*dlambda
+
+! Accumulative deviatoric strain
+ 
+      parts%epsilon_p(i) = parts%epsilon_p(i)       & 
+                         + dlambda*sxy(i)/(2*sqrt(J2))*0.000005
+
+                            endif ! Fail
+      enddo
+      
+      return
+      end subroutine
+
+!---------------------------------------------------------------
+      subroutine darcy_law(water, soil)
+!---------------------------------------------------------------
+!      use param, only: volume_fraction
+!      use m_particles
+      implicit none
+
+      type(particles) water, soil
+      double precision dx(3), ks, ns, gw, cf, sp, rrw
+      type(material), pointer :: h2o,sio2  
+      type(numerical), pointer :: numeric
+      double precision gravity   
+      integer i, j, k, d, dim
+
+      h2o => water%material
+      sio2=>  soil%material
+      numeric => water%numeric
+      gravity = numeric%gravity
+      dim = water%dim
+
+      gw = h2o%rho0*(-gravity); ns = sio2%porosity
+      ks = sio2%permeability
+      cf = gw*ns/ks
+      !cf = 6.e6
+       
+      do  k=1,water%niac
+          i = water%pair_i(k)
+          j = water%pair_j(k)  
+          rrw = water%w(k)/(water%rho(i)*soil%rho(j))
+
+! For staturated soil
+!        if(volume_fraction) cf = water%vof(i)*water%rho(i)*(-gravity)/ks
+        if(water%volume_fraction) cf = water%vof(i)*soil%vof(j)*water%rho(i)*(-gravity)/ks
+
+          do d=1,dim
+             sp = cf*(water%vx(d,i)-soil%vx(d,j))*rrw
+             water%dvx(d,i) = water%dvx(d,i) - soil%mass(j)*sp
+             soil%dvx(d,j)  = soil%dvx(d,j) + water%mass(i)*sp   
+          enddo
+      enddo
+
+      return
+      end subroutine 
+
+!-----------------------------------------------------
+      subroutine pore_water_pressure(water,soil)
+!-----------------------------------------------------
+!      use param
+!      use m_particles
+      implicit none
+      
+      type(particles) water, soil
+      double precision mprr
+      integer i, j, k, d
+      
+      do k = 1, water%niac
+         i = water%pair_i(k)   ! water
+         j = water%pair_j(k)   ! soil
+         mprr = water%mass(i)*water%p(i)/(water%rho(i)*soil%rho(j))
+!         mprr = water%mass(i)*(water%p(i)+soil%p(j))/       &      Bui2014
+!                (water%rho(i)*soil%rho(j))
+         do d = 1, water%dim
+            soil%dvx(d,j) = soil%dvx(d,j) + mprr*water%dwdx(d,k)  &  !+
+                            *soil%vof(j)  
+         enddo
+
+! saturated soil
+         if(water%volume_fraction)then
+         !do d = 1, dim
+            !water%dvx(d,i) = water%dvx(d,i) -                     & ! Must be -
+            !soil%mass(j)*water%p(i)*soil%vof(j)*water%dwdx(d,k)/  &
+            !(water%rho(i)*soil%rho(j))
+         !enddo
+         endif
+      enddo
+
+      return
+      end subroutine       
+
+!-------------------------------------------------------------
+      subroutine volume_fraction_water(water, soil)
+!-------------------------------------------------------------
+!      use param
+!      use m_particles
+      implicit none
+
+      type(particles) water, soil
+      integer i,j,k,d, ntotal
+      type(material), pointer :: sio2
+
+      sio2 => soil%material
+      ntotal = water%ntotal+water%nvirt
+
+      water%vof2 = 0.d0
+      do k = 1, water%niac
+         i = water%pair_i(k)
+         j = water%pair_j(k)
+         water%vof2(i) = water%vof2(i)+soil%mass(j)*water%w(k)
+      enddo
+
+      do k = 1, water%ntotal+water%nvirt
+         water%vof2(k) = 1.d0 - water%vof2(k)/sio2%rho0
+      enddo
+
+      return
+      end subroutine 
+
+!-------------------------------------------------------------
+      subroutine volume_fraction_water2(water, soil)
+!-------------------------------------------------------------
+!      use param
+!      use m_particles
+      implicit none
+
+      type(particles) water, soil
+      integer i,j,k,d, ntotal
+      type(material), pointer :: sio2
+      double precision dvx(3),tmp
+
+      sio2 => soil%material
+      ntotal = water%ntotal+water%nvirt
+
+!      water%dvof = 0.d0
+
+      do k = 1, water%niac
+         i = water%pair_i(k)
+         j = water%pair_j(k)
+         do d = 1, water%dim
+            dvx(d) = water%vx(d,i)-soil%vx(d,j)
+         enddo 
+         tmp = dvx(1)*water%dwdx(1,k)+dvx(2)*water%dwdx(2,k)
+         water%dvof(i) = water%dvof(i)-soil%mass(j)*tmp/sio2%rho0
+      enddo
+
+      return
+      end subroutine 
+
+!--------------------------------------------------------------------
+      subroutine volume_fraction_soil(parts)
+!--------------------------------------------------------------------
+!      use param
+!      use m_particles
+      implicit none
+
+      type(particles) parts
+      integer i,j,k, ntotal
+      type(material), pointer :: sio2
+
+      sio2 => parts%material
+      ntotal = parts%ntotal + parts%nvirt
+
+      do i = 1, ntotal
+         parts%vof(i) = parts%rho(i)/sio2%rho0
+      enddo
+
+      return
+      end subroutine
+
+!--------------------------------------------------------------------------
+      subroutine drag_force(water,soil)
+!--------------------------------------------------------------------------
+! For fixed porous media, drag force to fluid  
+
+      !use param
+!      use m_particles
+      implicit none
+
+      type(particles) water, soil
+      double precision dx(3), ks, ns, gw, cf, sp, rrw
+      type(material), pointer :: h2o,sio2  
+      type(numerical), pointer :: numeric
+      double precision gravity   
+      integer i, j, k, d, dim
+
+      h2o => water%material
+      sio2=>  soil%material
+      numeric => water%numeric
+      gravity = numeric%gravity
+      dim = water%dim
+
+      gw = h2o%rho0*(-gravity) 
+      !ns = sio2%porosity; ks = sio2%permeability
+      ns = 0.3; ks = 0.05      
+
+      cf = gw*ns/ks
+      !cf = 6.e6
+      !write(*,*) ns,ks
+       
+      do i=1,water%ntotal+water%nvirt
+         do d=1,dim
+      water%dvx(d,i) = water%dvx(d,i) - water%vx(d,i)*cf/water%rho(i)
+         enddo
+      enddo
+
+      return
+      end subroutine 
+
 
 !---------------------------------------------------------------------
 !   function find_particle_nearest2_point(parts,x,y ) result(index)
@@ -2458,5 +3452,39 @@ c%parts => a%parts
 
 end function
 
-end module
+!--------------------------------------------------
+    subroutine get_num_threads(this)
+!--------------------------------------------------
+implicit none
+class(particles) this
+integer i,j,k
+integer, external :: OMP_GET_NUM_THREADS
 
+!$omp parallel
+this%nthreads = OMP_GET_NUM_THREADS()
+!$omp end parallel
+
+allocate(this%niac_start(this%nthreads),this%niac_end(this%nthreads))
+
+end subroutine
+
+!--------------------------------------------------
+    subroutine get_niac_start_end(this)
+!--------------------------------------------------
+implicit none
+class(particles) this
+integer i,j,k,it
+
+i = this%niac/this%nthreads
+j = mod(this%niac,this%nthreads)
+
+do it = 1, this%nthreads
+   this%niac_start(it) = (it-1)*i + 1
+   this%niac_end(it) = it*i
+enddo
+
+this%niac_end(this%nthreads) = this%niac_end(this%nthreads)+j
+
+end subroutine
+
+end module
