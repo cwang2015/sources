@@ -58,14 +58,22 @@ endif
 !if(summation_density)then      
 !if(mod(itimestep,30)==0) call sum_density(pl)
 !else             
-    call con_density(pl)         
+if(pl%nthreads==1)then
+    call con_density(pl)   
+else
+    call con_density_omp(pl)
+endif
 !endif
       
 if(artificial_density)then
    !if(trim(pl%imaterial)=='water')then
       !!call renormalize_density_gradient(pl)
       !call art_density(pl)
+    if(pl%nthreads==1)then
       call delta_sph(pl,pl%rho,pl%drho)
+    else
+      call delta_sph_omp(pl,pl%rho,pl%drho)
+    endif  
    !endif
 endif
 
@@ -89,9 +97,17 @@ if(trim(pl%imaterial)=='water')then
 elseif(trim(pl%imaterial)=='soil')then
 
    if(yield_criterion == 1)then
-      call mohr_coulomb_failure_criterion(pl)
+      if(pl%nthreads==1)then    
+       call mohr_coulomb_failure_criterion(pl)
+      else 
+       call mohr_coulomb_failure_criterion_omp(pl)
+      endif 
    elseif(yield_criterion == 2)then
-      call drucker_prager_failure_criterion(pl)
+      if(pl%nthreads==1)then    
+       call drucker_prager_failure_criterion(pl)
+      else
+       call drucker_prager_failure_criterion_omp(pl)
+      endif 
    endif
 
    if(mod(itimestep,print_step).eq.0)    &
@@ -136,30 +152,51 @@ if(trim(pl%imaterial)=='soil')then
    elseif(plasticity==2)then     
       call plastic_flow_rule2(pl)
    elseif(plasticity==3)then
+    if(pl%nthreads==1)then
       call plastic_or_not(pl)
       call plastic_flow_rule3(pl)
+    else
+      call plastic_or_not_omp(pl)
+      call plastic_flow_rule3_omp(pl)
+    endif  
    endif
 endif
 
 ! --- Jaumann rate  !When???
 
-if(trim(pl%imaterial)=='soil')call Jaumann_rate(pl)
-
+if(trim(pl%imaterial)=='soil')then
+   if(pl%nthreads==1)then
+     call Jaumann_rate(pl)
+   else
+     call Jaumann_rate_omp(pl)
+   endif 
+endif
 !---  Artificial viscosity:
 
 if (visc_artificial) call pl%art_visc
 
 if(trim(pl%imaterial)=='soil'.and.soil_artificial_stress)then
         !call art_stress(pl)
+   if(pl%nthreads==1)then
    call pl%delta_sph(pl%p,pl%dp)
    call pl%delta_sph(pl%sxx,pl%dsxx)
    call pl%delta_sph(pl%sxy,pl%dsxy)
    call pl%delta_sph(pl%syy,pl%dsyy)
+   else
+   call pl%delta_sph_omp(pl%p,pl%dp)
+   call pl%delta_sph_omp(pl%sxx,pl%dsxx)
+   call pl%delta_sph_omp(pl%sxy,pl%dsxy)
+   call pl%delta_sph_omp(pl%syy,pl%dsyy)
+   endif
 endif        
-if(trim(pl%imaterial)=='water'.and.water_artificial_volume)  &
+if(trim(pl%imaterial)=='water'.and.water_artificial_volume)then  
         !call art_volume_fraction_water2(pl)
+   if(pl%nthreads==1)then
         call pl%delta_sph(pl%vof,pl%dvof)
-
+   else
+        call pl%delta_sph_omp(pl%vof,pl%dvof)
+    endif
+endif
 !--- Damping
 !       if(trim(pl%imaterial)=='soil') call damping_stress(pl)
     
@@ -180,8 +217,13 @@ pl%dvx(2,:) = pl%dvx(2,:) + gravity
 
 !     Calculating average velocity of each partile for avoiding penetration
 
-if (average_velocity) call av_vel(pl) 
-
+if (average_velocity) then
+   if(pl%nthreads==1)then
+       call av_vel(pl)
+   else    
+       call av_vel_omp(pl) 
+   endif
+endif
 !---  Convert velocity, force, and energy to f and dfdt  
       
 if(mod(itimestep,print_step).eq.0) then     

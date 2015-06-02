@@ -524,9 +524,11 @@ integer :: save_step_from = 0, save_step_to = 100
        procedure :: tension_instability_water 
        procedure :: sum_density
        procedure :: con_density
+       procedure :: con_density_omp
        procedure :: newtonian_fluid
        procedure :: art_visc
        procedure :: delta_sph
+       procedure :: delta_sph_omp
        procedure :: av_vel
        procedure :: repulsive_force
        procedure :: df
@@ -536,6 +538,7 @@ integer :: save_step_from = 0, save_step_to = 100
        procedure :: df3
        procedure :: df3_omp
        procedure :: velocity_divergence
+       procedure :: velocity_divergence_omp
 !       procedure :: time_integration_for_water
 !       procedure :: find_particle_nearest2_point
 !       procedure :: grad_scalar
@@ -543,12 +546,17 @@ integer :: save_step_from = 0, save_step_to = 100
 !       generic :: grad => grad_scalar, grad_tensor
       procedure :: shear_strain_rate 
       procedure :: Jaumann_rate
+      procedure :: Jaumann_rate_omp
       procedure :: mohr_coulomb_failure_criterion
+      procedure :: mohr_coulomb_failure_criterion_omp
       procedure :: drucker_prager_failure_criterion
+      procedure :: drucker_prager_failure_criterion_omp
       procedure :: plastic_or_not
+      procedure :: plastic_or_not_omp
       procedure :: plastic_flow_rule
       procedure :: plastic_flow_rule2
       procedure :: plastic_flow_rule3
+      procedure :: plastic_flow_rule3_omp
 
       procedure :: get_num_threads
       procedure :: get_niac_start_end
@@ -1979,6 +1987,50 @@ end function
       integer, pointer, dimension(:) :: pair_i, pair_j
       double precision, pointer, dimension(:) :: mass, rho, vcc
       double precision, pointer, dimension(:,:) :: vx, dwdx
+      integer i,j,k,d, dim, ntotal, niac
+      double precision dvx(3), hvcc
+      
+      pair_i => parts%pair_i
+      pair_j => parts%pair_j
+      mass   => parts%mass
+      rho    => parts%rho
+      vcc    => parts%vcc
+      vx     => parts%vx
+      dwdx   => parts%dwdx
+
+      ntotal = parts%ntotal + parts%nvirt
+      niac   = parts%niac; dim = parts%dim 
+
+      do i=1,ntotal
+        vcc(i) = 0.e0         
+      enddo
+    
+      do k=1,niac
+        i = pair_i(k)
+        j = pair_j(k)
+        do d=1,dim
+          dvx(d) = vx(d,j) - vx(d,i) 
+        enddo        
+        hvcc = dvx(1)*dwdx(1,k)
+        do d=2,dim
+          hvcc = hvcc + dvx(d)*dwdx(d,k)
+        enddo    
+         vcc(i) = vcc(i) + mass(j)*hvcc/rho(j)
+         vcc(j) = vcc(j) + mass(i)*hvcc/rho(i)
+      enddo  
+   
+      return
+      end subroutine
+
+!-----------------------------------------------------------------------
+      subroutine velocity_divergence_omp(parts)
+!-----------------------------------------------------------------------
+      implicit none
+
+      class(particles) parts      
+      integer, pointer, dimension(:) :: pair_i, pair_j
+      double precision, pointer, dimension(:) :: mass, rho, vcc
+      double precision, pointer, dimension(:,:) :: vx, dwdx
       real local(parts%maxn,4)
       integer i,j,k,d, dim, ntotal, niac,it
       double precision dvx(3), hvcc
@@ -2241,6 +2293,38 @@ end subroutine
   
       class(particles) parts      
 
+      integer ntotal,i,j,k,d    
+      double precision vcc, dvx(3) 
+      
+      ntotal = parts%ntotal + parts%nvirt
+
+      do i = 1, ntotal
+        parts%drho(i) = 0.
+      enddo
+     
+      do k=1,parts%niac      
+        i = parts%pair_i(k)
+        j = parts%pair_j(k)
+        do d=1, parts%dim
+          dvx(d) = parts%vx(d,i) - parts%vx(d,j) 
+        enddo        
+        vcc = dvx(1)* parts%dwdx(1,k)        
+        do d=2, parts%dim
+          vcc = vcc + dvx(d)*parts%dwdx(d,k)
+        enddo    
+        parts%drho(i) = parts%drho(i) + parts%mass(j)*vcc
+        parts%drho(j) = parts%drho(j) + parts%mass(i)*vcc       
+      enddo    
+
+      end subroutine
+! Subroutine to calculate the density with SPH continuiity approach.
+!----------------------------------------------------------------------      
+      subroutine con_density_omp(parts)
+!----------------------------------------------------------------------
+      implicit none
+  
+      class(particles) parts      
+
       integer ntotal,i,j,k,d,it
       real  div_v_local(parts%maxn,4)
 !      real, allocatable, dimension(:,:) :: div_v_local
@@ -2368,8 +2452,52 @@ end subroutine
       return
       end subroutine
 
+
 !-------------------------------------------------------------------
       subroutine delta_sph(parts,f,df)
+!-------------------------------------------------------------------
+      implicit none
+
+      class(particles) parts
+      real(dp), dimension(:) :: f,df
+
+      real(dp) dx(3),delta, muv, rr, h
+      integer i,j,k,d,ntotal,niac,dim
+
+!      write(*,*) 'In art_density...'
+
+      ntotal   =  parts%ntotal + parts%nvirt
+      niac     =  parts%niac; dim = parts%dim            
+      delta    = parts%numeric%delta
+          
+      do k=1,niac
+         i = parts%pair_i(k)
+         j = parts%pair_j(k)
+         rr = 0.e0
+         do d=1,dim
+            dx(d)  =  parts%x(d,i) -  parts%x(d,j)
+            rr     = rr + dx(d)*dx(d)
+         enddo
+            
+         muv = 2.0*(f(i)-f(j))/rr
+
+         h = 0.d0
+         do d=1,dim
+            !h = h + (dx(d)*muv - (drhodx(d,i)+drhodx(d,j)))*dwdx(d,k)
+            h = h + dx(d)*muv*parts%dwdx(d,k)
+         enddo
+         df(i) = df(i) + delta*parts%hsml(i)*parts%c(i)*parts%mass(j)*h/parts%rho(j)
+         df(j) = df(j) - delta*parts%hsml(j)*parts%c(j)*parts%mass(i)*h/parts%rho(i)
+      enddo
+
+      return
+      end subroutine
+
+!     Subroutine to calculate the average velocity to correct velocity
+!     for preventing.penetration (monaghan, 1992)      
+      
+!-------------------------------------------------------------------
+      subroutine delta_sph_omp(parts,f,df)
 !-------------------------------------------------------------------
       implicit none
 
@@ -2425,10 +2553,48 @@ end subroutine
      !$omp end parallel
       return
       end subroutine
+      
 !     Subroutine to calculate the average velocity to correct velocity
 !     for preventing.penetration (monaghan, 1992)      
 !----------------------------------------------------------------------      
       subroutine av_vel(parts)
+!----------------------------------------------------------------------   
+      implicit none
+
+      class(particles),target :: parts
+      real(dp) vcc, dvx(3), epsilon, mrho
+      integer i,j,k,d,ntotal,niac    
+
+      ntotal = parts%ntotal
+      niac   = parts%niac
+      epsilon = parts%numeric%epsilon
+      
+      parts%av = 0.d0
+     
+      do k=1,niac       
+         i = parts%pair_i(k)
+         j = parts%pair_j(k)       
+         mrho = (parts%rho(i)+parts%rho(j))/2.0
+         do d=1,parts%dim
+            dvx(d) = parts%vx(d,i) - parts%vx(d,j)            
+            parts%av(d, i) = parts%av(d,i) - parts%mass(j)*dvx(d)/mrho*parts%w(k)
+            parts%av(d, j) = parts%av(d,j) + parts%mass(i)*dvx(d)/mrho*parts%w(k)       
+         enddo                    
+      enddo  
+        
+      do i = 1, ntotal
+         do d = 1, parts%dim
+            parts%av(d,i) = epsilon * parts%av(d,i)
+         enddo 
+      enddo             
+
+      return
+      end subroutine
+
+!     Subroutine to calculate the average velocity to correct velocity
+!     for preventing.penetration (monaghan, 1992)      
+!----------------------------------------------------------------------      
+      subroutine av_vel_omp(parts)
 !----------------------------------------------------------------------   
       implicit none
 
@@ -2597,8 +2763,85 @@ end subroutine
       return
       end subroutine      
 
+
 !---------------------------------------------------------------------
       subroutine Jaumann_rate(parts)
+!----------------------------------------------------------------------
+      implicit none
+
+      class(particles) parts
+      type(material), pointer :: soil
+      real(dp) dvx(3), hxx, hyy, hzz, hxy, hxz, hyz, G 
+      integer i, j, k, d, dim, ntotal, niac
+
+      ntotal = parts%ntotal + parts%nvirt
+      niac = parts%niac; dim = parts%dim
+      soil => parts%material
+      G = soil%e/(2.0*(1+soil%niu))
+
+!     Hook's law
+
+      do i = 1, ntotal
+         parts%dsxx(i) = parts%dsxx(i)+G*parts%txx(i)   ! No accumulation origionaly
+         parts%dsxy(i) = parts%dsxy(i)+G*parts%txy(i)
+         parts%dsyy(i) = parts%dsyy(i)+G*parts%tyy(i)
+      enddo
+
+         if(parts%soil_pressure==2)then
+      do i = 1, ntotal
+         parts%dp(i)   = parts%dp(i) - soil%k*parts%vcc(i)  !!! simultaneous pressure  
+      enddo
+         endif         
+     
+!     spin tensor
+
+      parts%wxy = 0.d0
+
+      do k=1,niac
+          i = parts%pair_i(k)
+          j = parts%pair_j(k)
+          do d=1,dim
+            dvx(d) = parts%vx(d,j) - parts%vx(d,i)
+          enddo
+          if (dim.eq.1) then 
+            !hxx = 0.5e0*dvx(1)*dwdx(1,k)        
+          else if (dim.eq.2) then           
+            hxy = 0.5e0*(dvx(1)*parts%dwdx(2,k) - dvx(2)*parts%dwdx(1,k))
+          else if (dim.eq.3) then
+!            hxy = dvx(1)*dwdx(2,k) + dvx(2)*dwdx(1,k)
+!            hxz = dvx(1)*dwdx(3,k) + dvx(3)*dwdx(1,k)          
+!            hyz = dvx(2)*dwdx(3,k) + dvx(3)*dwdx(2,k)
+          endif                              
+          if (dim.eq.1) then 
+!            txx(i) = txx(i) + mass(j)*hxx/rho(j)
+!            txx(j) = txx(j) + mass(i)*hxx/rho(i)                 
+          else if (dim.eq.2) then           
+            parts%wxy(i) = parts%wxy(i) + parts%mass(j)*hxy/parts%rho(j)
+            parts%wxy(j) = parts%wxy(j) + parts%mass(i)*hxy/parts%rho(i)            
+          else if (dim.eq.3) then
+!            txy(i) = txy(i) + mass(j)*hxy/rho(j)
+!            txy(j) = txy(j) + mass(i)*hxy/rho(i) 
+!            txz(i) = txz(i) + mass(j)*hxz/rho(j)
+!            txz(j) = txz(j) + mass(i)*hxz/rho(i)                     
+!            tyz(i) = tyz(i) + mass(j)*hyz/rho(j)
+!            tyz(j) = tyz(j) + mass(i)*hyz/rho(i)   
+          endif                              
+       enddo
+   
+!   Jaumann rate
+
+      do i = 1, ntotal
+         parts%dsxx(i) = parts%dsxx(i)+2.0*parts%sxy(i)*parts%wxy(i)
+         parts%dsxy(i) = parts%dsxy(i)-(parts%sxx(i)-parts%syy(i))*parts%wxy(i)
+         parts%dsyy(i) = parts%dsyy(i)-2.0*parts%sxy(i)*parts%wxy(i)
+      enddo         
+
+      return
+      end subroutine
+      
+      
+!---------------------------------------------------------------------
+      subroutine Jaumann_rate_omp(parts)
 !----------------------------------------------------------------------
       implicit none
 
@@ -2711,7 +2954,56 @@ end subroutine
    
       k = 0
       soil%fail = 0
-     !$omp parallel do reduction(+:k)
+      do i = 1, ntotal
+         tmax  = sqrt(((soil%sxx(i)-soil%syy(i))/2)**2+soil%sxy(i)**2)
+         if(tmax<1.e-6)cycle
+         yield = cohesion*cos(phi)+soil%p(i)*sin(phi)
+
+         if(yield<=0.)then    ! <
+            yield=0.; soil%p(i)=-cohesion*tan(phi)**(-1.0)
+            soil%rho(i) = property%rho0
+         endif
+
+!         if(yield<=0.)then   ! Collapse
+!            sxx(i) = sxx(i)+p(i)-cohesion*tan(phi)**(-1.0)
+!            syy(i) = syy(i)+p(i)-cohesion*tan(phi)**(-1.0)
+!            p(i)   = 0.
+!         endif
+
+         if(tmax>yield)then
+!         if(yield>0.and.tmax>yield)then
+            k = k + 1
+            soil%fail(i) = 1 
+            skale = yield/tmax
+            soil%sxx(i) = skale * soil%sxx(i)
+            soil%sxy(i) = skale * soil%sxy(i)
+            soil%syy(i) = skale * soil%syy(i)
+         endif
+         !sxx(i) = 0.; sxy(i) = 0.; syy(i) = 0.
+      enddo
+      soil%nfail = k
+
+      return
+      end subroutine      
+
+!------------------------------------------------------------
+      subroutine mohr_coulomb_failure_criterion_omp(soil)
+!------------------------------------------------------------
+      implicit none
+
+      class(particles) soil
+      type(material), pointer :: property
+      double precision yield, phi, skale, cohesion, tmax
+      integer i, k, ntotal
+
+      ntotal = soil%ntotal+soil%nvirt
+      property => soil%material
+      cohesion = property%cohesion
+      phi      = property%phi
+   
+      k = 0
+      soil%fail = 0
+     !$omp parallel do private(tmax,yield,skale) reduction(+:k)
       do i = 1, ntotal
          tmax  = sqrt(((soil%sxx(i)-soil%syy(i))/2)**2+soil%sxy(i)**2)
          if(tmax<1.e-6)cycle
@@ -2768,7 +3060,67 @@ end subroutine
    
       k = 0
       soil%fail = 0
-      !$omp parallel do reduction(+:k)
+      do i = 1, ntotal
+         !tmax  = sqrt(((sxx(i)-syy(i))/2)**2+sxy(i)**2)
+         !if(tmax<1.e-6)cycle
+         !yield = cohesion*cos(phi)+p(i)*sin(phi)
+
+
+         if(soil%p(i)<0.)then    ! <
+            !k = k + 1
+            !soil%fail(i) = 1
+            soil%p(i)=0.d0
+            !soil%rho(i) = property%rho0
+         endif
+
+!         if(yield<=0.)then   ! Collapse
+!            sxx(i) = sxx(i)+p(i)-cohesion*tan(phi)**(-1.0)
+!            syy(i) = syy(i)+p(i)-cohesion*tan(phi)**(-1.0)
+!            p(i)   = 0.
+!         endif
+
+         I1 = 3.*soil%p(i) 
+
+         J2 = soil%sxx(i)**2.+2.*soil%sxy(i)**2.+soil%syy(i)**2.+(soil%sxx(i)+soil%syy(i))**2.
+         J2 = sqrt(J2/2.)+1.d-6
+         !if(J2<1.e-6)cycle
+
+         if(J2>alpha1*I1)then
+!         if(yield>0.and.tmax>yield)then
+            k = k + 1
+            soil%fail(i) = 1 
+            skale = alpha1*I1/J2
+            soil%sxx(i) = skale * soil%sxx(i)
+            soil%sxy(i) = skale * soil%sxy(i)
+            soil%syy(i) = skale * soil%syy(i)
+        endif
+
+      enddo
+      soil%nfail = k
+
+      return
+      end subroutine
+!------------------------------------------------------------
+      subroutine drucker_prager_failure_criterion_omp(soil)
+!------------------------------------------------------------
+      implicit none
+
+      class(particles) soil
+      type(material), pointer :: property
+      double precision yield, phi, skale, cohesion, tmax, alpha1,I1,J2
+      integer i, k, ntotal
+        
+      !if(soil%itimestep==82)write(*,*) 'in drucker...'
+ 
+      ntotal = soil%ntotal+soil%nvirt
+      property => soil%material
+      cohesion = property%cohesion
+      phi      = property%phi
+      alpha1   = tan(phi)/sqrt(9.+12.*tan(phi)**2.)
+   
+      k = 0
+      soil%fail = 0
+      !$omp parallel do private(I1,J2,skale) reduction(+:k)
       do i = 1, ntotal
          !tmax  = sqrt(((sxx(i)-syy(i))/2)**2+sxy(i)**2)
          !if(tmax<1.e-6)cycle
@@ -2831,6 +3183,7 @@ end subroutine
    
       k = 0
       soil%fail = 0
+
       do i = 1, ntotal
          !tmax  = sqrt(((sxx(i)-syy(i))/2)**2+sxy(i)**2)
          !if(tmax<1.e-6)cycle
@@ -2867,10 +3220,75 @@ end subroutine
         endif
 
       enddo
+
       soil%nfail = k
 
       return
       end subroutine
+      
+!------------------------------------------------------------
+      subroutine plastic_or_not_omp(soil)
+!------------------------------------------------------------
+      implicit none
+
+      class(particles) soil
+      type(material), pointer :: property
+      real(dp) yield, phi, skale, cohesion, tmax, alpha1,I1,J2
+      integer i, k, ntotal
+        
+      !if(soil%itimestep==82)write(*,*) 'in drucker...'
+
+      ntotal = soil%ntotal+soil%nvirt
+      property => soil%material
+      cohesion = property%cohesion
+      phi      = property%phi
+      alpha1   = tan(phi)/sqrt(9.+12.*tan(phi)**2.)
+   
+      k = 0
+      soil%fail = 0
+      !$omp parallel do private(I1,J2) reduction(+:k)
+      do i = 1, ntotal
+         !tmax  = sqrt(((sxx(i)-syy(i))/2)**2+sxy(i)**2)
+         !if(tmax<1.e-6)cycle
+         !yield = cohesion*cos(phi)+p(i)*sin(phi)
+
+
+         !if(p(i)<0.)then    ! <
+         !   !k = k + 1
+         !   !soil%fail(i) = 1
+         !   p(i)=0.d0
+         !   !soil%rho(i) = property%rho0
+         !endif
+
+!         if(yield<=0.)then   ! Collapse
+!            sxx(i) = sxx(i)+p(i)-cohesion*tan(phi)**(-1.0)
+!            syy(i) = syy(i)+p(i)-cohesion*tan(phi)**(-1.0)
+!            p(i)   = 0.
+!         endif
+
+         I1 = 3.*soil%p(i) 
+
+         J2 = soil%sxx(i)**2.+2.*soil%sxy(i)**2.+soil%syy(i)**2.+(soil%sxx(i)+soil%syy(i))**2.
+         J2 = sqrt(J2/2.)+1.d-6
+         !if(J2<1.e-6)cycle
+
+!         if(J2>alpha1*I1)then
+         if(abs(J2-alpha1*I1)<1.0e-5)then
+            k = k + 1
+            soil%fail(i) = 1 
+            !skale = alpha1*I1/J2
+            !sxx(i) = skale * sxx(i)
+            !sxy(i) = skale * sxy(i)
+            !syy(i) = skale * syy(i)
+        endif
+
+      enddo
+      !$omp end parallel do
+      soil%nfail = k
+
+      return
+      end subroutine
+
 
 !---------------------------------------------------------------------
       subroutine plastic_flow_rule(parts)
@@ -3030,7 +3448,6 @@ end subroutine
       k   = property%k; e = property%E; niu = property%niu
       alpha = tan(phi)/sqrt(9.+12.*tan(phi)**2.)
       G = e/(2.0*(1+niu))
-      
       do i = 1, ntotal
                             if(parts%fail(i)==1)then
 
@@ -3065,7 +3482,72 @@ end subroutine
       
       return
       end subroutine
+!---------------------------------------------------------------------
+      subroutine plastic_flow_rule3_omp(parts)
+!---------------------------------------------------------------------
+      implicit none
 
+      class(particles) parts
+      double precision, pointer, dimension(:) :: dsxx,dsxy,dsyy,vcc
+      double precision, pointer, dimension(:) :: sxx, sxy, syy
+      type(material), pointer :: property
+      double precision alpha, phi, K, G,e,niu, J2, sde, dlambda
+      double precision exx, exy, eyy                ! total strain rate
+      double precision :: small_value = 1.d-10
+      integer i, ntotal
+
+      ntotal = parts%ntotal + parts%nvirt
+
+      dsxx => parts%dsxx
+      dsxy => parts%dsxy
+      dsyy => parts%dsyy
+      vcc  => parts%vcc
+      sxx => parts%sxx
+      sxy => parts%sxy
+      syy => parts%syy
+
+      property => parts%material
+      phi = property%phi
+      k   = property%k; e = property%E; niu = property%niu
+      alpha = tan(phi)/sqrt(9.+12.*tan(phi)**2.)
+      G = e/(2.0*(1+niu))
+      !$omp parallel do private(exx,exy,eyy,sde,J2,dlambda)
+      do i = 1, ntotal
+                            if(parts%fail(i)==1)then
+
+      exx = parts%txx(i)/2.+parts%vcc(i)/3.   ! Due to this, this should before Jaumman
+      exy = parts%txy(i)/2.
+      eyy = parts%tyy(i)/2.+parts%vcc(i)/3.
+
+      sde = sxx(i)*exx+2.*sxy(i)*exy+syy(i)*eyy
+      J2 = (sxx(i)**2.+2.*sxy(i)**2.+syy(i)**2.+(sxx(i)+syy(i))**2.)/2.
+      J2 = J2 + small_value
+
+      !G = parts%eta(i)
+      dlambda = (3.*alpha*K*vcc(i)+G/sqrt(J2)*sde)/(9.*alpha**2.*K+G)
+      !if(dlambda<0)write(*,*) 'dlambda = ',dlambda,i,parts%itimestep
+      if(dlambda<0)cycle
+      !dsxx(i) = dsxx(i)-dlambda*(3.*alpha*K+G/sqrt(J2)*sxx(i))
+      dsxx(i) = dsxx(i)-dlambda*(G/sqrt(J2)*sxx(i))
+      dsxy(i) = dsxy(i)-dlambda*(G/sqrt(J2)*sxy(i))
+      !dsyy(i) = dsyy(i)-dlambda*(3.*alpha*K+G/sqrt(J2)*syy(i))
+      dsyy(i) = dsyy(i)-dlambda*(G/sqrt(J2)*syy(i))
+
+      !parts%p(i) = parts%p(i) + 3.*k*alpha*dlambda*0.000005   !!! simultaneous pressure
+      parts%dp(i) = parts%dp(i) + 3.*k*alpha*dlambda
+
+! Accumulative deviatoric strain
+ 
+      parts%epsilon_p(i) = parts%epsilon_p(i)       & 
+                         + dlambda*sxy(i)/(2*sqrt(J2))*0.000005
+
+                            endif ! Fail
+      enddo
+      !$omp end parallel do
+      
+      
+      return
+      end subroutine
 !---------------------------------------------------------------
       subroutine darcy_law(water, soil)
 !---------------------------------------------------------------
