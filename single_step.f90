@@ -219,7 +219,6 @@ endif
    else
        call pl%repulsive_force_omp
    endif  
-          call pl%repulsive_force
 !      endif
 
 pl%dvx(2,:) = pl%dvx(2,:) + gravity

@@ -2683,7 +2683,7 @@ end subroutine
       parts%av = 0.d0
      
      !$omp parallel 
-     !$omp do private(i,it,j,d,k,mrho,dvx)    
+     !$omp do private(i,j,d,k,mrho,dvx)    
      do it = 1,parts%nthreads
          do d = 1,parts%dim
           do i =1,ntotal
@@ -2706,7 +2706,7 @@ end subroutine
      enddo
      !$omp enddo
      !$omp barrier
-     !$omp do private(it)
+     !$omp do private(it,d)
      do i = 1,ntotal
          do d = 1,parts%dim
            do it = 1,parts%nthreads
