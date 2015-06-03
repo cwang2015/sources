@@ -86,8 +86,11 @@ elseif(trim(pl%imaterial)=='soil')then
 endif
        
 !---  Internal forces:
-
-call shear_strain_rate(pl)   
+if(pl%nthreads==1)then
+ call shear_strain_rate(pl) 
+else
+ call shear_strain_rate_omp(pl) 
+endif
 if(trim(pl%imaterial)=='soil')call velocity_divergence(pl)
 
 call pressure(pl)
@@ -234,6 +237,7 @@ endif
                                             enddo ! iphase
 
 !call drag_force(parts,soil)   !!! Porous media
+
 
                 if(.not.single_phase)then
 

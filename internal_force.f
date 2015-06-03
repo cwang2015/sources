@@ -800,71 +800,7 @@ c Accumulative deviatoric strain
       
       return
       end subroutine
-!---------------------------------------------------------------------
-      subroutine plastic_flow_rule3(parts)
-!---------------------------------------------------------------------
-      use m_particles
-      implicit none
 
-      type(particles) parts
-      double precision, pointer, dimension(:) :: dsxx,dsxy,dsyy,vcc
-      double precision, pointer, dimension(:) :: sxx, sxy, syy
-      type(material), pointer :: property
-      double precision alpha, phi, K, G,e,niu, J2, sde, dlambda
-      double precision exx, exy, eyy                ! total strain rate
-      double precision :: small_value = 1.d-10
-      integer i, ntotal
-
-      ntotal = parts%ntotal + parts%nvirt
-
-      dsxx => parts%dsxx
-      dsxy => parts%dsxy
-      dsyy => parts%dsyy
-      vcc  => parts%vcc
-      sxx => parts%sxx
-      sxy => parts%sxy
-      syy => parts%syy
-
-      property => parts%material
-      phi = property%phi
-      k   = property%k; e = property%E; niu = property%niu
-      alpha = tan(phi)/sqrt(9.+12.*tan(phi)**2.)
-      G = e/(2.0*(1+niu))
-      
-      do i = 1, ntotal
-                            if(parts%fail(i)==1)then
-
-      exx = parts%txx(i)/2.+parts%vcc(i)/3.   ! Due to this, this should before Jaumman
-      exy = parts%txy(i)/2.
-      eyy = parts%tyy(i)/2.+parts%vcc(i)/3.
-
-      sde = sxx(i)*exx+2.*sxy(i)*exy+syy(i)*eyy
-      J2 = (sxx(i)**2.+2.*sxy(i)**2.+syy(i)**2.+(sxx(i)+syy(i))**2.)/2.
-      J2 = J2 + small_value
-
-      !G = parts%eta(i)
-      dlambda = (3.*alpha*K*vcc(i)+G/sqrt(J2)*sde)/(9.*alpha**2.*K+G)
-      !if(dlambda<0)write(*,*) 'dlambda = ',dlambda,i,parts%itimestep
-      if(dlambda<0)cycle
-      !dsxx(i) = dsxx(i)-dlambda*(3.*alpha*K+G/sqrt(J2)*sxx(i))
-      dsxx(i) = dsxx(i)-dlambda*(G/sqrt(J2)*sxx(i))
-      dsxy(i) = dsxy(i)-dlambda*(G/sqrt(J2)*sxy(i))
-      !dsyy(i) = dsyy(i)-dlambda*(3.*alpha*K+G/sqrt(J2)*syy(i))
-      dsyy(i) = dsyy(i)-dlambda*(G/sqrt(J2)*syy(i))
-
-      !parts%p(i) = parts%p(i) + 3.*k*alpha*dlambda*0.000005   !!! simultaneous pressure
-      parts%dp(i) = parts%dp(i) + 3.*k*alpha*dlambda
-
-c Accumulative deviatoric strain
- 
-      parts%epsilon_p(i) = parts%epsilon_p(i) 
-     &                   + dlambda*sxy(i)/(2*sqrt(J2))*0.000005
-
-                            endif ! Fail
-      enddo
-      
-      return
-      end subroutine
 
 !DEC$ENDIF
 

@@ -16,166 +16,6 @@ type block
      procedure :: cell_center => get_cell_center_sub
 end type
 
-!---------------------------------------------------------
-type parameters
-
-!Math parameters
-real(dp) :: pi = 3.14159265358979323846
-
-!Physics parameter
-real(dp) :: gravity = -9.8
-
-!Geometry parameters
-
-!dim : Dimension of the problem (1, 2 or 3)
-integer :: dim = 2
-
-!Parameters for the computational geometry,  
-!x_maxgeom : Upper limit of allowed x-regime 
-!x_mingeom : Lower limit of allowed x-regime 
-!y_maxgeom : Upper limit of allowed y-regime 
-!y_mingeom : Lower limit of allowed y-regime 
-!z_maxgeom : Upper limit of allowed z-regime 
-!z_mingeom : Lower limit of allowed z-regime 
-real(dp) :: x_maxgeom = 10.e0, x_mingeom = -10.e0,  &
-            y_maxgeom = 10.e0, y_mingeom = -10.e0,  &
-            z_maxgeom = 10.e0, z_mingeom = -10.e0
-
-!Memory allocation
-
-!maxn: Maximum number of particles
-!max_interation : Maximum number of interaction pairs
-integer :: maxn = 2000, max_interaction = 10 * 2000
-  
-!SPH algorithm
-
-!Particle approximation (pa_sph)
-!pa_sph = 1 : (e.g. (p(i)+p(j))/(rho(i)*rho(j))
-!         2 : (e.g. (p(i)/rho(i)**2+p(j)/rho(j)**2)
-integer :: pa_sph = 2 
-
-!Nearest neighbor particle searching (nnps) method
-!nnps = 1 : Simplest and direct searching
-!       2 : Sorting grid linked list
-!       3 : Tree algorithm
-integer :: nnps = 1 
-
-!Smoothing length evolution (sle) algorithm
-!sle = 0 : Keep unchanged,
-!      1 : h = fac * (m/rho)^(1/dim)
-!      2 : dh/dt = (-1/dim)*(h/rho)*(drho/dt)
-!      3 : Other approaches (e.g. h = h_0 * (rho_0/rho)**(1/dim) ) 
-integer :: sle = 0 
-
-!Smoothing kernel function 
-!skf = 1, cubic spline kernel by W4 - Spline (Monaghan 1985)
-!    = 2, Gauss kernel   (Gingold and Monaghan 1981) 
-!    = 3, Quintic kernel (Morris 1997)
-!    = 4, Wendland    
-integer :: skf = 4 
-
-!Switches for different senarios
-
-!summation_density = .TRUE. : Use density summation model in the code, 
-!                    .FALSE.: Use continuiity equation
-!average_velocity = .TRUE. : Monaghan treatment on average velocity,
-!                   .FALSE.: No average treatment.
-!config_input = .TRUE. : Load initial configuration data,
-!               .FALSE.: Generate initial configuration.
-!virtual_part = .TRUE. : Use vritual particle,
-!               .FALSE.: No use of vritual particle.
-!vp_input = .TRUE. : Load virtual particle information,
-!           .FALSE.: Generate virtual particle information.
-!visc = .true. : Consider viscosity,
-!       .false.: No viscosity.
-!ex_force =.true. : Consider external force,
-!          .false.: No external force.
-!visc_artificial = .true. : Consider artificial viscosity,
-!                  .false.: No considering of artificial viscosity.
-!heat_artificial = .true. : Consider artificial heating,
-!                  .false.: No considering of artificial heating.
-!self_gravity = .true. : Considering self_gravity,
-!               .false.: No considering of self_gravity
-!nor_density =  .true. : Density normalization by using CSPM,
-!               .false.: No normalization.
-
-integer :: integrate_scheme = 1  ! =1, LF; =2, Verlet
-logical :: summation_density  = .false.         
-logical :: average_velocity  = .true.         
-logical :: config_input  = .false. 
-logical :: virtual_part  = .true. 
-logical :: vp_input  = .false.  
-logical :: visc  = .true.  
-logical :: ex_force  = .true.
-logical :: visc_artificial  = .true. 
-logical :: heat_artificial  = .false. 
-logical :: self_gravity  = .true.      
-logical :: nor_density  = .false.              
-
-integer :: soil_pressure = 2  ! =1, eos; =2, mean trace
-integer :: stress_integration = 1
-integer :: yield_criterion = 2
-integer :: plasticity = 3  ! =0 non; =1 Bui, =2 return mapping =3 Lopez
-logical :: artificial_density = .true.                  
-logical :: soil_artificial_stress = .true.
-
-logical :: volume_fraction = .true.
-logical :: water_artificial_volume = .true.
-logical :: volume_fraction_renorm = .true.
-
-! 0 ignor; 1 negative pressure to zero; 2 artficial stress
-integer :: water_tension_instability = 0
-
-! Symmetry of the problem
-! nsym = 0 : no symmetry,
-!      = 1 : axis symmetry,
-!      = 2 : center symmetry.     
-integer :: nsym = 0
-
-! Control parameters for output 
-! int_stat = .true. : Print statistics about SPH particle interactions.
-!                     including virtual particle information.
-! print_step: Print Timestep (On Screen)
-! save_step : Save Timestep    (To Disk File)
-! moni_particle: The particle number for information monitoring.
-logical :: int_stat = .true.
-integer :: print_step, save_step, moni_particle = 264
-          
-!Simulation cases
-
-!shocktube = .true. : carry out shock tube simulation
-!shearcavity = .true. : carry out shear cavity simulation
-!logical shocktube, shearcavity, waterjet
-logical :: shocktube  = .false. 
-logical :: shearcavity  = .false. 
-logical :: waterjet = .true.
-
-!Recorde time interval
-integer :: save_step_from = 0, save_step_to = 100
-
-!Material parameters
-
-!For equation of state (EOS) of water
-
-!real(dp) rho0_f,b,gamma,cf,viscosity
-
-!For soil
-
-!real(dp) rho0_s,cs,k,porosity,permeability,G,E,niu,cohesion,phi
-   
-! Artificial viscosity
-! alpha: shear viscosity; beta: bulk viscosity; etq: to avoid sigularities   
-!real(dp) :: alpha=0.1d0, beta=0.d0, etq=0.1d0
-
-! Leonard_Johns repulsive force
-!real(dp) :: rr0 = 0.005d0, dd = 0.1d0, p1 = 12, p2 = 4
-
-! Delta-SPH
-!real(dp) :: delta = 0.1d0
-        
-end type parameters 
-!-----------------------------------------------------------------
-
 type material
 
 ! For water
@@ -228,19 +68,16 @@ end type
 type particles
 
 !Physics parameter
-real(dp) :: gravity = -9.8
+!real(dp) :: gravity = -9.8
 
 !Geometry parameters
 
 !dim : Dimension of the problem (1, 2 or 3)
 integer :: dim = 2        
         
-!   integer :: nnps  = 1
    integer :: niac  = 0
    integer :: ntotal = 0, nvirt = 0
    real(dp) dspp  ! initial particle interval  
-
-
 
 !Parameters for the computational geometry,  
 !x_maxgeom : Upper limit of allowed x-regime 
@@ -328,32 +165,32 @@ integer :: skf = 4
 !nor_density =  .true. : Density normalization by using CSPM,
 !               .false.: No normalization.
 
-integer :: integrate_scheme = 1  ! =1, LF; =2, Verlet
-logical :: summation_density  = .false.         
-logical :: average_velocity  = .true.         
-logical :: config_input  = .false. 
-logical :: virtual_part  = .true. 
-logical :: vp_input  = .false.  
-logical :: visc  = .true.  
-logical :: ex_force  = .true.
-logical :: visc_artificial  = .true. 
-logical :: heat_artificial  = .false. 
-logical :: self_gravity  = .true.      
-logical :: nor_density  = .false.              
+!integer :: integrate_scheme = 1  ! =1, LF; =2, Verlet
+!logical :: summation_density  = .false.         
+!logical :: average_velocity  = .true.         
+!logical :: config_input  = .false. 
+!logical :: virtual_part  = .true. 
+!logical :: vp_input  = .false.  
+!logical :: visc  = .true.  
+!logical :: ex_force  = .true.
+!logical :: visc_artificial  = .true. 
+!logical :: heat_artificial  = .false. 
+!logical :: self_gravity  = .true.      
+!logical :: nor_density  = .false.              
 
-integer :: soil_pressure = 2  ! =1, eos; =2, mean trace
-integer :: stress_integration = 1
-integer :: yield_criterion = 2
-integer :: plasticity = 3  ! =0 non; =1 Bui, =2 return mapping =3 Lopez
-logical :: artificial_density = .true.                  
-logical :: soil_artificial_stress = .true.
+!integer :: soil_pressure = 2  ! =1, eos; =2, mean trace
+!integer :: stress_integration = 1
+!integer :: yield_criterion = 2
+!integer :: plasticity = 3  ! =0 non; =1 Bui, =2 return mapping =3 Lopez
+!logical :: artificial_density = .true.                  
+!logical :: soil_artificial_stress = .true.
 
-logical :: volume_fraction = .true.
-logical :: water_artificial_volume = .true.
-logical :: volume_fraction_renorm = .true.
+!logical :: volume_fraction = .true.
+!logical :: water_artificial_volume = .true.
+!logical :: volume_fraction_renorm = .true.
 
 ! 0 ignor; 1 negative pressure to zero; 2 artficial stress
-integer :: water_tension_instability = 0
+!integer :: water_tension_instability = 0
 
 ! Symmetry of the problem
 ! nsym = 0 : no symmetry,
@@ -372,28 +209,6 @@ integer :: print_step, save_step, moni_particle = 264
 
 !Recorde time interval
 integer :: save_step_from = 0, save_step_to = 100
-
-!Material parameters
-
-!For equation of state (EOS) of water
-
-!real(dp) rho0_f,b,gamma,cf,viscosity
-
-!For soil
-
-!real(dp) rho0_s,cs,k,porosity,permeability,G,E,niu,cohesion,phi
-   
-! Artificial viscosity
-! alpha: shear viscosity; beta: bulk viscosity; etq: to avoid sigularities   
-!real(dp) :: alpha=0.1d0, beta=0.d0, etq=0.1d0
-
-! Leonard_Johns repulsive force
-!real(dp) :: rr0 = 0.005d0, dd = 0.1d0, p1 = 12, p2 = 4
-
-! Delta-SPH
-!real(dp) :: delta = 0.1d0   
-
-!   class(parameters), pointer :: params => null()
 
    character(len=32) :: imaterial
    class(*), pointer :: material => null()
@@ -531,6 +346,7 @@ integer :: save_step_from = 0, save_step_to = 100
        procedure :: delta_sph
        procedure :: delta_sph_omp
        procedure :: av_vel
+       procedure :: av_vel_omp
        procedure :: repulsive_force
        procedure :: df
        procedure :: df_omp
@@ -546,6 +362,7 @@ integer :: save_step_from = 0, save_step_to = 100
 !       procedure :: grad_tensor
 !       generic :: grad => grad_scalar, grad_tensor
       procedure :: shear_strain_rate 
+      procedure :: shear_strain_rate_omp
       procedure :: Jaumann_rate
       procedure :: Jaumann_rate_omp
       procedure :: mohr_coulomb_failure_criterion
@@ -1339,8 +1156,8 @@ end function
       integer dnxgcell(3),dpxgcell(3)
       real(dp) hsml,dr,r,dx(3),tdwdx(3)
 
-      INTEGER nthreads,n_per_threads, niac_per_threads, it, n_start(8), n_end(8)
-      Integer niac_start(8),niac_end(8), last
+      INTEGER nthreads,n_per_threads, niac_per_threads, it, n_start(4), n_end(4)
+      Integer niac_start(4),niac_end(4), last
       INTEGER, EXTERNAL :: OMP_GET_THREAD_NUM, OMP_GET_NUM_THREADS
       real(dp) t1,t2,t3
 
@@ -1366,24 +1183,28 @@ end function
       enddo
 
 !     Determine interaction parameters:
-!$omp parallel
-      nthreads = omp_get_num_threads()
-!$omp end parallel
+!!!$omp parallel
+!!      nthreads = omp_get_num_threads()
+!!!$omp end parallel
+      nthreads = parts%nthreads
+!      allocate(n_start(nthreads),n_end(nthreads))
+
       n_per_threads = ntotal/nthreads
       niac_per_threads = parts%max_interaction/nthreads
       do it = 1, nthreads
          n_start(it)=(it-1)*n_per_threads+1
          n_end(it) = it*n_per_threads
-         niac_start(it)=(it-1)*niac_per_threads
-         niac_end(it)=niac_start(it)
+         parts%niac_start(it)=(it-1)*niac_per_threads
+         parts%niac_end(it)=parts%niac_start(it)
       enddo   
+      n_end(nthreads) = n_end(nthreads) + mod(ntotal,nthreads)
 
       parts%pair_i = 0; parts%pair_j=0
 !      t1 = rtc()
 !$omp parallel 
 !$omp do private(niac,i,d,minxcell,maxxcell,dnxgcell,dpxgcell,xcell,ycell,zcell,j,dx,dr,r,tdwdx)
 do it = 1, nthreads
-       niac = niac_start(it)
+       niac = parts%niac_start(it)
        do i = n_start(it),n_end(it)
 
 !      niac = 0
@@ -1449,8 +1270,8 @@ do it = 1, nthreads
         enddo !zcell
       enddo !i
 
-      niac_start(it) = niac_start(it)+1
-      niac_end(it) = niac
+      parts%niac_start(it) = parts%niac_start(it)+1
+      parts%niac_end(it) = niac
       enddo !it      
 !$omp end do
 !$omp end parallel
@@ -1458,7 +1279,7 @@ do it = 1, nthreads
 !      write(*,*) t2-t1
       parts%niac = 0
       do it = 1, nthreads
-         parts%niac = parts%niac + niac_end(it)-niac_start(it)+1
+         parts%niac = parts%niac + parts%niac_end(it)-parts%niac_start(it)+1
       enddo
 
       last = parts%max_interaction
@@ -1816,9 +1637,6 @@ enddo
 
 end function
 
-
-! Calculate partial derivatives of a field
-
 !-------------------------------------------
           function df2_omp(parts,f,x)
 !-------------------------------------------
@@ -1881,8 +1699,7 @@ do i = 1, parts%ntotal + parts%nvirt
 enddo   
 
 end function
-
-
+          
 ! Calculate partial derivatives of a field
 !-------------------------------------------
           function df3(parts,f,x)
@@ -1909,9 +1726,11 @@ do k=1,parts%niac
    df3(i) = df3(i) + parts%mass(j)*fwx
    df3(j) = df3(j) - parts%mass(i)*fwx
 enddo
+
 do i = 1, parts%ntotal + parts%nvirt
    df3(i) = df3(i)*parts%rho(i)
 enddo
+
 end function
 
 !-------------------------------------------
@@ -1977,6 +1796,7 @@ enddo
 
 
 end function
+
 
 
 !-----------------------------------------------------------------------
@@ -2088,7 +1908,6 @@ end function
    
       return
       end subroutine
-
 !---------------------------------------------------------------------
       subroutine initial_density(parts)
 !---------------------------------------------------------------------
@@ -2151,10 +1970,10 @@ end function
       elseif(parts%imaterial=='soil')then
 
          soil => parts%material
-         if(parts%soil_pressure==1)          &
-         parts%p(1:ntotal) = soil%k*(parts%rho(1:ntotal)/soil%rho0-1)
-!         parts%p(1:ntotal) = parts%p(1:ntotal)
-!     &                      -soil%k*parts%vcc(1:ntotal)*0.000005   !*dt
+!         if(parts%soil_pressure==1)          &
+!         parts%p(1:ntotal) = soil%k*(parts%rho(1:ntotal)/soil%rho0-1)
+!!         parts%p(1:ntotal) = parts%p(1:ntotal)
+!!     &                      -soil%k*parts%vcc(1:ntotal)*0.000005   !*dt
          parts%c(1:ntotal) = soil%c
 
       endif
@@ -2227,7 +2046,6 @@ return
 end subroutine
 
 !Subroutine to calculate the density with SPH summation algorithm.
-
 !----------------------------------------------------------------------
       subroutine sum_density(parts) 
 !----------------------------------------------------------------------
@@ -2430,7 +2248,7 @@ end subroutine
       real  div_v_local(parts%maxn,4)
 !      real, allocatable, dimension(:,:) :: div_v_local
       double precision vcc, dvx(3) 
- !     allocate(div_v_local(parts%maxn,8))
+
       ntotal = parts%ntotal + parts%nvirt
        call parts%get_niac_start_end
       do i = 1, ntotal
@@ -2468,7 +2286,6 @@ end subroutine
      !$omp end parallel
  !    deallocate(div_v_local)
       end subroutine
-
 
 !----------------------------------------------------------------------
       subroutine newtonian_fluid(parts)
@@ -2553,7 +2370,6 @@ end subroutine
       return
       end subroutine
 
-
 !-------------------------------------------------------------------
       subroutine delta_sph(parts,f,df)
 !-------------------------------------------------------------------
@@ -2595,8 +2411,8 @@ end subroutine
       end subroutine
 
 !     Subroutine to calculate the average velocity to correct velocity
-!     for preventing.penetration (monaghan, 1992)      
-      
+!     for preventing.penetration (monaghan, 1992)     
+
 !-------------------------------------------------------------------
       subroutine delta_sph_omp(parts,f,df)
 !-------------------------------------------------------------------
@@ -2692,8 +2508,6 @@ end subroutine
       return
       end subroutine
 
-!     Subroutine to calculate the average velocity to correct velocity
-!     for preventing.penetration (monaghan, 1992)      
 !----------------------------------------------------------------------      
       subroutine av_vel_omp(parts)
 !----------------------------------------------------------------------   
@@ -2755,6 +2569,86 @@ end subroutine
 
 !----------------------------------------------------------------------
       subroutine shear_strain_rate(parts)
+!----------------------------------------------------------------------
+      implicit none
+
+      class(particles) parts
+      real(dp) dvx(3), hxx, hyy, hzz, hxy, hxz, hyz
+      integer i, j, k, d, dim, ntotal, niac
+
+      ntotal = parts%ntotal + parts%nvirt
+      niac = parts%niac; dim = parts%dim
+
+      parts%txx(1:ntotal) = 0.e0
+      if(dim>=2)then
+         parts%tyy(1:ntotal) = 0.e0
+         parts%txy(1:ntotal) = 0.e0
+      endif
+      if(dim==3)then
+         parts%tzz(1:ntotal) = 0.e0
+         parts%txz(1:ntotal) = 0.e0
+         parts%tyz(1:ntotal) = 0.e0
+      endif
+      
+!     Calculate SPH sum for shear tensor Tab = va,b + vb,a - 2/3 delta_ab vc,c
+
+        do k=1,niac
+          i = parts%pair_i(k)
+          j = parts%pair_j(k)
+          do d=1,dim
+             dvx(d) = parts%vx(d,j) - parts%vx(d,i)
+          enddo
+          if (dim.eq.1) then 
+             hxx = 2.e0*dvx(1)*parts%dwdx(1,k)        
+          else if (dim.eq.2) then           
+             hxx = 2.e0*dvx(1)*parts%dwdx(1,k) - dvx(2)*parts%dwdx(2,k) 
+             hxy = dvx(1)*parts%dwdx(2,k) + dvx(2)*parts%dwdx(1,k)
+             hyy = 2.e0*dvx(2)*parts%dwdx(2,k) - dvx(1)*parts%dwdx(1,k)
+          else if (dim.eq.3) then
+             hxx = 2.e0*dvx(1)*parts%dwdx(1,k) - dvx(2)*parts%dwdx(2,k)   &
+                   - dvx(3)*parts%dwdx(3,k) 
+             hxy = dvx(1)*parts%dwdx(2,k) + dvx(2)*parts%dwdx(1,k)
+             hxz = dvx(1)*parts%dwdx(3,k) + dvx(3)*parts%dwdx(1,k)          
+             hyy = 2.e0*dvx(2)*parts%dwdx(2,k) - dvx(1)*parts%dwdx(1,k)   &    
+                   - dvx(3)*parts%dwdx(3,k)
+             hyz = dvx(2)*parts%dwdx(3,k) + dvx(3)*parts%dwdx(2,k)
+             hzz = 2.e0*dvx(3)*parts%dwdx(3,k) - dvx(1)*parts%dwdx(1,k)   &
+                   - dvx(2)*parts%dwdx(2,k)
+          endif                              
+          hxx = 2.e0/3.e0*hxx
+          hyy = 2.e0/3.e0*hyy
+          hzz = 2.e0/3.e0*hzz
+          if (dim.eq.1) then 
+             parts%txx(i) = parts%txx(i) + parts%mass(j)*hxx/parts%rho(j)
+             parts%txx(j) = parts%txx(j) + parts%mass(i)*hxx/parts%rho(i)               
+          else if (dim.eq.2) then           
+             parts%txx(i) = parts%txx(i) + parts%mass(j)*hxx/parts%rho(j)
+             parts%txx(j) = parts%txx(j) + parts%mass(i)*hxx/parts%rho(i)   
+             parts%txy(i) = parts%txy(i) + parts%mass(j)*hxy/parts%rho(j)
+             parts%txy(j) = parts%txy(j) + parts%mass(i)*hxy/parts%rho(i)            
+             parts%tyy(i) = parts%tyy(i) + parts%mass(j)*hyy/parts%rho(j)
+             parts%tyy(j) = parts%tyy(j) + parts%mass(i)*hyy/parts%rho(i)          
+          else if (dim.eq.3) then
+!             txx(i) = txx(i) + mass(j)*hxx/rho(j)
+!             txx(j) = txx(j) + mass(i)*hxx/rho(i)   
+!             txy(i) = txy(i) + mass(j)*hxy/rho(j)
+!             txy(j) = txy(j) + mass(i)*hxy/rho(i) 
+!             txz(i) = txz(i) + mass(j)*hxz/rho(j)
+!             txz(j) = txz(j) + mass(i)*hxz/rho(i)                     
+!             tyy(i) = tyy(i) + mass(j)*hyy/rho(j)
+!             tyy(j) = tyy(j) + mass(i)*hyy/rho(i)
+!             tyz(i) = tyz(i) + mass(j)*hyz/rho(j)
+!             tyz(j) = tyz(j) + mass(i)*hyz/rho(i)   
+!             tzz(i) = tzz(i) + mass(j)*hzz/rho(j)
+!             tzz(j) = tzz(j) + mass(i)*hzz/rho(i)                 
+          endif                              
+        enddo
+
+      return
+      end subroutine      
+
+!----------------------------------------------------------------------
+      subroutine shear_strain_rate_omp(parts)
 !----------------------------------------------------------------------
       implicit none
 
@@ -2864,7 +2758,7 @@ end subroutine
       return
       end subroutine      
 
-
+      
 !---------------------------------------------------------------------
       subroutine Jaumann_rate(parts)
 !----------------------------------------------------------------------
@@ -2888,11 +2782,11 @@ end subroutine
          parts%dsyy(i) = parts%dsyy(i)+G*parts%tyy(i)
       enddo
 
-         if(parts%soil_pressure==2)then
+!         if(parts%soil_pressure==2)then
       do i = 1, ntotal
          parts%dp(i)   = parts%dp(i) - soil%k*parts%vcc(i)  !!! simultaneous pressure  
       enddo
-         endif         
+!         endif         
      
 !     spin tensor
 
@@ -2940,7 +2834,7 @@ end subroutine
       return
       end subroutine
       
-      
+
 !---------------------------------------------------------------------
       subroutine Jaumann_rate_omp(parts)
 !----------------------------------------------------------------------
@@ -2965,11 +2859,11 @@ end subroutine
          parts%dsyy(i) = parts%dsyy(i)+G*parts%tyy(i)
       enddo
       !$omp end parallel do
-         if(parts%soil_pressure==2)then
+!         if(parts%soil_pressure==2)then
       do i = 1, ntotal
          parts%dp(i)   = parts%dp(i) - soil%k*parts%vcc(i)  !!! simultaneous pressure  
       enddo
-         endif         
+!         endif         
      
 !     spin tensor
 
@@ -3140,7 +3034,7 @@ end subroutine
 
       return
       end subroutine      
-
+      
 !------------------------------------------------------------
       subroutine drucker_prager_failure_criterion(soil)
 !------------------------------------------------------------
@@ -3201,6 +3095,7 @@ end subroutine
 
       return
       end subroutine
+
 !------------------------------------------------------------
       subroutine drucker_prager_failure_criterion_omp(soil)
 !------------------------------------------------------------
@@ -3263,7 +3158,7 @@ end subroutine
 
       return
       end subroutine
-
+      
 !------------------------------------------------------------
       subroutine plastic_or_not(soil)
 !------------------------------------------------------------
@@ -3284,7 +3179,6 @@ end subroutine
    
       k = 0
       soil%fail = 0
-
       do i = 1, ntotal
          !tmax  = sqrt(((sxx(i)-syy(i))/2)**2+sxy(i)**2)
          !if(tmax<1.e-6)cycle
@@ -3321,12 +3215,11 @@ end subroutine
         endif
 
       enddo
-
       soil%nfail = k
 
       return
       end subroutine
-      
+
 !------------------------------------------------------------
       subroutine plastic_or_not_omp(soil)
 !------------------------------------------------------------
@@ -3389,7 +3282,6 @@ end subroutine
 
       return
       end subroutine
-
 
 !---------------------------------------------------------------------
       subroutine plastic_flow_rule(parts)
@@ -3549,6 +3441,7 @@ end subroutine
       k   = property%k; e = property%E; niu = property%niu
       alpha = tan(phi)/sqrt(9.+12.*tan(phi)**2.)
       G = e/(2.0*(1+niu))
+      
       do i = 1, ntotal
                             if(parts%fail(i)==1)then
 
@@ -3583,6 +3476,7 @@ end subroutine
       
       return
       end subroutine
+
 !---------------------------------------------------------------------
       subroutine plastic_flow_rule3_omp(parts)
 !---------------------------------------------------------------------
@@ -3649,6 +3543,7 @@ end subroutine
       
       return
       end subroutine
+      
 !---------------------------------------------------------------
       subroutine darcy_law(water, soil)
 !---------------------------------------------------------------
@@ -3681,7 +3576,8 @@ end subroutine
 
 ! For staturated soil
 !        if(volume_fraction) cf = water%vof(i)*water%rho(i)*(-gravity)/ks
-        if(water%volume_fraction) cf = water%vof(i)*soil%vof(j)*water%rho(i)*(-gravity)/ks
+!        if(water%volume_fraction) cf = water%vof(i)*soil%vof(j)*water%rho(i)*(-gravity)/ks
+        cf = water%vof(i)*soil%vof(j)*water%rho(i)*(-gravity)/ks
 
           do d=1,dim
              sp = cf*(water%vx(d,i)-soil%vx(d,j))*rrw
@@ -3716,13 +3612,13 @@ end subroutine
          enddo
 
 ! saturated soil
-         if(water%volume_fraction)then
+         !if(water%volume_fraction)then
          !do d = 1, dim
             !water%dvx(d,i) = water%dvx(d,i) -                     & ! Must be -
             !soil%mass(j)*water%p(i)*soil%vof(j)*water%dwdx(d,k)/  &
             !(water%rho(i)*soil%rho(j))
          !enddo
-         endif
+         !endif
       enddo
 
       return
