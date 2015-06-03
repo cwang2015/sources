@@ -343,11 +343,13 @@ integer :: save_step_from = 0, save_step_to = 100
        procedure :: con_density_omp
        procedure :: newtonian_fluid
        procedure :: art_visc
+       procedure :: art_visc_omp
        procedure :: delta_sph
        procedure :: delta_sph_omp
        procedure :: av_vel
        procedure :: av_vel_omp
        procedure :: repulsive_force
+       procedure :: repulsive_force_omp
        procedure :: df
        procedure :: df_omp
        procedure :: df2
@@ -1512,6 +1514,71 @@ enddo
        
 return
 end subroutine
+      
+      !--------------------------------------------------------------------------
+      subroutine repulsive_force_omp(parts)
+!--------------------------------------------------------------------------
+implicit none
+
+class(particles) parts
+double precision dx(3), rr, f, rr0, dd, p1, p2     
+integer i, j, k, d, ii, it, ntotal
+real(dp) local(2,parts%maxn,8)
+ntotal = parts%ntotal + parts%nvirt
+rr0 = parts%dspp; dd = parts%numeric%dd
+p1 = parts%numeric%p1; p2 = parts%numeric%p2
+  
+!$omp parallel 
+!$omp do private(i,it,j,d,k,rr,dx,f,ii)    
+do it = 1,parts%nthreads
+        do i =1,ntotal
+          do d = 1,parts%dim
+            local(d,i,it) = 0.
+          enddo
+        enddo
+    do k=parts%niac_start(it),parts%niac_end(it)
+
+   i = parts%pair_i(k)
+   j = parts%pair_j(k)
+   if(parts%itype(i)*parts%itype(j)>0)cycle  
+!   if(parts%itype(i).gt.0.and.parts%itype(j).lt.0)then  
+      rr = 0.      
+      do d=1,parts%dim
+         dx(d) =  parts%x(d,i) -  parts%x(d,j)
+         rr = rr + dx(d)*dx(d)
+      enddo  
+      rr = sqrt(rr)
+      !if(rr.lt.rr0)then
+      if(rr.gt.rr0)cycle
+         f = ((rr0/rr)**p1-(rr0/rr)**p2)/rr**2
+         
+         ii = i
+         if(parts%itype(i)<0)ii=j 
+
+         do d = 1, parts%dim
+             local(d,ii,it) = local(d,ii,it) +dd*dx(d)*f
+!            parts%dvx(d, ii) = parts%dvx(d, ii) + dd*dx(d)*f
+         enddo
+    enddo
+      !endif
+   !endif        
+enddo   
+!$omp enddo
+!$omp barrier
+!$omp do private(it)
+     do i = 1,ntotal
+         do it = 1,parts%nthreads
+           do d = 1,parts%dim
+             parts%dvx(d,i) = parts%dvx(d,i) +local(d,i,it)
+           enddo
+         enddo
+     enddo
+!$omp end do
+!$omp end parallel
+
+return
+end subroutine
+
 
 ! Calculate partial derivatives of a field
 !-------------------------------------------
@@ -1552,7 +1619,7 @@ real(dp) f(:)
 character(len=1) x
 class(particles) parts
 real(dp), allocatable, dimension(:) :: df_omp
-real(dp) df_local(parts%maxn,4)
+real(dp) df_local(parts%maxn,8)
 real(dp), pointer, dimension(:) :: dwdx
 real(dp) fwx
 integer i, j, k, ntotal, it, nthreads
@@ -1646,7 +1713,7 @@ real(dp) f(:)
 character(len=1) x
 class(particles) parts
 real(dp), allocatable :: df2_omp(:)
-real(dp) df_local(parts%maxn,4)
+real(dp) df_local(parts%maxn,8)
 real(dp), pointer, dimension(:) :: dwdx
 real(dp) fwx
 integer i, j, k,ntotal,nthreads,it
@@ -1742,7 +1809,7 @@ real(dp) f(:)
 character(len=1) x
 class(particles) parts
 real(dp), allocatable, dimension(:) :: df3_omp
-real(dp) df3_local(parts%maxn,4)
+real(dp) df3_local(parts%maxn,8)
 real(dp), pointer, dimension(:) :: dwdx
 real(dp) fwx
 integer i,j,k,it,ntotal,nthreads
@@ -1852,7 +1919,7 @@ end function
       integer, pointer, dimension(:) :: pair_i, pair_j
       double precision, pointer, dimension(:) :: mass, rho, vcc
       double precision, pointer, dimension(:,:) :: vx, dwdx
-      real local(parts%maxn,4)
+      real local(parts%maxn,8)
       integer i,j,k,d, dim, ntotal, niac,it
       double precision dvx(3), hvcc
       
@@ -2112,7 +2179,7 @@ end subroutine
       class(particles) parts
       integer ntotal, i, j, k, d,it 
       real(dp) selfdens, hv(3), r, wi(parts%maxn)     
-      real local(parts%maxn,4)
+      real local(parts%maxn,8)
       ntotal = parts%ntotal + parts%nvirt
 
 !     wi(maxn)---integration of the kernel itself
@@ -2245,7 +2312,7 @@ end subroutine
       class(particles) parts      
 
       integer ntotal,i,j,k,d,it
-      real  div_v_local(parts%maxn,4)
+      real  div_v_local(parts%maxn,8)
 !      real, allocatable, dimension(:,:) :: div_v_local
       double precision vcc, dvx(3) 
 
@@ -2370,6 +2437,97 @@ end subroutine
       return
       end subroutine
 
+      
+! Subroutine to calculate the artificial viscosity (Monaghan, 1992) 
+!----------------------------------------------------------------------      
+      subroutine art_visc_omp(parts)
+!----------------------------------------------------------------------
+      implicit none
+
+      class(particles) parts
+
+      type(numerical), pointer :: numeric
+      real local(2,parts%maxn,8)
+      real(dp) dx, dvx(3), alpha, beta, etq, piv, muv, vr, rr, h, mc, mrho, mhsml
+      integer i,j,k,d,dim,ntotal,niac,it
+
+      ntotal   =  parts%ntotal + parts%nvirt
+      niac     =  parts%niac; dim = parts%dim
+            
+      numeric  => parts%numeric      
+      alpha = numeric%alpha; beta = numeric%beta; etq = numeric%etq
+         
+!     Calculate SPH sum for artificial viscosity
+      
+     !$omp parallel 
+     !$omp do private(i,j,d,k,mhsml,dvx,dx,vr,rr,muv,mc,mrho,piv,h)    
+     do it = 1,parts%nthreads
+         do i =1,ntotal
+             do d = 1,dim
+             local(d,i,it) = 0.
+             enddo
+         enddo
+      do k=parts%niac_start(it),parts%niac_end(it)
+
+        i = parts%pair_i(k)
+        j = parts%pair_j(k)
+        mhsml= (parts%hsml(i)+parts%hsml(j))/2.
+        vr = 0.e0
+        rr = 0.e0
+        do d=1,dim
+          dvx(d) = parts%vx(d,i) - parts%vx(d,j)
+          dx     = parts%x(d,i)  - parts%x(d,j)
+          vr     = vr + dvx(d)*dx
+          rr     = rr + dx*dx
+        enddo
+
+!     Artificial viscous force only if v_ij * r_ij < 0
+
+        if (vr.lt.0.e0) then
+
+!     Calculate muv_ij = hsml v_ij * r_ij / ( r_ij^2 + hsml^2 etq^2 )
+            
+          muv = mhsml*vr/(rr + mhsml*mhsml*etq*etq)
+          
+!     Calculate PIv_ij = (-alpha muv_ij c_ij + beta muv_ij^2) / rho_ij
+
+          mc   = 0.5e0*(parts%c(i) + parts%c(j))
+          mrho = 0.5e0*(parts%rho(i) + parts%rho(j))
+          piv  = (beta*muv - alpha*mc)*muv/mrho              
+
+!     Calculate SPH sum for artificial viscous force
+
+          do d=1,dim
+            h = -piv*parts%dwdx(d,k)
+            local(d,i,it) = local(d,i,it) + parts%mass(j)*h
+            local(d,j,it) = local(d,j,it) - parts%mass(i)*h
+!            parts%dvx(d,i) = parts%dvx(d,i) + parts%mass(j)*h
+!            parts%dvx(d,j) = parts%dvx(d,j) - parts%mass(i)*h
+!            dedt(i) = dedt(i) - mass(j)*dvx(d)*h
+!            dedt(j) = dedt(j) - mass(i)*dvx(d)*h
+          enddo
+        endif
+      enddo
+      enddo
+     !$omp enddo
+     !$omp barrier
+     !$omp do private(it,d)
+     do i = 1,ntotal
+         do d = 1,dim
+             do it = 1,parts%nthreads
+               parts%dvx(d,i) = parts%dvx(d,i) + local(d,i,it)
+             enddo
+         enddo
+     enddo
+     !$omp end do
+     !$omp end parallel
+
+!     Change of specific internal energy:
+
+      return
+      end subroutine
+
+
 !-------------------------------------------------------------------
       subroutine delta_sph(parts,f,df)
 !-------------------------------------------------------------------
@@ -2420,7 +2578,7 @@ end subroutine
 
       class(particles) parts
       real(dp), dimension(:) :: f,df
-      real local(parts%maxn,4)
+      real local(parts%maxn,8)
       real(dp) dx(3),delta, muv, rr, h
       integer i,j,k,d,ntotal,niac,dim,it
 
@@ -2516,7 +2674,7 @@ end subroutine
       class(particles),target :: parts
       real(dp) vcc, dvx(3), epsilon, mrho
       integer i,j,k,d,ntotal,niac,it
-      real local(2,parts%maxn,4)
+      real local(2,parts%maxn,8)
 
       ntotal = parts%ntotal
       niac   = parts%niac
@@ -2655,9 +2813,9 @@ end subroutine
       class(particles) parts
       real(dp) dvx(3), hxx, hyy, hzz, hxy, hxz, hyz
       integer i, j, k, d, dim, ntotal, niac,it
-      real local_xx(parts%maxn,4)
-      real local_xy(parts%maxn,4)
-      real local_yy(parts%maxn,4)
+      real local_xx(parts%maxn,8)
+      real local_xy(parts%maxn,8)
+      real local_yy(parts%maxn,8)
 
       ntotal = parts%ntotal + parts%nvirt
       niac = parts%niac; dim = parts%dim
@@ -2843,7 +3001,7 @@ end subroutine
       class(particles) parts
       type(material), pointer :: soil
       real(dp) dvx(3), hxx, hyy, hzz, hxy, hxz, hyz, G 
-      real local(parts%maxn,4)
+      real local(parts%maxn,8)
       integer i, j, k, d, dim, ntotal, niac,it
 
       ntotal = parts%ntotal + parts%nvirt

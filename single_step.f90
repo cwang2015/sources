@@ -176,8 +176,13 @@ if(trim(pl%imaterial)=='soil')then
 endif
 !---  Artificial viscosity:
 
-if (visc_artificial) call pl%art_visc
-
+if (visc_artificial) then
+   if(pl%nthreads==1)then
+     call pl%art_visc
+   else
+     call pl%art_visc_omp
+   endif  
+endif   
 if(trim(pl%imaterial)=='soil'.and.soil_artificial_stress)then
         !call art_stress(pl)
    if(pl%nthreads==1)then
@@ -209,6 +214,11 @@ endif
 !      if (ex_force)then
 !          if(self_gravity) call gravity_force(pl)
 !          call repulsive_force(pl)
+   if(pl%nthreads==1)then
+       call pl%repulsive_force
+   else
+       call pl%repulsive_force_omp
+   endif  
           call pl%repulsive_force
 !      endif
 
