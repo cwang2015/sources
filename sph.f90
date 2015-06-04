@@ -2,7 +2,7 @@
 !     subroutine beham
 
 use constants
-use param
+!use param
 use declarations
 use declarations_sph
 implicit none     
