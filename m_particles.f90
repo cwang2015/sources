@@ -111,7 +111,7 @@ real(dp) mingridx(3),maxgridx(3),dgeomx(3)
 
 !maxn: Maximum number of particles
 !max_interation : Maximum number of interaction pairs
-integer :: maxn = 2000, max_interaction = 10 * 2000
+integer :: maxn = 12000, max_interaction = 10 * 12000
   
 !SPH algorithm
 
@@ -1149,7 +1149,6 @@ end function
 !   the interaction parameters used by the SPH algorithm. Interaction 
 !   pairs are determined by using a sorting grid linked list  
 !----------------------------------------------------------------------
-      use ifport
       implicit none
 
       class(particles) parts
@@ -1158,9 +1157,132 @@ end function
       integer dnxgcell(3),dpxgcell(3)
       real(dp) hsml,dr,r,dx(3),tdwdx(3)
 
-      INTEGER nthreads,n_per_threads, niac_per_threads, it, n_start(4), n_end(4)
-      Integer niac_start(4),niac_end(4), last
-      INTEGER, EXTERNAL :: OMP_GET_THREAD_NUM, OMP_GET_NUM_THREADS
+!      INTEGER nthreads,n_per_threads, niac_per_threads, it, n_start(8), n_end(8)
+!      INTEGER, EXTERNAL :: OMP_GET_THREAD_NUM, OMP_GET_NUM_THREADS
+
+      ntotal  = parts%ntotal + parts%nvirt
+      scale_k = parts%get_scale_k()
+      hsml = parts%hsml(1)             !!! hsml is same for all particles!
+
+      do i=1,ntotal
+         parts%countiac(i) = 0
+      enddo
+
+      call parts%init_grid
+      
+!     Position particles on grid and create linked list:
+      
+      do i=1,ntotal
+        call parts%grid_geom(i,parts%x(:,i),gcell)
+        do d=1,parts%dim
+          parts%xgcell(d,i) = gcell(d)
+        enddo
+        parts%celldata(i) = parts%grid(gcell(1),gcell(2),gcell(3))
+        parts%grid(gcell(1),gcell(2),gcell(3)) = i
+      enddo
+
+!     Determine interaction parameters:
+!!$omp parallel
+!      nthreads = omp_get_num_threads()
+!      write(*,*) 'ooo', nthreads
+!!$omp end parallel       
+!      n_per_threads = ntotal/nthreads
+!      niac_per_threads = parts%max_interaction/threads
+!      do it = 1, nthreads
+!         n_start(it)=(it-1)*n_per*threads+1
+!         n_end(it) = it*n_per_threads
+!         niac_start(it)=(it-1)*niac_per_threads
+!         niac_end(it)=niac_start(it)
+!      enddo   
+
+!!$omp parallel do private(niac,i,d)
+!do it = 1, nthreads
+!       niac = niac_start(it)
+!       do i = n_start(it),n_end(it)
+
+      niac = 0
+      do i=1,ntotal-1
+
+!     Determine range of grid to go through:
+         
+        do d=1,3
+          minxcell(d) = 1
+          maxxcell(d) = 1
+        enddo
+        do d=1,parts%dim
+          dnxgcell(d) = parts%xgcell(d,i) - parts%ghsmlx(d)
+          dpxgcell(d) = parts%xgcell(d,i) + parts%ghsmlx(d)
+          minxcell(d) = max(dnxgcell(d),1)
+          maxxcell(d) = min(dpxgcell(d),parts%ngridx(d))
+        enddo
+
+!     Search grid:
+      
+        do zcell=minxcell(3),maxxcell(3)
+          do ycell=minxcell(2),maxxcell(2)
+            do xcell=minxcell(1),maxxcell(1)
+              j = parts%grid(xcell,ycell,zcell)
+ 1            if (j.gt.i) then
+                dx(1) = parts%x(1,i) - parts%x(1,j)
+                dr    = dx(1)*dx(1)
+                do d=2,parts%dim
+                  dx(d) = parts%x(d,i) - parts%x(d,j)
+                  dr    = dr + dx(d)*dx(d)
+                enddo
+                if (sqrt(dr).lt.scale_k*hsml) then
+                  if (niac.lt.parts%max_interaction) then
+
+!     Neighboring pair list, and totalinteraction number and
+!     the interaction number for each particle 
+
+                    niac = niac + 1
+                    parts%pair_i(niac) = i
+                    parts%pair_j(niac) = j
+                    r = sqrt(dr)
+                    parts%countiac(i) = parts%countiac(i) + 1
+                    parts%countiac(j) = parts%countiac(j) + 1
+                           
+!--- Kernel and derivations of kernel
+
+                    call parts%kernel(r,dx,hsml,parts%w(niac),tdwdx)  !!!!!!!!
+	            do d = 1, parts%dim
+	              parts%dwdx(d,niac)=tdwdx(d)
+                    enddo                  
+                  else
+                    print *, ' >>> Error <<< : too many interactions'
+                    stop
+                  endif
+                endif
+                j = parts%celldata(j)
+                goto 1
+              endif
+            enddo
+          enddo
+        enddo
+      enddo
+      parts%niac = niac
+
+      end subroutine
+
+      
+!----------------------------------------------------------------------      
+      subroutine link_list_omp(parts)
+!----------------------------------------------------------------------
+!   Subroutine to calculate the smoothing funciton for each particle and
+!   the interaction parameters used by the SPH algorithm. Interaction 
+!   pairs are determined by using a sorting grid linked list  
+!----------------------------------------------------------------------
+      use ifport
+      implicit none
+
+      class(particles) parts
+      integer i, j, d, scale_k, ntotal, niac,m ,n
+      integer gcell(3),xcell,ycell,zcell,minxcell(3),maxxcell(3)
+      integer dnxgcell(3),dpxgcell(3)
+      real(dp) hsml,dr,r,dx(3),tdwdx(3)
+
+      INTEGER nthreads,n_per_threads, niac_per_threads, it, n_start(8), n_end(8)
+      Integer niac_start(8),niac_end(8), last
       real(dp) t1,t2,t3
 
       ntotal  = parts%ntotal + parts%nvirt
@@ -1305,6 +1427,10 @@ do it = 1, nthreads
          enddo
          i = i + 1
       enddo   
+      
+call parts%get_niac_start_end
+
+parts%niac_end(nthreads) = parts%niac_end(parts%nthreads)+n
 !      t3 = rtc()
 !      write(*,*) t1,t2,t3
 !      write(*,*) t2-t1,t3-t2
@@ -1631,10 +1757,10 @@ nthreads = parts%nthreads
 !write(*,*) 'sadf', nthreads
 
 allocate(df_omp(ntotal))
-if(nthreads>1)then
+!if(nthreads>1)then
 !   allocate(df_local(ntotal,nthreads))
-   call parts%get_niac_start_end
-endif   
+!   call parts%get_niac_start_end
+!endif   
 
 if(x=='x')dwdx=>parts%dwdx(1,:)
 if(x=='y')dwdx=>parts%dwdx(2,:)
@@ -1722,10 +1848,10 @@ ntotal = parts%ntotal + parts%nvirt
 nthreads = parts%nthreads
 
 allocate(df2_omp(size(f))); df2_omp = 0.
-if(nthreads>1)then
+!if(nthreads>1)then
 !   allocate(df_local(ntotal,nthreads))
-   call parts%get_niac_start_end
-endif  
+!   call parts%get_niac_start_end
+!endif  
 
 if(x=='x')dwdx=>parts%dwdx(1,:)
 if(x=='y')dwdx=>parts%dwdx(2,:)
@@ -1821,7 +1947,7 @@ allocate(df3_omp(ntotal))
 
 !if(nthreads>1)then
 !   allocate(df3_local(ntotal,nthreads))
-   call parts%get_niac_start_end
+!   call parts%get_niac_start_end
 !endif 
 
 if(x=='x')dwdx=>parts%dwdx(1,:)
@@ -2317,7 +2443,7 @@ end subroutine
       double precision vcc, dvx(3) 
 
       ntotal = parts%ntotal + parts%nvirt
-       call parts%get_niac_start_end
+ !      call parts%get_niac_start_end
       do i = 1, ntotal
         parts%drho(i) = 0.
       enddo
@@ -3026,7 +3152,7 @@ end subroutine
 !     spin tensor
 
       parts%wxy = 0.d0
-   call parts%get_niac_start_end
+!   call parts%get_niac_start_end
    
      !$omp parallel 
      !$omp do private(i,it,j,d,k,dvx,hxy)    

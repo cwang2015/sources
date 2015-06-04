@@ -1164,7 +1164,11 @@ endif
 if (pl%numeric%nnps.eq.1) then 
    call direct_find(pl)
 else if (pl%numeric%nnps.eq.2) then
+ if(pl%nthreads==1)then
    call link_list(pl)     
+ else
+   call link_list_omp(pl)  
+ endif
 !        call link_list(itimestep, ntotal+nvirt,hsml(1),x,niac,pair_i,
 !     &       pair_j,w,dwdx,ns)
 !        call link_list(itimestep, parts%ntotal+parts%nvirt,
@@ -1177,6 +1181,7 @@ endif
 
 if(mod(itimestep,print_step).eq.0.and.int_stat) then
    call pl%interaction_statistics
+   write(*,*) "nthreads=",parts%nthreads
 endif   
 
 !--- Added by Wang
