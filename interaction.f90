@@ -1,20 +1,5 @@
       subroutine darcy_law(water, soil)
 
-!--------------------------------------------------------------------------
-!     Subroutine to calculate the external forces, e.g. gravitational forces.      
-!     The forces from the interactions with boundary virtual particles 
-!     are also calculated here as external forces.
-
-!     here as the external force. 
-!     ntotal  : Number of particles                                 [in]
-!     mass    : Particle masses                                     [in]
-!     x       : Coordinates of all particles                        [in]
-!     pair_i : List of first partner of interaction pair            [in]
-!     pair_j : List of second partner of interaction pair           [in]
-!     itype   : type of particles                                   [in]
-!     hsml   : Smoothing Length                                     [in]
-!     dvxdt   : Acceleration with respect to x, y and z            [out] 
-
       use param, only: volume_fraction
       use m_particles
       implicit none
@@ -80,11 +65,11 @@
 
 ! saturated soil
          if(volume_fraction)then
-         do d = 1, dim
-!            water%dvx(d,i) = water%dvx(d,i) -                     & ! Must be -
-!            soil%mass(j)*water%p(i)*soil%vof(j)*water%dwdx(d,k)/  &
-!            (water%rho(i)*soil%rho(j))
-         enddo
+         !do d = 1, dim
+            !water%dvx(d,i) = water%dvx(d,i) -                     & ! Must be -
+            !soil%mass(j)*water%p(i)*soil%vof(j)*water%dwdx(d,k)/  &
+            !(water%rho(i)*soil%rho(j))
+         !enddo
          endif
       enddo
 

@@ -39,6 +39,11 @@
           read(pvalu,*) save_step
           write(*,*) 'Save step = ', save_step
 
+      case('PARTICLE PAIRS FIND METHOD')
+
+         read(pvalu,*) numeric%nnps
+         write(*,*) 'Particle pairs find method = ', numeric%nnps 
+
       case('RESULTS FILE')
                 
                   !ndim = 1
@@ -88,8 +93,8 @@
        case('IMMERSE DEPTH')
                   ndim = 1
                   if(ncoma>=ndim) call trim_pvalu(trim(pvalu),',',ndim)
-                  read(pvalu,*) wasserjet%immerse
-                  write(*,*) 'Immerse depth = ', wasserjet%immerse
+                  !read(pvalu,*) wasserjet%immerse
+                  !write(*,*) 'Immerse depth = ', wasserjet%immerse
 
        case('WITH NOZZLE')
                   
@@ -113,6 +118,10 @@
           read(pvalu,*) sio2%porosity, sio2%permeability
           write(*,*) 'Darcy parameter: porosity, permeability '
           write(*,*) sio2%porosity, sio2%permeability
+
+      case('INTEGRATION SCHEME')
+          read(pvalu,*) integrate_scheme
+          write(*,*) 'Integration scheme: ', integrate_scheme 
 
       case('SOIL FAILURE CRITERIA')
        

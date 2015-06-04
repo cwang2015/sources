@@ -33,10 +33,10 @@ c     3-dim. problem: maxngx = maxngy = maxngz ~ maxn^(1/3)
       parameter ( maxngx  = 100        ,
      &            maxngy  = 100        ,
      &            maxngz  = 1          )
-      integer ntotal, grid(maxngx,maxngy,maxngz), ngridx(dim), 
-     &        ghsmlx(dim)
-      double precision hsml, maxgridx(dim), mingridx(dim), dgeomx(dim)
-      integer i, j, k, d, maxng(dim), ngrid(3)
+      integer ntotal, grid(maxngx,maxngy,maxngz), ngridx(3), 
+     &        ghsmlx(3)
+      double precision hsml, maxgridx(3), mingridx(3), dgeomx(3)
+      integer i, j, k, d, maxng(3), ngrid(3)
       double precision nppg
 
 c     Averaged number of particles per grid cell

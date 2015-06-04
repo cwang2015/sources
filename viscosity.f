@@ -1,3 +1,5 @@
+
+!DEC$IF(.FALSE.)
       subroutine viscosity(parts)
 c----------------------------------------------------------------------
 c   Subroutine to define the fluid particle viscosity
@@ -59,3 +61,4 @@ c-------------------------------------------------------------
       return
       end subroutine
 
+!DEC$ENDIF

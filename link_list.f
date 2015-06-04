@@ -50,7 +50,9 @@ c     3-dim. problem: maxngx = maxngy = maxngz ~ maxn^(1/3)
       else if (skf.eq.2) then 
         scale_k = 3 
       else if (skf.eq.3) then 
-         scale_k = 3 
+         scale_k = 3
+      else if (skf.eq.4) then
+         scale_k = 2   
       endif 
      
       do i=1,ntotal
@@ -119,7 +121,7 @@ c     the interaction number for each particle
                            
 C--- Kernel and derivations of kernel
 
-                    call kernel(r,dx,hsml,w(niac),tdwdx)
+                    !call kernel(r,dx,hsml,w(niac),tdwdx)  !!!!!!!!
 	            do d = 1, dim
 	              dwdx(d,niac)=tdwdx(d)
                     enddo                  
