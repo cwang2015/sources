@@ -276,6 +276,7 @@ integer :: skf = 4
        procedure :: repulsive_force
        procedure :: df
        procedure :: df_omp
+       procedure :: df_omp2
        procedure :: df2
        procedure :: df3
        procedure :: df3_omp
@@ -1515,6 +1516,73 @@ do i = 1, ntotal
    df_omp(i) = 0.d0
    do it = 1, nthreads
       df_omp(i) = df_omp(i)+df_local(i,it)
+   enddo
+enddo   
+!$omp end do
+!$omp end parallel
+
+end function
+
+! Calculate partial derivatives of a field
+!----------------------------------------------
+      function df_omp2(parts,f,x) result(val)
+!----------------------------------------------
+implicit none
+
+real(dp) f(:)
+character(len=1) x
+class(particles) parts
+real(dp), allocatable, dimension(:) :: val
+!real(dp), allocatable, dimension(:,:) :: df_local
+real(dp), pointer, dimension(:) :: dwdx
+real(dp) fwx
+integer i, j, k, ntotal, it, nthreads, ii, jj
+
+!write(*,*) 'In df_omp...'
+
+ntotal = parts%ntotal + parts%nvirt
+nthreads = parts%nthreads
+!write(*,*) 'sadf', nthreads
+
+allocate(val(ntotal*nthreads))
+!if(nthreads>1)then
+!   allocate(df_local(ntotal,nthreads))
+   call parts%get_niac_start_end
+!endif   
+
+if(x=='x')dwdx=>parts%dwdx(1,:)
+if(x=='y')dwdx=>parts%dwdx(2,:)
+
+!$omp parallel
+!$omp do private(i,j,k,fwx,ii,jj)
+do it = 1, parts%nthreads
+   do i = 1, ntotal
+      ii = i + (it-1)*ntotal
+      val(ii) = 0.d0
+   enddo
+   do k = parts%niac_start(it), parts%niac_end(it)
+
+
+!do k=1,parts%niac
+   i = parts%pair_i(k)
+   j = parts%pair_j(k)
+   fwx = (f(i)+f(j))*dwdx(k)
+   ii = i + (it-1)*ntotal; jj = j + (it-1)*ntotal
+   val(ii) = val(ii) + parts%mass(j)/parts%rho(j)*fwx
+   val(jj) = val(jj) - parts%mass(i)/parts%rho(i)*fwx   
+!   df_local(i,it) = df_local(i,it) + parts%mass(j)/parts%rho(j)*fwx
+!   df_local(j,it) = df_local(j,it) - parts%mass(i)/parts%rho(i)*fwx
+   enddo !k
+enddo !it
+!$omp end do
+!$omp barrier
+
+!$omp do private(it,ii)
+do i = 1, ntotal
+   !val(i) = 0.d0
+   do it = 2, nthreads
+      ii = i + (it-1)*ntotal
+      val(i) = val(i)+val(ii)
    enddo
 enddo   
 !$omp end do

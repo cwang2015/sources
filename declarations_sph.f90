@@ -1312,8 +1312,8 @@ if(pl%imaterial=='water')then
    pl%dvx(1,:) = -pl%vof*pl%df(pl%p,'x') + pl%df(pl%vof*pl%sxx,'x') + pl%df(pl%vof*pl%sxy,'y')
    pl%dvx(2,:) = -pl%vof*pl%df(pl%p,'y') + pl%df(pl%vof*pl%sxy,'x') + pl%df(pl%vof*pl%syy,'y')
    else
-   pl%dvx(1,:) = -pl%vof*pl%df_omp(pl%p,'x') + pl%df_omp(pl%vof*pl%sxx,'x') + pl%df_omp(pl%vof*pl%sxy,'y')
-   pl%dvx(2,:) = -pl%vof*pl%df_omp(pl%p,'y') + pl%df_omp(pl%vof*pl%sxy,'x') + pl%df_omp(pl%vof*pl%syy,'y')           
+   pl%dvx(1,:) = -pl%vof*pl%df_omp2(pl%p,'x') + pl%df_omp2(pl%vof*pl%sxx,'x') + pl%df_omp2(pl%vof*pl%sxy,'y')
+   pl%dvx(2,:) = -pl%vof*pl%df_omp2(pl%p,'y') + pl%df_omp2(pl%vof*pl%sxy,'x') + pl%df_omp2(pl%vof*pl%syy,'y')           
    endif        
 
    where (pl%rho.gt.0.0) pl%dvx(1,:) = pl%dvx(1,:)/pl%rho
