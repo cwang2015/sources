@@ -1,6 +1,6 @@
 subroutine input
 
-use param
+!use param
 use declarations_sph
 implicit none     
       

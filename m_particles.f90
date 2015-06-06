@@ -111,7 +111,7 @@ real(dp) mingridx(3),maxgridx(3),dgeomx(3)
 
 !maxn: Maximum number of particles
 !max_interation : Maximum number of interaction pairs
-integer :: maxn = 12000, max_interaction = 10 * 12000
+integer :: maxn = 2000, max_interaction = 10 * 2000
   
 !SPH algorithm
 
@@ -139,76 +139,6 @@ integer :: sle = 0
 !    = 3, Quintic kernel (Morris 1997)
 !    = 4, Wendland    
 integer :: skf = 4 
-
-!Switches for different senarios
-
-!summation_density = .TRUE. : Use density summation model in the code, 
-!                    .FALSE.: Use continuiity equation
-!average_velocity = .TRUE. : Monaghan treatment on average velocity,
-!                   .FALSE.: No average treatment.
-!config_input = .TRUE. : Load initial configuration data,
-!               .FALSE.: Generate initial configuration.
-!virtual_part = .TRUE. : Use vritual particle,
-!               .FALSE.: No use of vritual particle.
-!vp_input = .TRUE. : Load virtual particle information,
-!           .FALSE.: Generate virtual particle information.
-!visc = .true. : Consider viscosity,
-!       .false.: No viscosity.
-!ex_force =.true. : Consider external force,
-!          .false.: No external force.
-!visc_artificial = .true. : Consider artificial viscosity,
-!                  .false.: No considering of artificial viscosity.
-!heat_artificial = .true. : Consider artificial heating,
-!                  .false.: No considering of artificial heating.
-!self_gravity = .true. : Considering self_gravity,
-!               .false.: No considering of self_gravity
-!nor_density =  .true. : Density normalization by using CSPM,
-!               .false.: No normalization.
-
-!integer :: integrate_scheme = 1  ! =1, LF; =2, Verlet
-!logical :: summation_density  = .false.         
-!logical :: average_velocity  = .true.         
-!logical :: config_input  = .false. 
-!logical :: virtual_part  = .true. 
-!logical :: vp_input  = .false.  
-!logical :: visc  = .true.  
-!logical :: ex_force  = .true.
-!logical :: visc_artificial  = .true. 
-!logical :: heat_artificial  = .false. 
-!logical :: self_gravity  = .true.      
-!logical :: nor_density  = .false.              
-
-!integer :: soil_pressure = 2  ! =1, eos; =2, mean trace
-!integer :: stress_integration = 1
-!integer :: yield_criterion = 2
-!integer :: plasticity = 3  ! =0 non; =1 Bui, =2 return mapping =3 Lopez
-!logical :: artificial_density = .true.                  
-!logical :: soil_artificial_stress = .true.
-
-!logical :: volume_fraction = .true.
-!logical :: water_artificial_volume = .true.
-!logical :: volume_fraction_renorm = .true.
-
-! 0 ignor; 1 negative pressure to zero; 2 artficial stress
-!integer :: water_tension_instability = 0
-
-! Symmetry of the problem
-! nsym = 0 : no symmetry,
-!      = 1 : axis symmetry,
-!      = 2 : center symmetry.     
-integer :: nsym = 0
-
-! Control parameters for output 
-! int_stat = .true. : Print statistics about SPH particle interactions.
-!                     including virtual particle information.
-! print_step: Print Timestep (On Screen)
-! save_step : Save Timestep    (To Disk File)
-! moni_particle: The particle number for information monitoring.
-logical :: int_stat = .true.
-integer :: print_step, save_step, moni_particle = 264
-
-!Recorde time interval
-integer :: save_step_from = 0, save_step_to = 100
 
    character(len=32) :: imaterial
    class(*), pointer :: material => null()
@@ -1149,6 +1079,7 @@ end function
 !   the interaction parameters used by the SPH algorithm. Interaction 
 !   pairs are determined by using a sorting grid linked list  
 !----------------------------------------------------------------------
+      use ifport
       implicit none
 
       class(particles) parts
@@ -1430,7 +1361,7 @@ do it = 1, nthreads
       
 call parts%get_niac_start_end
 
-parts%niac_end(nthreads) = parts%niac_end(parts%nthreads)+n
+
 !      t3 = rtc()
 !      write(*,*) t1,t2,t3
 !      write(*,*) t2-t1,t3-t2
@@ -1790,6 +1721,73 @@ do i = 1, ntotal
    df_omp(i) = 0.d0
    do it = 1, nthreads
       df_omp(i) = df_omp(i)+df_local(i,it)
+   enddo
+enddo   
+!$omp end do
+!$omp end parallel
+
+end function
+          
+! Calculate partial derivatives of a field
+!----------------------------------------------
+      function df_omp2(parts,f,x) result(val)
+!----------------------------------------------
+implicit none
+
+real(dp) f(:)
+character(len=1) x
+class(particles) parts
+real(dp), allocatable, dimension(:) :: val
+!real(dp), allocatable, dimension(:,:) :: df_local
+real(dp), pointer, dimension(:) :: dwdx
+real(dp) fwx
+integer i, j, k, ntotal, it, nthreads, ii, jj
+
+!write(*,*) 'In df_omp...'
+
+ntotal = parts%ntotal + parts%nvirt
+nthreads = parts%nthreads
+!write(*,*) 'sadf', nthreads
+
+allocate(val(ntotal*nthreads))
+!if(nthreads>1)then
+!   allocate(df_local(ntotal,nthreads))
+!   call parts%get_niac_start_end
+!endif   
+
+if(x=='x')dwdx=>parts%dwdx(1,:)
+if(x=='y')dwdx=>parts%dwdx(2,:)
+
+!$omp parallel
+!$omp do private(i,j,k,fwx,ii,jj)
+do it = 1, parts%nthreads
+   do i = 1, ntotal
+      ii = i + (it-1)*ntotal
+      val(ii) = 0.d0
+   enddo
+   do k = parts%niac_start(it), parts%niac_end(it)
+
+
+!do k=1,parts%niac
+   i = parts%pair_i(k)
+   j = parts%pair_j(k)
+   fwx = (f(i)+f(j))*dwdx(k)
+   ii = i + (it-1)*ntotal; jj = j + (it-1)*ntotal
+   val(ii) = val(ii) + parts%mass(j)/parts%rho(j)*fwx
+   val(jj) = val(jj) - parts%mass(i)/parts%rho(i)*fwx   
+!   df_local(i,it) = df_local(i,it) + parts%mass(j)/parts%rho(j)*fwx
+!   df_local(j,it) = df_local(j,it) - parts%mass(i)/parts%rho(i)*fwx
+   enddo !k
+enddo !it
+!$omp end do
+!$omp barrier
+
+!$omp do private(it,ii)
+do i = 1, ntotal
+   !val(i) = 0.d0
+   do it = 2, nthreads
+      ii = i + (it-1)*ntotal
+      val(i) = val(i)+val(ii)
    enddo
 enddo   
 !$omp end do

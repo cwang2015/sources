@@ -2,8 +2,83 @@
     module declarations_sph
 !-----------------------------
 use m_particles
-use param
+!use param
 implicit none
+
+!     Switches for different senarios
+
+!     summation_density = .TRUE. : Use density summation model in the code, 
+!                        .FALSE.: Use continuiity equation
+!     average_velocity = .TRUE. : Monaghan treatment on average velocity,
+!                       .FALSE.: No average treatment.
+!     config_input = .TRUE. : Load initial configuration data,
+!                   .FALSE.: Generate initial configuration.
+!     virtual_part = .TRUE. : Use vritual particle,
+!                   .FALSE.: No use of vritual particle.
+!     vp_input = .TRUE. : Load virtual particle information,
+!               .FALSE.: Generate virtual particle information.
+!     visc = .true. : Consider viscosity,
+!           .false.: No viscosity.
+!     ex_force =.true. : Consider external force,
+!               .false.: No external force.
+!     visc_artificial = .true. : Consider artificial viscosity,
+!                      .false.: No considering of artificial viscosity.
+!     heat_artificial = .true. : Consider artificial heating,
+!                      .false.: No considering of artificial heating.
+!     self_gravity = .true. : Considering self_gravity,
+!                    .false.: No considering of self_gravity
+!     nor_density =  .true. : Density normalization by using CSPM,
+!                    .false.: No normalization.
+
+integer :: integrate_scheme = 1  ! =1, LF; =2, Verlet
+logical :: summation_density  = .false.         
+logical :: average_velocity  = .true.         
+logical :: config_input  = .false. 
+logical :: virtual_part  = .true. 
+logical :: vp_input  = .false.  
+logical :: visc  = .true.  
+logical :: ex_force  = .true.
+logical :: visc_artificial  = .true. 
+logical :: heat_artificial  = .false. 
+!logical :: self_gravity  = .true.      
+logical :: nor_density  = .false.              
+
+integer :: soil_pressure = 2  ! =1, eos; =2, mean trace
+integer :: stress_integration = 1
+integer :: yield_criterion = 2
+integer :: plasticity = 3  ! =0 non; =1 Bui, =2 return mapping =3 Lopez
+logical :: artificial_density = .true.                  
+logical :: soil_artificial_stress = .true.
+
+logical :: volume_fraction = .true.
+logical :: water_artificial_volume = .true.
+logical :: volume_fraction_renorm = .true.
+
+! 0 ignor; 1 negative pressure to zero; 2 artficial stress
+integer :: water_tension_instability = 0
+
+! Symmetry of the problem
+! nsym = 0 : no symmetry,
+!      = 1 : axis symmetry,
+!      = 2 : center symmetry.     
+integer :: nsym = 0
+
+! Control parameters for output 
+! int_stat = .true. : Print statistics about SPH particle interactions.
+!                     including virtual particle information.
+! print_step: Print Timestep (On Screen)
+! save_step : Save Timestep    (To Disk File)
+! moni_particle: The particle number for information monitoring.
+logical :: int_stat = .true.
+integer :: print_step, save_step, moni_particle = 264
+           
+! double precision pi,gravity
+!double precision, parameter :: pi = 3.14159265358979323846 
+!parameter ( gravity = -9.8 )
+      
+
+!     Recorde time interval
+integer :: save_step_from = 0, save_step_to = 100
 
 ! Control panel
 logical :: self_gravity = .true.
@@ -338,11 +413,15 @@ contains
      subroutine allocate_sph
 !-------------------------------
 implicit none
+integer dim,maxn,max_interaction
 
 !---------------------Real particles (water)---------------------
-parts%dim  = dim
-parts%maxn = maxn
-parts%max_interaction = max_interaction
+!parts%dim  = dim
+!parts%maxn = maxn
+!parts%max_interaction = max_interaction
+dim = parts%dim
+maxn = parts%maxn
+max_interaction = parts%max_interaction
 
 call allocate_particles(parts)
 
@@ -674,7 +753,7 @@ implicit none
          endif
           
          if(pl%itype(i)<0)cycle
-         do d = 1, dim
+         do d = 1, pl%dim
             pl%v_min(d, i) = pl%vx(d, i)
             pl%vx(d, i) = pl%vx(d, i) + (dt/2.)*pl%dvx(d, i)
          enddo
@@ -712,7 +791,7 @@ implicit none
          endif
         
          if(pl%itype(i)<0)cycle
-         do d = 1, dim        
+         do d = 1, pl%dim        
             pl%vx(d, i) = pl%vx(d, i) + (dt/2.) * pl%dvx(d, i)   &
                         + pl%av(d, i)
             pl%x(d, i) = pl%x(d, i) + dt * pl%vx(d, i)
@@ -751,7 +830,7 @@ implicit none
          endif
 
          if(pl%itype(i)<0)cycle
-         do d = 1, dim                   
+         do d = 1, pl%dim                   
             pl%vx(d, i) = pl%v_min(d, i) + dt * pl%dvx(d, i)   &
                         + pl%av(d, i)
             pl%x(d, i) = pl%x(d, i) + dt * pl%vx(d, i)                  
@@ -818,7 +897,7 @@ do it = 1, maxtimestep
           
          if(pl%itype(i)<0)cycle
 
-         do d = 1, dim
+         do d = 1, pl%dim
             pl%v_min(d, i) = pl%vx(d, i)
             pl%vx(d, i) = pl%vx(d, i) + (dt/2.)*pl%dvx(d, i)
          enddo
@@ -838,7 +917,7 @@ do it = 1, maxtimestep
 
          if(pl%itype(i)<0)cycle
 
-         do d = 1, dim        
+         do d = 1, pl%dim        
             pl%vx(d, i) = pl%vx(d, i) + (dt/2.) * pl%dvx(d, i)   & 
                         + pl%av(d, i)
             pl%x(d, i) = pl%x(d, i) + dt * pl%vx(d, i)
@@ -857,7 +936,7 @@ do it = 1, maxtimestep
 
          if(pl%itype(i)<0)cycle
 
-         do d = 1, dim                   
+         do d = 1, pl%dim                   
             pl%vx(d, i) = pl%v_min(d, i) + dt * pl%dvx(d, i)    & 
                         + pl%av(d, i)
             pl%x(d, i) = pl%x(d, i) + dt * pl%vx(d, i)                  
@@ -914,7 +993,7 @@ do it = 1, maxtimestep
 
 if(mod(itimestep,50) .ne. 0) then
     do i = 1, pl%ntotal
-       do d = 1, dim
+       do d = 1, pl%dim
           pl%x(d,i) = pl%x(d,i) + dt * pl%vx(d,i) +(dt**2./2.)*pl%dvx(d,i)
           lastvx(d,i) = lastvx(d,i) + 2.*dt*pl%dvx(d,i)
        
@@ -922,7 +1001,7 @@ if(mod(itimestep,50) .ne. 0) then
     enddo
 else
     do i = 1, pl%ntotal
-       do d = 1, dim
+       do d = 1, pl%dim
           pl%x(d,i) = pl%x(d,i) + dt * pl%vx(d,i) +(dt**2./2.)*pl%dvx(d,i)
           lastvx(d,i) = pl%vx(d,i) + dt*pl%dvx(d,i)
       enddo
@@ -1018,7 +1097,7 @@ do it = 1, maxtimestep
          endif
           
          if(pl%itype(i)<0)cycle
-         do d = 1, dim
+         do d = 1, pl%dim
             pl%v_min(d, i) = pl%vx(d, i)
             pl%vx(d, i) = pl%vx(d, i) + (dt/2.)*pl%dvx(d, i)
          enddo
@@ -1053,7 +1132,7 @@ do it = 1, maxtimestep
         
          if(pl%itype(i)<0)cycle
 
-         do d = 1, dim        
+         do d = 1, pl%dim        
             pl%vx(d, i) = pl%vx(d, i) + (dt/2.) * pl%dvx(d, i)   &
                         + pl%av(d, i)
             pl%x(d, i) = pl%x(d, i) + dt * pl%vx(d, i)
@@ -1091,7 +1170,7 @@ do it = 1, maxtimestep
          endif
 
          if(pl%itype(i)<0)cycle
-         do d = 1, dim                   
+         do d = 1, pl%dim                   
             pl%vx(d, i) = pl%v_min(d, i) + dt * pl%dvx(d, i)   &
                         + pl%av(d, i)
             pl%x(d, i) = pl%x(d, i) + dt * pl%vx(d, i)                  
@@ -1133,7 +1212,7 @@ end subroutine
 !   Subroutine to determine the right hand side of a differential 
 !   equation in a single step for performing time integration 
 !----------------------------------------------------------------------
-use param 
+!use param 
 !use declarations_sph
 !use m_sph_fo
 implicit none
