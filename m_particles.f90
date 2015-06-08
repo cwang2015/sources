@@ -1,8 +1,9 @@
 !---------------------------
     module m_particles
 !---------------------------
+use m_array
 implicit none
-integer, parameter :: dp = kind(0.d0)
+!integer, parameter :: dp = kind(0.d0)
 
 type block             
      real(dp) xl, yl
@@ -52,16 +53,6 @@ integer :: nnps = 1
 ! Velocity average
   real(dp) :: epsilon = 0.001
    
-end type
-
-type array
-   integer :: ndim1
-   real(dp), pointer, dimension(:) :: r  => null()
-   type(array), pointer :: x => null(), y => null(), z => null()
-   type(array), pointer :: xy => null(), xz => null(), yz => null()
-   type(particles), pointer :: parts => null()
-   contains
-       final :: array_final
 end type
 
 ! Particles in SPH method
@@ -303,21 +294,6 @@ end type
 interface write_field
    module procedure :: write_scalar_field
    module procedure :: write_vector2d_field
-end interface
-
-interface operator(+)
-   module procedure :: array_add_array 
-end interface
-
-interface operator(-)
-   module procedure :: array_sub_array
-   module procedure :: array_minus
-end interface
-
-interface operator(*)
-   module procedure :: array_mul_array
-   module procedure :: array_mul_real
-   module procedure :: array_mul_double_real
 end interface
 
 !=======
@@ -1472,6 +1448,8 @@ character(len=1) x
 class(particles) parts
 real(dp), allocatable, dimension(:) :: df_omp
 real(dp), allocatable, dimension(:,:) :: df_local
+!real(dp) df_omp(parts%maxn)
+!real(dp) df_local(parts%maxn,8)
 real(dp), pointer, dimension(:) :: dwdx
 real(dp) fwx
 integer i, j, k, ntotal, it, nthreads
@@ -1480,7 +1458,6 @@ integer i, j, k, ntotal, it, nthreads
 
 ntotal = parts%ntotal + parts%nvirt
 nthreads = parts%nthreads
-!write(*,*) 'sadf', nthreads
 
 allocate(df_omp(ntotal))
 if(nthreads>1)then
@@ -1521,6 +1498,7 @@ enddo
 !$omp end do
 !$omp end parallel
 
+!deallocate(df_local)
 end function
 
 ! Calculate partial derivatives of a field
@@ -2917,151 +2895,6 @@ end subroutine
 
 !end function
 
-!--------------------------------------------
-    subroutine array_equal_array(a,b)
-!--------------------------------------------        
-implicit none
-class(array),intent(INOUT) :: a
-class(array),intent(IN)    :: b
-integer ndim1
-
-if(a%ndim1/=b%ndim1)stop 'Error: inequal length arrays!'
-
-ndim1 = a%ndim1
-a%r(1:ndim1) = b%r(1:ndim1)
-
-return
-end subroutine
-
-!--------------------------------------------
-       subroutine array_final(this)
-!--------------------------------------------
-implicit none
-type(array) this
-
-if(associated(this%r))deallocate(this%r)
-
-return
-end subroutine
-
-!--------------------------------------------
-    function array_add_array(a,b) result(c)
-!--------------------------------------------
-implicit none
-type(array), intent(in) :: a, b
-type(array), allocatable:: c
-integer ndim1
-
-if(a%ndim1/=b%ndim1)stop 'Cannot add arrays!'
-if(.not.associated(a%parts,b%parts)) stop 'Cannot add arrays'
-
-ndim1 = a%ndim1
-allocate(c)
-allocate(c%r(ndim1))
-c%ndim1 = ndim1
-
-c%r(1:ndim1) = a%r(1:ndim1) + b%r(1:ndim1)
-c%parts => a%parts
-
-end function
-
-!--------------------------------------------
-    function array_sub_array(a,b) result(c)
-!--------------------------------------------
-implicit none
-type(array), intent(in) :: a, b
-type(array), allocatable:: c
-integer ndim1
-
-if(a%ndim1/=b%ndim1)stop 'Cannot substract arrays!'
-if(.not.associated(a%parts,b%parts)) stop 'Cannot substract arrays!'
-
-ndim1 = a%ndim1
-allocate(c)
-allocate(c%r(ndim1))
-c%ndim1 = ndim1
-
-c%r(1:ndim1) = a%r(1:ndim1) - b%r(1:ndim1)
-c%parts => a%parts
-
-end function
-
-!--------------------------------------------
-    function array_minus(a) result(c)
-!--------------------------------------------
-implicit none
-type(array), intent(in) :: a
-type(array), allocatable:: c
-integer ndim1
-
-ndim1 = a%ndim1
-allocate(c)
-allocate(c%r(ndim1))
-c%ndim1 = ndim1
-
-c%r(1:ndim1) = -a%r(1:ndim1)
-c%parts => a%parts
-
-end function
-
-!--------------------------------------------
-    function array_mul_array(a,b) result(c)
-!--------------------------------------------
-implicit none
-type(array), intent(in) :: a,b
-type(array), allocatable:: c
-integer ndim1
-
-if(a%ndim1/=b%ndim1)stop 'Cannot multiply arrays!'
-if(.not.associated(a%parts,b%parts)) stop 'Cannot multiply arrays!'
-
-ndim1 = a%ndim1
-allocate(c)
-allocate(c%r(ndim1))
-c%ndim1 = ndim1
-
-c%r(1:ndim1) = a%r(1:ndim1)*b%r(1:ndim1)
-c%parts => a%parts
-
-end function
-
-!--------------------------------------------
-    function array_mul_real(a,r) result(c)
-!--------------------------------------------
-implicit none
-type(array), intent(in) :: a
-real, intent(in) :: r
-type(array), allocatable:: c
-integer ndim1
-
-ndim1 = a%ndim1
-allocate(c)
-allocate(c%r(ndim1))
-c%ndim1 = ndim1
-
-c%r(1:ndim1) = r*a%r(1:ndim1)
-c%parts => a%parts
-
-end function
-
-!--------------------------------------------------
-    function array_mul_double_real(a,r) result(c)
-!--------------------------------------------------
-implicit none
-type(array), intent(in) :: a
-real(dp), intent(in) :: r
-type(array), allocatable :: c
-integer ndim1
-
-ndim1 = a%ndim1
-allocate(c)
-allocate(c%r(ndim1))
-c%ndim1 = ndim1
-
-c%r(1:ndim1) = r*a%r(1:ndim1)
-c%parts => a%parts
-
-end function
 
 !--------------------------------------------------
     subroutine get_num_threads(this)
