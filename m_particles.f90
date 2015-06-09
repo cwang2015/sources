@@ -158,22 +158,26 @@ integer :: skf = 4
    integer,  pointer, dimension(:)   :: zone => null()
 
 ! Volume of Fraction
-   real(dp), pointer, dimension(:)   :: vof  => null(), vof2=>null() ! phi_f= 1-phi_s
+   type(array), pointer :: vof  => null()
+   real(dp), pointer, dimension(:)   :: vof2=>null() ! phi_f= 1-phi_s
    real(dp), pointer, dimension(:)   :: dvof  => null()
    real(dp), pointer, dimension(:)   :: vof_min  => null()
 
 ! Field variables
    real(dp), pointer, dimension(:)   :: rho  => null()
    real(dp), pointer, dimension(:,:) :: vx   => null()   
-   real(dp), pointer, dimension(:)   :: p    => null()
+   !real(dp), pointer, dimension(:)   :: p    => null()
+   type(array), pointer :: p => null()
    !real(dp), pointer, dimension(:)   :: eta  => null()   
    real(dp), pointer, dimension(:)   :: c    => null()   
    real(dp), pointer, dimension(:)   :: u    => null()
 
 ! Stress tensor 
    !type(tensor), pointer, dimension(:)   :: st   => null() 
-   real(dp), pointer, dimension(:) :: sxx => null(), syy => null()
-   real(dp), pointer, dimension(:) :: szz => null(), sxy => null()
+   !real(dp), pointer, dimension(:) :: sxx => null(), syy => null()
+   type(array), pointer :: sxx => null(), syy => null()
+   !real(dp), pointer, dimension(:) :: szz => null(), sxy => null()
+   type(array), pointer :: szz => null(), sxy => null()
    real(dp), pointer, dimension(:) :: sxz => null(), syz => null()
  
 ! Shear strain rate 
@@ -200,7 +204,8 @@ integer :: skf = 4
 
 ! Acceleration
    real(dp), pointer, dimension(:)     :: drho => null()
-   real(dp), pointer, dimension(:,:)   :: dvx  => null()
+   !real(dp), pointer, dimension(:,:)   :: dvx  => null()
+   type(array), pointer :: dvx  => null()
    real(dp), pointer, dimension(:)     :: du   => null()
    real(dp), pointer, dimension(:)     :: dp   => null()
    real(dp), pointer, dimension(:,:)   :: av   => null()
@@ -509,15 +514,15 @@ miu = mat%viscosity/mat%rho0
 ! CFL condition
 mint1 = 0.25*minval(parts%hsml(1:ntotal)/c)
 ! Acceleration 
-mint21 = 0.25*minval(sqrt(parts%hsml(1:ntotal)/parts%dvx(1,1:ntotal)))
-mint22 = 0.25*minval(sqrt(parts%hsml(1:ntotal)/parts%dvx(2,1:ntotal)))
+!mint21 = 0.25*minval(sqrt(parts%hsml(1:ntotal)/parts%dvx(1,1:ntotal)))
+!mint22 = 0.25*minval(sqrt(parts%hsml(1:ntotal)/parts%dvx(2,1:ntotal)))
 ! Viscous diffustion time
 mint3 = 0.125*minval(parts%hsml(1:ntotal)**2/miu)
 
-write(*,*) 'Minimum time step is: '
-write(*,*) ' mint1 = ', mint1
-write(*,*) ' mint21 = ', mint21, ' mint22 = ', mint22
-write(*,*) ' mint3 = ', mint3
+!write(*,*) 'Minimum time step is: '
+!write(*,*) ' mint1 = ', mint1
+!write(*,*) ' mint21 = ', mint21, ' mint22 = ', mint22
+!write(*,*) ' mint3 = ', mint3
 
 return
 end subroutine
@@ -1398,9 +1403,13 @@ do k=1,parts%niac
          ii = i
          if(parts%itype(i)<0)ii=j 
 
-         do d = 1, parts%dim
-            parts%dvx(d, ii) = parts%dvx(d, ii) + dd*dx(d)*f
-         enddo
+         !do d = 1, parts%dim
+         !   parts%dvx(d, ii) = parts%dvx(d, ii) + dd*dx(d)*f
+         !enddo
+
+         parts%dvx%x%r(ii) = parts%dvx%x%r(ii) + dd * dx(1)*f
+         parts%dvx%y%r(ii) = parts%dvx%y%r(ii) + dd * dx(2)*f
+
       !endif
    !endif        
 enddo   
@@ -1759,7 +1768,7 @@ end function
       if(parts%imaterial=='water')then
 
          water => parts%material
-         parts%rho(1:ntotal) = water%rho0*(parts%p(1:ntotal)/water%b+1) &
+         parts%rho(1:ntotal) = water%rho0*(parts%p%r(1:ntotal)/water%b+1) &
                             **(1/water%gamma)
 
       elseif(parts%imaterial=='soil')then
@@ -1786,8 +1795,8 @@ end function
       if(parts%imaterial=='water')then
 
          water => parts%material
-         parts%p(1:ntotal) = water%b*((parts%rho(1:ntotal)/(water%rho0  &
-                            *parts%vof(1:ntotal))) &   !!! False density
+         parts%p%r(1:ntotal) = water%b*((parts%rho(1:ntotal)/(water%rho0  &
+                            *parts%vof%r(1:ntotal))) &   !!! False density
                             **water%gamma-1)  
 
 ! Tension instability
@@ -1801,7 +1810,7 @@ end function
 !                              endif
 
          !parts%c(1:ntotal) = water%c         
-         parts%c(1:ntotal) = water%c*(parts%rho(1:ntotal)/(water%rho0*parts%vof(1:ntotal)))**3.0         
+         parts%c(1:ntotal) = water%c*(parts%rho(1:ntotal)/(water%rho0*parts%vof%r(1:ntotal)))**3.0         
 
       elseif(parts%imaterial=='soil')then
 
@@ -1829,11 +1838,11 @@ integer ntotal, i
 ntotal = parts%ntotal+parts%nvirt
 
 water => parts%material
-parts%p(1:ntotal) = water%b*((parts%rho(1:ntotal)/(water%rho0  &
-                   *parts%vof(1:ntotal))) &   !!! False density
+parts%p%r(1:ntotal) = water%b*((parts%rho(1:ntotal)/(water%rho0  &
+                   *parts%vof%r(1:ntotal))) &   !!! False density
                   **water%gamma-1)
 
-parts%c(1:ntotal) = water%c*(parts%rho(1:ntotal)/(water%rho0*parts%vof(1:ntotal)))**3.0         
+parts%c(1:ntotal) = water%c*(parts%rho(1:ntotal)/(water%rho0*parts%vof%r(1:ntotal)))**3.0         
 
 return
 end subroutine
@@ -1851,8 +1860,8 @@ ntotal = parts%ntotal+parts%nvirt
 water => parts%material
 
 do i = 1, ntotal
-   if(parts%p(i)<0)then
-      parts%p(i) = 0.d0
+   if(parts%p%r(i)<0)then
+      parts%p%r(i) = 0.d0
       !parts%rho(i) = water%rho0*parts%vof(i)
    endif
 enddo
@@ -1873,7 +1882,7 @@ integer ntotal, i
 ntotal = parts%ntotal+parts%nvirt
 
 soil => parts%material
-parts%p(1:ntotal) = soil%k*(parts%rho(1:ntotal)/soil%rho0-1)
+parts%p%r(1:ntotal) = soil%k*(parts%rho(1:ntotal)/soil%rho0-1)
 ! parts%p(1:ntotal) = parts%p(1:ntotal)  &
 !                    -soil%k*parts%vcc(1:ntotal)*0.000005   !*dt
 parts%c(1:ntotal) = soil%c
@@ -1986,9 +1995,9 @@ end subroutine
       ntotal = parts%ntotal + parts%nvirt
       liquid => parts%material
 
-      parts%sxx(1:ntotal) = liquid%viscosity*parts%txx(1:ntotal)
-      parts%syy(1:ntotal) = liquid%viscosity*parts%tyy(1:ntotal)
-      parts%sxy(1:ntotal) = liquid%viscosity*parts%txy(1:ntotal)
+      parts%sxx%r(1:ntotal) = liquid%viscosity*parts%txx(1:ntotal)
+      parts%syy%r(1:ntotal) = liquid%viscosity*parts%tyy(1:ntotal)
+      parts%sxy%r(1:ntotal) = liquid%viscosity*parts%txy(1:ntotal)
 
       return
       end subroutine
@@ -2042,17 +2051,24 @@ end subroutine
 
 !     Calculate SPH sum for artificial viscous force
 
-          do d=1,dim
-            h = -piv*parts%dwdx(d,k)
-            parts%dvx(d,i) = parts%dvx(d,i) + parts%mass(j)*h
-            parts%dvx(d,j) = parts%dvx(d,j) - parts%mass(i)*h
-!            dedt(i) = dedt(i) - mass(j)*dvx(d)*h
-!            dedt(j) = dedt(j) - mass(i)*dvx(d)*h
-          enddo
+          !do d=1,dim
+          !  h = -piv*parts%dwdx(d,k)
+          !  parts%dvx(d,i) = parts%dvx(d,i) + parts%mass(j)*h
+          !  parts%dvx(d,j) = parts%dvx(d,j) - parts%mass(i)*h
+          !enddo
+
+            h = -piv*parts%dwdx(1,k)
+            parts%dvx%x%r(i) = parts%dvx%x%r(i) + parts%mass(j)*h
+            parts%dvx%x%r(j) = parts%dvx%x%r(j) - parts%mass(i)*h
+            if(dim.ge.2)then
+            h = -piv*parts%dwdx(2,k)
+            parts%dvx%y%r(i) = parts%dvx%y%r(i) + parts%mass(j)*h
+            parts%dvx%y%r(j) = parts%dvx%y%r(j) - parts%mass(i)*h
+            endif
+            
+
         endif
       enddo
-
-!     Change of specific internal energy:
 
       return
       end subroutine
@@ -2281,9 +2297,9 @@ end subroutine
 !   Jaumann rate
 
       do i = 1, ntotal
-         parts%dsxx(i) = parts%dsxx(i)+2.0*parts%sxy(i)*parts%wxy(i)
-         parts%dsxy(i) = parts%dsxy(i)-(parts%sxx(i)-parts%syy(i))*parts%wxy(i)
-         parts%dsyy(i) = parts%dsyy(i)-2.0*parts%sxy(i)*parts%wxy(i)
+         parts%dsxx(i) = parts%dsxx(i)+2.0*parts%sxy%r(i)*parts%wxy(i)
+         parts%dsxy(i) = parts%dsxy(i)-(parts%sxx%r(i)-parts%syy%r(i))*parts%wxy(i)
+         parts%dsyy(i) = parts%dsyy(i)-2.0*parts%sxy%r(i)*parts%wxy(i)
       enddo         
 
       return
@@ -2307,12 +2323,12 @@ end subroutine
       k = 0
       soil%fail = 0
       do i = 1, ntotal
-         tmax  = sqrt(((soil%sxx(i)-soil%syy(i))/2)**2+soil%sxy(i)**2)
+         tmax  = sqrt(((soil%sxx%r(i)-soil%syy%r(i))/2)**2+soil%sxy%r(i)**2)
          if(tmax<1.e-6)cycle
-         yield = cohesion*cos(phi)+soil%p(i)*sin(phi)
+         yield = cohesion*cos(phi)+soil%p%r(i)*sin(phi)
 
          if(yield<=0.)then    ! <
-            yield=0.; soil%p(i)=-cohesion*tan(phi)**(-1.0)
+            yield=0.; soil%p%r(i)=-cohesion*tan(phi)**(-1.0)
             soil%rho(i) = property%rho0
          endif
 
@@ -2327,9 +2343,9 @@ end subroutine
             k = k + 1
             soil%fail(i) = 1 
             skale = yield/tmax
-            soil%sxx(i) = skale * soil%sxx(i)
-            soil%sxy(i) = skale * soil%sxy(i)
-            soil%syy(i) = skale * soil%syy(i)
+            soil%sxx%r(i) = skale * soil%sxx%r(i)
+            soil%sxy%r(i) = skale * soil%sxy%r(i)
+            soil%syy%r(i) = skale * soil%syy%r(i)
          endif
          !sxx(i) = 0.; sxy(i) = 0.; syy(i) = 0.
       enddo
@@ -2364,10 +2380,10 @@ end subroutine
          !yield = cohesion*cos(phi)+p(i)*sin(phi)
 
 
-         if(soil%p(i)<0.)then    ! <
+         if(soil%p%r(i)<0.)then    ! <
             !k = k + 1
             !soil%fail(i) = 1
-            soil%p(i)=0.d0
+            soil%p%r(i)=0.d0
             !soil%rho(i) = property%rho0
          endif
 
@@ -2377,9 +2393,9 @@ end subroutine
 !            p(i)   = 0.
 !         endif
 
-         I1 = 3.*soil%p(i) 
+         I1 = 3.*soil%p%r(i) 
 
-         J2 = soil%sxx(i)**2.+2.*soil%sxy(i)**2.+soil%syy(i)**2.+(soil%sxx(i)+soil%syy(i))**2.
+         J2 = soil%sxx%r(i)**2.+2.*soil%sxy%r(i)**2.+soil%syy%r(i)**2.+(soil%sxx%r(i)+soil%syy%r(i))**2.
          J2 = sqrt(J2/2.)+1.d-6
          !if(J2<1.e-6)cycle
 
@@ -2388,9 +2404,9 @@ end subroutine
             k = k + 1
             soil%fail(i) = 1 
             skale = alpha1*I1/J2
-            soil%sxx(i) = skale * soil%sxx(i)
-            soil%sxy(i) = skale * soil%sxy(i)
-            soil%syy(i) = skale * soil%syy(i)
+            soil%sxx%r(i) = skale * soil%sxx%r(i)
+            soil%sxy%r(i) = skale * soil%sxy%r(i)
+            soil%syy%r(i) = skale * soil%syy%r(i)
         endif
 
       enddo
@@ -2438,9 +2454,9 @@ end subroutine
 !            p(i)   = 0.
 !         endif
 
-         I1 = 3.*soil%p(i) 
+         I1 = 3.*soil%p%r(i) 
 
-         J2 = soil%sxx(i)**2.+2.*soil%sxy(i)**2.+soil%syy(i)**2.+(soil%sxx(i)+soil%syy(i))**2.
+         J2 = soil%sxx%r(i)**2.+2.*soil%sxy%r(i)**2.+soil%syy%r(i)**2.+(soil%sxx%r(i)+soil%syy%r(i))**2.
          J2 = sqrt(J2/2.)+1.d-6
          !if(J2<1.e-6)cycle
 
@@ -2480,9 +2496,9 @@ end subroutine
       dsxy => parts%dsxy
       dsyy => parts%dsyy
       vcc  => parts%vcc
-      sxx => parts%sxx
-      sxy => parts%sxy
-      syy => parts%syy
+      sxx => parts%sxx%r
+      sxy => parts%sxy%r
+      syy => parts%syy%r
 
       property => parts%material
       phi = property%phi
@@ -2545,9 +2561,9 @@ end subroutine
       dsxy2 => parts%dsxy2
       dsyy2 => parts%dsyy2
       vcc  => parts%vcc
-      sxx => parts%sxx
-      sxy => parts%sxy
-      syy => parts%syy
+      sxx => parts%sxx%r
+      sxy => parts%sxy%r
+      syy => parts%syy%r
 
       property => parts%material
       phi = property%phi
@@ -2609,9 +2625,9 @@ end subroutine
       dsxy => parts%dsxy
       dsyy => parts%dsyy
       vcc  => parts%vcc
-      sxx => parts%sxx
-      sxy => parts%sxy
-      syy => parts%syy
+      sxx => parts%sxx%r
+      sxy => parts%sxy%r
+      syy => parts%syy%r
 
       property => parts%material
       phi = property%phi
@@ -2687,13 +2703,21 @@ end subroutine
 ! For staturated soil
 !        if(volume_fraction) cf = water%vof(i)*water%rho(i)*(-gravity)/ks
 !        if(water%volume_fraction) cf = water%vof(i)*soil%vof(j)*water%rho(i)*(-gravity)/ks
-        cf = water%vof(i)*soil%vof(j)*water%rho(i)*(-gravity)/ks
+        cf = water%vof%r(i)*soil%vof%r(j)*water%rho(i)*(-gravity)/ks
 
-          do d=1,dim
-             sp = cf*(water%vx(d,i)-soil%vx(d,j))*rrw
-             water%dvx(d,i) = water%dvx(d,i) - soil%mass(j)*sp
-             soil%dvx(d,j)  = soil%dvx(d,j) + water%mass(i)*sp   
-          enddo
+          !do d=1,dim
+          !   sp = cf*(water%vx(d,i)-soil%vx(d,j))*rrw
+          !   water%dvx(d,i) = water%dvx(d,i) - soil%mass(j)*sp
+          !   soil%dvx(d,j)  = soil%dvx(d,j) + water%mass(i)*sp   
+          !enddo
+
+          sp = cf*(water%vx(1,i)-soil%vx(1,j))*rrw
+          water%dvx%x%r(i) = water%dvx%x%r(i) - soil%mass(j)*sp
+          soil%dvx%x%r(j)  =  soil%dvx%x%r(j) + water%mass(i)*sp   
+          sp = cf*(water%vx(2,i)-soil%vx(2,j))*rrw
+          water%dvx%y%r(i) = water%dvx%y%r(i) - soil%mass(j)*sp
+          soil%dvx%y%r(j)  =  soil%dvx%y%r(j) + water%mass(i)*sp   
+
       enddo
 
       return
@@ -2713,13 +2737,18 @@ end subroutine
       do k = 1, water%niac
          i = water%pair_i(k)   ! water
          j = water%pair_j(k)   ! soil
-         mprr = water%mass(i)*water%p(i)/(water%rho(i)*soil%rho(j))
+         mprr = water%mass(i)*water%p%r(i)/(water%rho(i)*soil%rho(j))
 !         mprr = water%mass(i)*(water%p(i)+soil%p(j))/       &      Bui2014
 !                (water%rho(i)*soil%rho(j))
-         do d = 1, water%dim
-            soil%dvx(d,j) = soil%dvx(d,j) + mprr*water%dwdx(d,k)  &  !+
-                            *soil%vof(j)  
-         enddo
+!         do d = 1, water%dim
+!            soil%dvx(d,j) = soil%dvx(d,j) + mprr*water%dwdx(d,k)  &  !+
+!                            *soil%vof%r(j)  
+!         enddo
+
+            soil%dvx%x%r(j) = soil%dvx%x%r(j) + mprr*water%dwdx(1,k)  &  !+
+                            *soil%vof%r(j)  
+            soil%dvx%y%r(j) = soil%dvx%y%r(j) + mprr*water%dwdx(2,k)  &  !+
+                            *soil%vof%r(j)  
 
 ! saturated soil
          !if(water%volume_fraction)then
@@ -2807,7 +2836,7 @@ end subroutine
       ntotal = parts%ntotal + parts%nvirt
 
       do i = 1, ntotal
-         parts%vof(i) = parts%rho(i)/sio2%rho0
+         parts%vof%r(i) = parts%rho(i)/sio2%rho0
       enddo
 
       return
@@ -2845,7 +2874,7 @@ end subroutine
        
       do i=1,water%ntotal+water%nvirt
          do d=1,dim
-      water%dvx(d,i) = water%dvx(d,i) - water%vx(d,i)*cf/water%rho(i)
+      !water%dvx(d,i) = water%dvx(d,i) - water%vx(d,i)*cf/water%rho(i)
          enddo
       enddo
 

@@ -73,8 +73,8 @@ parts%vx = 0.d0
 water_surface = 0.1
 wass => parts%material
 do i = 1,parts%ntotal+parts%nvirt
-   parts%p(i) = wass%rho0*gravity*(parts%x(2,i)-water_surface)
-   if(parts%zone(i)==6)parts%p(i)=0.0
+   parts%p%r(i) = wass%rho0*gravity*(parts%x(2,i)-water_surface)
+   if(parts%zone(i)==6)parts%p%r(i)=0.0
 enddo
 
 
@@ -83,16 +83,16 @@ parts%c = wass%c
 ! ...Volume fraction
 
 do i = 1, parts%ntotal + parts%nvirt
-   parts%vof(i) = 1.0
-   if(parts%zone(i)==1.or.parts%zone(i)==2)parts%vof(i) = 0.45
+   parts%vof%r(i) = 1.0
+   if(parts%zone(i)==1.or.parts%zone(i)==2)parts%vof%r(i) = 0.45
 enddo
-if(single_phase) parts%vof = 1.0
-if(.not.volume_fraction)  parts%vof = 1.0
+if(single_phase) parts%vof%r = 1.0
+if(.not.volume_fraction)  parts%vof%r = 1.0
 
 ! Density and Mass
 
 call initial_density(parts)
-parts%rho = parts%rho * parts%vof
+parts%rho = parts%rho * parts%vof%r
 parts%mass = parts%vol * parts%rho     
 
 ! ----------------------------------- For Soil --------------------------------
@@ -116,26 +116,26 @@ soil%vx = 0.d0
 soil_surface = 0.048
 sand => soil%material
 do i = 1,soil%ntotal+soil%nvirt
-   soil%p(i) = (sand%rho0-wass%rho0)*gravity*(soil%x(2,i)-soil_surface)
-   if(soil%zone(i)==3.or.soil%zone(i)==5.or.soil%zone(i)==6)soil%p(i)=0.0
+   soil%p%r(i) = (sand%rho0-wass%rho0)*gravity*(soil%x(2,i)-soil_surface)
+   if(soil%zone(i)==3.or.soil%zone(i)==5.or.soil%zone(i)==6)soil%p%r(i)=0.0
 enddo
 do i = 1, soil%ntotal+soil%nvirt   
-   soil%sxy(i) = 0.d0
-   soil%sxx(i) =  0.1905*soil%p(i)
-   soil%syy(i) = -0.381*soil%p(i)
-   soil%p(i)   =  0.619*soil%p(i)
+   soil%sxy%r(i) = 0.d0
+   soil%sxx%r(i) =  0.1905*soil%p%r(i)
+   soil%syy%r(i) = -0.381*soil%p%r(i)
+   soil%p%r(i)   =  0.619*soil%p%r(i)
 enddo
 
 soil%c = sand%c
 
 ! Volume fraction
 
-soil%vof = 0.55
-if(.not.volume_fraction)soil%vof = 1.0
+soil%vof%r = 0.55
+if(.not.volume_fraction)soil%vof%r = 1.0
 
 ! Density and Mass
 
-soil%rho  = sand%rho0*soil%vof
+soil%rho  = sand%rho0*soil%vof%r
 soil%mass = soil%vol*soil%rho
 
 return
