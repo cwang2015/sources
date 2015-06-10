@@ -1,5 +1,4 @@
 
-!DEC$IF(.FALSE.)
       subroutine int_force(parts)
 
 c----------------------------------------------------------------------
@@ -9,7 +8,7 @@ c   gradient of the viscous stress tensor, used by the time integration.
 c   Moreover the entropy production due to viscous dissipation, tds/dt, 
 c   and the change of internal energy per mass, de/dt, are calculated. 
  
-      use param
+c      use param
       use m_particles
       implicit none
 
@@ -23,10 +22,11 @@ c   and the change of internal energy per mass, de/dt, are calculated.
      *                                           szz, sxz, syz
       double precision, pointer, dimension(:) :: vof
       double precision h, hvcc, he, rhoij
-      integer i, j, k, d
+      integer i, j, k, d, dim, pa_sph
 
       ntotal = parts%ntotal + parts%nvirt
-      niac = parts%niac
+      niac = parts%niac; dim = parts%dim
+      pa_sph = parts%pa_sph
 
       pair_i   => parts%pair_i
       pair_j   => parts%pair_j
@@ -71,7 +71,7 @@ c     Pressure part
 
 c     Viscous force
 
-            if (visc) then 
+c            if (visc) then 
             
              if (d.eq.1) then
             
@@ -101,7 +101,7 @@ c     z-coordinate of acceleration
      &               + (syz(i) + syz(j))*dwdx(2,k)
      &               + (szz(i) + szz(j))*dwdx(3,k)            
              endif
-           endif             
+c           endif             
            h = h*rhoij
            dvxdt(d,i) = dvxdt(d,i) + mass(j)*h
            dvxdt(d,j) = dvxdt(d,j) - mass(i)*h
@@ -118,7 +118,7 @@ c     For SPH algorithm 2
 
 c     Viscous force
 
-            if (visc) then             
+c            if (visc) then             
              if (d.eq.1) then
                        
 c     x-coordinate of acceleration
@@ -156,7 +156,7 @@ c     z-coordinate of acceleration
      &               + (szz(i)/rho(i)**2 + 
      &                  szz(j)/rho(j)**2)*dwdx(3,k)            
              endif            
-           endif              
+c           endif              
            dvxdt(d,i) = dvxdt(d,i) + mass(j)*h
            dvxdt(d,j) = dvxdt(d,j) - mass(i)*h
           enddo
@@ -166,7 +166,171 @@ c     z-coordinate of acceleration
       return
       end subroutine
 
-!DEC$ENDIF
+      subroutine int_force_water_phase(parts)
+
+c----------------------------------------------------------------------
+c   Subroutine to calculate the internal forces on the right hand side 
+c   of the Navier-Stokes equations, i.e. the pressure gradient and the
+c   gradient of the viscous stress tensor, used by the time integration. 
+c   Moreover the entropy production due to viscous dissipation, tds/dt, 
+c   and the change of internal energy per mass, de/dt, are calculated. 
+ 
+c      use param
+      use m_particles
+      implicit none
+
+      type(particles) parts
+      
+      integer ntotal,niac
+      integer, pointer, dimension(:) :: pair_i, pair_j 
+      double precision, pointer, dimension(:) :: hsml, mass, rho, p
+      double precision, pointer, dimension(:,:) :: dwdx, vx, dvxdt
+      double precision, pointer, dimension(:) :: sxx, sxy, syy, 
+     *                                           szz, sxz, syz
+      double precision, pointer, dimension(:) :: vof
+      double precision h, hp, hvcc, he, rhoij
+      integer i, j, k, d, dim, pa_sph
+
+      ntotal = parts%ntotal + parts%nvirt
+      niac = parts%niac; dim = parts%dim
+      pa_sph = parts%pa_sph
+
+      pair_i   => parts%pair_i
+      pair_j   => parts%pair_j
+      mass     => parts%mass
+      dwdx     => parts%dwdx
+      vx       => parts%vx
+      rho      => parts%rho
+      p        => parts%p
+      dvxdt    => parts%dvx
+      sxx      => parts%sxx
+      syy      => parts%syy
+      sxy      => parts%sxy
+      vof      => parts%vof
+
+c      Calculate SPH sum for pressure force -p,a/rho
+c      and viscous force (eta Tab),b/rho
+c      and the internal energy change de/dt due to -p/rho vc,c
+
+      do k=1,niac
+        i = pair_i(k)
+        j = pair_j(k)
+
+        !if(parts%itype(i)<0.and.parts%itype(j)>0)then
+        !   sxy(i) = -sxy(j); sxx(i)=sxx(j); syy(i)=syy(j); p(i)=p(j)  !!!
+        !endif
+        !if(parts%itype(i)>0.and.parts%itype(j)<0)then
+        !   sxy(j) = -sxy(i); sxx(j)=sxx(i); syy(j)=syy(i); p(j)=p(i)  !!!
+        !endif
+
+        he = 0.e0
+        
+c     For SPH algorithm 1
+
+        rhoij = 1.e0/(rho(i)*rho(j))        
+        if(pa_sph.eq.1) then  
+          do d=1,dim
+        
+c     Pressure part
+                    
+            h = -(p(i) + p(j))*dwdx(d,k)
+            he = he + (vx(d,j) - vx(d,i))*h
+
+c     Viscous force
+
+c            if (visc) then 
+            
+             if (d.eq.1) then
+            
+c     x-coordinate of acceleration
+
+               h = h + (sxx(i) + sxx(j))*dwdx(1,k)
+               if (dim.ge.2) then
+                 h = h + (sxy(i) + sxy(j))*dwdx(2,k)
+                 if (dim.eq.3) then
+                   h = h + (sxz(i) + sxz(j))*dwdx(3,k)
+                 endif
+               endif            
+             elseif (d.eq.2) then
+            
+c     y-coordinate of acceleration
+
+               h = h + (sxy(i) + sxy(j))*dwdx(1,k)
+     &               + (syy(i) + syy(j))*dwdx(2,k)
+               if (dim.eq.3) then
+                 h = h + (syz(i) + syz(j))*dwdx(3,k)
+               endif             
+             elseif (d.eq.3) then
+            
+c     z-coordinate of acceleration
+
+               h = h + (sxz(i) + sxz(j))*dwdx(1,k)
+     &               + (syz(i) + syz(j))*dwdx(2,k)
+     &               + (szz(i) + szz(j))*dwdx(3,k)            
+             endif
+c           endif             
+           h = h*rhoij
+           dvxdt(d,i) = dvxdt(d,i) + mass(j)*h
+           dvxdt(d,j) = dvxdt(d,j) - mass(i)*h
+          enddo
+          he = he*rhoij
+          
+c     For SPH algorithm 2
+          
+        else if (pa_sph.eq.2) then 
+          do d=1,dim                
+            hp = -(p(i)/rho(i)**2 + 
+     &            p(j)/rho(j)**2)*dwdx(d,k) 
+c            he = he + (vx(d,j) - vx(d,i))*h
+c     Viscous force
+
+c            if (visc) then             
+             if (d.eq.1) then
+                       
+c     x-coordinate of acceleration
+               h = 0.d0  !!!!
+               h = h + (sxx(i)*vof(i)/rho(i)**2 +
+     &                  sxx(j)*vof(j)/rho(j)**2)*dwdx(1,k)
+               if (dim.ge.2) then
+                 h = h + (sxy(i)*vof(i)/rho(i)**2 + 
+     &                    sxy(j)*vof(j)/rho(j)**2)*dwdx(2,k)
+                 if (dim.eq.3) then
+                   h = h + (sxz(i)/rho(i)**2 + 
+     &                      sxz(j)/rho(j)**2)*dwdx(3,k)
+                 endif
+               endif            
+             elseif (d.eq.2) then
+            
+c     y-coordinate of acceleration
+               h = 0.d0
+               h = h + (sxy(i)*vof(i)/rho(i)**2  
+     &               +  sxy(j)*vof(j)/rho(j)**2)*dwdx(1,k)
+     &               + (syy(i)*vof(i)/rho(i)**2  
+     &               +  syy(j)*vof(j)/rho(j)**2)*dwdx(2,k)
+               if (dim.eq.3) then
+                 h = h + (syz(i)/rho(i)**2  
+     &                 +  syz(j)/rho(j)**2)*dwdx(3,k)
+               endif              
+             elseif (d.eq.3) then
+            
+c     z-coordinate of acceleration
+               h = 0.d0
+               h = h + (sxz(i)/rho(i)**2 + 
+     &                  sxz(j)/rho(j)**2)*dwdx(1,k)
+     &               + (syz(i)/rho(i)**2 + 
+     &                  syz(j)/rho(j)**2)*dwdx(2,k)
+     &               + (szz(i)/rho(i)**2 + 
+     &                  szz(j)/rho(j)**2)*dwdx(3,k)            
+             endif            
+c           endif              
+           dvxdt(d,i) = dvxdt(d,i) + mass(j)*(h+vof(i)*hp)
+           dvxdt(d,j) = dvxdt(d,j) - mass(i)*(h+vof(j)*hp)
+          enddo
+        endif        
+      enddo
+
+      return
+      end subroutine
 
 !DEC$IF(.FALSE.)
 c---------------------------------------------------------------------
@@ -852,6 +1016,7 @@ c Accumulative deviatoric strain
       end subroutine
 
 !DEC$ENDIF
+!DEC$IF(.FALSE.)
 c ---------------------------------------------------------------------
       subroutine damping_stress(parts)
 c----------------------------------------------------------------------
@@ -872,7 +1037,6 @@ c----------------------------------------------------------------------
       return
       end subroutine
 
-!DEC$IF(.FALSE.)
       subroutine grad(gradf,op,f,parts)
 
 c----------------------------------------------------------------------
@@ -1100,7 +1264,6 @@ c     z-coordinate of acceleration
       return
       end subroutine
 
-!DEC$ENDIF
 
       function diff(f,xy,parts)
 
@@ -1146,3 +1309,4 @@ c   Subroutine to calculate the partial derivatives of function
 
 
 
+!DEC$ENDIF
