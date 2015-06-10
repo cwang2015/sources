@@ -15,7 +15,6 @@ end type
 
 interface assignment(=)
   module procedure :: array_equal_array
-  module procedure :: array_equal_double_real
 end interface
 
 interface operator(+)
@@ -52,25 +51,6 @@ ndim1 = a%ndim1
 !$omp parallel do
 do i = 1, ndim1
    a%r(i) = b%r(i)
-enddo
-!$omp end parallel do
-
-return
-end subroutine
-
-!--------------------------------------------
-    subroutine array_equal_double_real(a,b)
-!--------------------------------------------        
-implicit none
-type(array),intent(INOUT) :: a
-real(dp),intent(IN)    :: b
-integer ndim1,i
-
-ndim1 = a%ndim1
-
-!$omp parallel do
-do i = 1, ndim1
-   a%r(i) = b
 enddo
 !$omp end parallel do
 
