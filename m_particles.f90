@@ -164,7 +164,8 @@ integer :: skf = 4
    real(dp), pointer, dimension(:)   :: vof_min  => null()
 
 ! Field variables
-   real(dp), pointer, dimension(:)   :: rho  => null()
+   !real(dp), pointer, dimension(:)   :: rho  => null()
+   type(array), pointer :: rho  => null()
    real(dp), pointer, dimension(:,:) :: vx   => null()   
    !real(dp), pointer, dimension(:)   :: p    => null()
    type(array), pointer :: p => null()
@@ -251,6 +252,7 @@ integer :: skf = 4
        procedure :: take_real => take_real_points1
        procedure :: take_virtual => take_virtual_points1
        procedure :: setup_itype
+       procedure :: setup_ndim1
        procedure :: get_scale_k
        procedure :: direct_find
        procedure :: init_grid
@@ -806,6 +808,27 @@ elseif(trim(parts%imaterial)=='soil')then
    parts%itype(1:ntotal) = 3
    parts%itype(ntotal+1:ntotal+bntotal) = -3
 endif
+
+return
+end subroutine
+
+!----------------------------------------
+      subroutine setup_ndim1(parts)
+!----------------------------------------
+implicit none
+class(particles) parts
+integer ntotal, bntotal
+
+ntotal = parts%ntotal + parts%nvirt
+
+if(associated(parts%rho))parts%rho%ndim1 = ntotal
+if(associated(parts%p))parts%p%ndim1 = ntotal
+if(associated(parts%vof))parts%vof%ndim1 = ntotal
+if(associated(parts%sxx))parts%sxx%ndim1 = ntotal
+if(associated(parts%sxy))parts%sxy%ndim1 = ntotal
+if(associated(parts%syy))parts%syy%ndim1 = ntotal
+if(associated(parts%dvx%x))parts%dvx%x%ndim1 = ntotal
+if(associated(parts%dvx%y))parts%dvx%y%ndim1 = ntotal
 
 return
 end subroutine
@@ -1440,8 +1463,8 @@ do k=1,parts%niac
    i = parts%pair_i(k)
    j = parts%pair_j(k)
    fwx = (f(i)+f(j))*dwdx(k)
-   df(i) = df(i) + parts%mass(j)/parts%rho(j)*fwx
-   df(j) = df(j) - parts%mass(i)/parts%rho(i)*fwx
+   df(i) = df(i) + parts%mass(j)/parts%rho%r(j)*fwx
+   df(j) = df(j) - parts%mass(i)/parts%rho%r(i)*fwx
 enddo
 
 end function
@@ -1452,10 +1475,10 @@ end function
 !-------------------------------------------
 implicit none
 
-real(dp) f(:)
+type(array) f
 character(len=1) x
 class(particles) parts
-real(dp), allocatable, dimension(:) :: df_omp
+type(array) :: df_omp
 real(dp), allocatable, dimension(:,:) :: df_local
 !real(dp) df_omp(parts%maxn)
 !real(dp) df_local(parts%maxn,8)
@@ -1468,7 +1491,8 @@ integer i, j, k, ntotal, it, nthreads
 ntotal = parts%ntotal + parts%nvirt
 nthreads = parts%nthreads
 
-allocate(df_omp(ntotal))
+df_omp%ndim1 = ntotal
+allocate(df_omp%r(ntotal))
 if(nthreads>1)then
    allocate(df_local(ntotal,nthreads))
    call parts%get_niac_start_end
@@ -1489,9 +1513,9 @@ do it = 1, parts%nthreads
 !do k=1,parts%niac
    i = parts%pair_i(k)
    j = parts%pair_j(k)
-   fwx = (f(i)+f(j))*dwdx(k)
-   df_local(i,it) = df_local(i,it) + parts%mass(j)/parts%rho(j)*fwx
-   df_local(j,it) = df_local(j,it) - parts%mass(i)/parts%rho(i)*fwx
+   fwx = (f%r(i)+f%r(j))*dwdx(k)
+   df_local(i,it) = df_local(i,it) + parts%mass(j)/parts%rho%r(j)*fwx
+   df_local(j,it) = df_local(j,it) - parts%mass(i)/parts%rho%r(i)*fwx
    enddo !k
 enddo !it
 !$omp end do
@@ -1499,9 +1523,9 @@ enddo !it
 
 !$omp do private(it)
 do i = 1, ntotal
-   df_omp(i) = 0.d0
+   df_omp%r(i) = 0.d0
    do it = 1, nthreads
-      df_omp(i) = df_omp(i)+df_local(i,it)
+      df_omp%r(i) = df_omp%r(i)+df_local(i,it)
    enddo
 enddo   
 !$omp end do
@@ -1555,8 +1579,8 @@ do it = 1, parts%nthreads
    j = parts%pair_j(k)
    fwx = (f(i)+f(j))*dwdx(k)
    ii = i + (it-1)*ntotal; jj = j + (it-1)*ntotal
-   val(ii) = val(ii) + parts%mass(j)/parts%rho(j)*fwx
-   val(jj) = val(jj) - parts%mass(i)/parts%rho(i)*fwx   
+   val(ii) = val(ii) + parts%mass(j)/parts%rho%r(j)*fwx
+   val(jj) = val(jj) - parts%mass(i)/parts%rho%r(i)*fwx   
 !   df_local(i,it) = df_local(i,it) + parts%mass(j)/parts%rho(j)*fwx
 !   df_local(j,it) = df_local(j,it) - parts%mass(i)/parts%rho(i)*fwx
    enddo !k
@@ -1605,7 +1629,7 @@ do k=1,parts%niac
 enddo
 
 do i = 1, parts%ntotal + parts%nvirt 
-   df2(i) = df2(i)/parts%rho(i)
+   df2(i) = df2(i)/parts%rho%r(i)
 enddo   
 
 end function
@@ -1633,13 +1657,13 @@ if(x=='y')dwdx=>parts%dwdx(2,:)
 do k=1,parts%niac
    i = parts%pair_i(k)
    j = parts%pair_j(k)
-   fwx = ((f(i)/parts%rho(i)**2)+(f(j)/parts%rho(j)**2))*dwdx(k)
+   fwx = ((f(i)/parts%rho%r(i)**2)+(f(j)/parts%rho%r(j)**2))*dwdx(k)
    df3(i) = df3(i) + parts%mass(j)*fwx
    df3(j) = df3(j) - parts%mass(i)*fwx
 enddo
 
 do i = 1, parts%ntotal + parts%nvirt
-   df3(i) = df3(i)*parts%rho(i)
+   df3(i) = df3(i)*parts%rho%r(i)
 enddo
 
 end function
@@ -1681,7 +1705,7 @@ do it = 1, parts%nthreads
    do k = parts%niac_start(it), parts%niac_end(it)
    i = parts%pair_i(k)
    j = parts%pair_j(k)
-   fwx = ((f(i)/parts%rho(i)**2)+(f(j)/parts%rho(j)**2))*dwdx(k)
+   fwx = ((f(i)/parts%rho%r(i)**2)+(f(j)/parts%rho%r(j)**2))*dwdx(k)
    df3_local (i,it)= df3_local (i,it) + parts%mass(j)*fwx
    df3_local (j,it)= df3_local (j,it) - parts%mass(i)*fwx
 !   df3_omp(i) = df3_omp(i) + parts%mass(j)*fwx
@@ -1702,7 +1726,7 @@ enddo
 !$omp end parallel
 
 do i = 1, parts%ntotal + parts%nvirt
-   df3_omp(i) = df3_omp(i)*parts%rho(i)
+   df3_omp(i) = df3_omp(i)*parts%rho%r(i)
 enddo
 
 
@@ -1724,7 +1748,7 @@ end function
       pair_i => parts%pair_i
       pair_j => parts%pair_j
       mass   => parts%mass
-      rho    => parts%rho
+      rho    => parts%rho%r
       vcc    => parts%vcc
       vx     => parts%vx
       dwdx   => parts%dwdx
@@ -1768,7 +1792,7 @@ end function
       if(parts%imaterial=='water')then
 
          water => parts%material
-         parts%rho(1:ntotal) = water%rho0*(parts%p%r(1:ntotal)/water%b+1) &
+         parts%rho%r(1:ntotal) = water%rho0*(parts%p%r(1:ntotal)/water%b+1) &
                             **(1/water%gamma)
 
       elseif(parts%imaterial=='soil')then
@@ -1795,7 +1819,7 @@ end function
       if(parts%imaterial=='water')then
 
          water => parts%material
-         parts%p%r(1:ntotal) = water%b*((parts%rho(1:ntotal)/(water%rho0  &
+         parts%p%r(1:ntotal) = water%b*((parts%rho%r(1:ntotal)/(water%rho0  &
                             *parts%vof%r(1:ntotal))) &   !!! False density
                             **water%gamma-1)  
 
@@ -1810,7 +1834,7 @@ end function
 !                              endif
 
          !parts%c(1:ntotal) = water%c         
-         parts%c(1:ntotal) = water%c*(parts%rho(1:ntotal)/(water%rho0*parts%vof%r(1:ntotal)))**3.0         
+         parts%c(1:ntotal) = water%c*(parts%rho%r(1:ntotal)/(water%rho0*parts%vof%r(1:ntotal)))**3.0         
 
       elseif(parts%imaterial=='soil')then
 
@@ -1838,11 +1862,11 @@ integer ntotal, i
 ntotal = parts%ntotal+parts%nvirt
 
 water => parts%material
-parts%p%r(1:ntotal) = water%b*((parts%rho(1:ntotal)/(water%rho0  &
+parts%p%r(1:ntotal) = water%b*((parts%rho%r(1:ntotal)/(water%rho0  &
                    *parts%vof%r(1:ntotal))) &   !!! False density
                   **water%gamma-1)
 
-parts%c(1:ntotal) = water%c*(parts%rho(1:ntotal)/(water%rho0*parts%vof%r(1:ntotal)))**3.0         
+parts%c(1:ntotal) = water%c*(parts%rho%r(1:ntotal)/(water%rho0*parts%vof%r(1:ntotal)))**3.0         
 
 return
 end subroutine
@@ -1882,7 +1906,7 @@ integer ntotal, i
 ntotal = parts%ntotal+parts%nvirt
 
 soil => parts%material
-parts%p%r(1:ntotal) = soil%k*(parts%rho(1:ntotal)/soil%rho0-1)
+parts%p%r(1:ntotal) = soil%k*(parts%rho%r(1:ntotal)/soil%rho0-1)
 ! parts%p(1:ntotal) = parts%p(1:ntotal)  &
 !                    -soil%k*parts%vcc(1:ntotal)*0.000005   !*dt
 parts%c(1:ntotal) = soil%c
@@ -1915,35 +1939,35 @@ end subroutine
 
       do i=1,ntotal
         call parts%kernel(r,hv,parts%hsml(i),selfdens,hv)
-        wi(i)=selfdens*parts%mass(i)/parts%rho(i)
+        wi(i)=selfdens*parts%mass(i)/parts%rho%r(i)
       enddo
 
       do k=1,parts%niac
         i = parts%pair_i(k)
         j = parts%pair_j(k)
-        wi(i) = wi(i) + parts%mass(j)/parts%rho(j)*parts%w(k)
-        wi(j) = wi(j) + parts%mass(i)/parts%rho(i)*parts%w(k)
+        wi(i) = wi(i) + parts%mass(j)/parts%rho%r(j)*parts%w(k)
+        wi(j) = wi(j) + parts%mass(i)/parts%rho%r(i)*parts%w(k)
       enddo
 
 !     Secondly calculate the rho integration over the space
 
       do i=1,ntotal
         call parts%kernel(r,hv,parts%hsml(i),selfdens,hv)
-        parts%rho(i) = selfdens*parts%mass(i)
+        parts%rho%r(i) = selfdens*parts%mass(i)
       enddo
 
 !     Calculate SPH sum for rho:
       do k=1,parts%niac
         i = parts%pair_i(k)
         j = parts%pair_j(k)
-        parts%rho(i) = parts%rho(i) + parts%mass(j)*parts%w(k)
-        parts%rho(j) = parts%rho(j) + parts%mass(i)*parts%w(k)
+        parts%rho%r(i) = parts%rho%r(i) + parts%mass(j)*parts%w(k)
+        parts%rho%r(j) = parts%rho%r(j) + parts%mass(i)*parts%w(k)
       enddo
 
 !     Thirdly, calculate the normalized rho, rho=sum(rho)/sum(w)
 !      if (nor_density) then 
         do i=1, ntotal
-          parts%rho(i)=parts%rho(i)/wi(i)
+          parts%rho%r(i)=parts%rho%r(i)/wi(i)
         enddo
 !      endif 
  
@@ -1959,7 +1983,7 @@ end subroutine
       class(particles) parts      
 
       integer ntotal,i,j,k,d    
-      double precision vcc, dvx(3) 
+      double precision vcc, dvx(3), vx_i(3), vx_j(3), dwdx(3) 
       
       ntotal = parts%ntotal + parts%nvirt
 
@@ -1971,11 +1995,15 @@ end subroutine
         i = parts%pair_i(k)
         j = parts%pair_j(k)
         do d=1, parts%dim
-          dvx(d) = parts%vx(d,i) - parts%vx(d,j) 
+          vx_i(d) = parts%vx(d,i); vx_j(d) = parts%vx(d,j)
+          dwdx(d) = parts%dwdx(d,k) 
+          dvx(d) = vx_i(d) - vx_j(d) 
         enddo        
-        vcc = dvx(1)* parts%dwdx(1,k)        
+        !vcc = dvx(1)* parts%dwdx(1,k)        
+        vcc = dvx(1)*dwdx(1)        
         do d=2, parts%dim
-          vcc = vcc + dvx(d)*parts%dwdx(d,k)
+          !vcc = vcc + dvx(d)*parts%dwdx(d,k)
+          vcc = vcc + dvx(d)*dwdx(d)
         enddo    
         parts%drho(i) = parts%drho(i) + parts%mass(j)*vcc
         parts%drho(j) = parts%drho(j) + parts%mass(i)*vcc       
@@ -2046,7 +2074,7 @@ end subroutine
 !     Calculate PIv_ij = (-alpha muv_ij c_ij + beta muv_ij^2) / rho_ij
 
           mc   = 0.5e0*(parts%c(i) + parts%c(j))
-          mrho = 0.5e0*(parts%rho(i) + parts%rho(j))
+          mrho = 0.5e0*(parts%rho%r(i) + parts%rho%r(j))
           piv  = (beta*muv - alpha*mc)*muv/mrho              
 
 !     Calculate SPH sum for artificial viscous force
@@ -2106,8 +2134,8 @@ end subroutine
             !h = h + (dx(d)*muv - (drhodx(d,i)+drhodx(d,j)))*dwdx(d,k)
             h = h + dx(d)*muv*parts%dwdx(d,k)
          enddo
-         df(i) = df(i) + delta*parts%hsml(i)*parts%c(i)*parts%mass(j)*h/parts%rho(j)
-         df(j) = df(j) - delta*parts%hsml(j)*parts%c(j)*parts%mass(i)*h/parts%rho(i)
+         df(i) = df(i) + delta*parts%hsml(i)*parts%c(i)*parts%mass(j)*h/parts%rho%r(j)
+         df(j) = df(j) - delta*parts%hsml(j)*parts%c(j)*parts%mass(i)*h/parts%rho%r(i)
       enddo
 
       return
@@ -2133,7 +2161,7 @@ end subroutine
       do k=1,niac       
          i = parts%pair_i(k)
          j = parts%pair_j(k)       
-         mrho = (parts%rho(i)+parts%rho(j))/2.0
+         mrho = (parts%rho%r(i)+parts%rho%r(j))/2.0
          do d=1,parts%dim
             dvx(d) = parts%vx(d,i) - parts%vx(d,j)            
             parts%av(d, i) = parts%av(d,i) - parts%mass(j)*dvx(d)/mrho*parts%w(k)
@@ -2202,15 +2230,15 @@ end subroutine
           hyy = 2.e0/3.e0*hyy
           hzz = 2.e0/3.e0*hzz
           if (dim.eq.1) then 
-             parts%txx(i) = parts%txx(i) + parts%mass(j)*hxx/parts%rho(j)
-             parts%txx(j) = parts%txx(j) + parts%mass(i)*hxx/parts%rho(i)               
+             parts%txx(i) = parts%txx(i) + parts%mass(j)*hxx/parts%rho%r(j)
+             parts%txx(j) = parts%txx(j) + parts%mass(i)*hxx/parts%rho%r(i)             
           else if (dim.eq.2) then           
-             parts%txx(i) = parts%txx(i) + parts%mass(j)*hxx/parts%rho(j)
-             parts%txx(j) = parts%txx(j) + parts%mass(i)*hxx/parts%rho(i)   
-             parts%txy(i) = parts%txy(i) + parts%mass(j)*hxy/parts%rho(j)
-             parts%txy(j) = parts%txy(j) + parts%mass(i)*hxy/parts%rho(i)            
-             parts%tyy(i) = parts%tyy(i) + parts%mass(j)*hyy/parts%rho(j)
-             parts%tyy(j) = parts%tyy(j) + parts%mass(i)*hyy/parts%rho(i)          
+             parts%txx(i) = parts%txx(i) + parts%mass(j)*hxx/parts%rho%r(j)
+             parts%txx(j) = parts%txx(j) + parts%mass(i)*hxx/parts%rho%r(i)   
+             parts%txy(i) = parts%txy(i) + parts%mass(j)*hxy/parts%rho%r(j)
+             parts%txy(j) = parts%txy(j) + parts%mass(i)*hxy/parts%rho%r(i)            
+             parts%tyy(i) = parts%tyy(i) + parts%mass(j)*hyy/parts%rho%r(j)
+             parts%tyy(j) = parts%tyy(j) + parts%mass(i)*hyy/parts%rho%r(i)          
           else if (dim.eq.3) then
 !             txx(i) = txx(i) + mass(j)*hxx/rho(j)
 !             txx(j) = txx(j) + mass(i)*hxx/rho(i)   
@@ -2282,8 +2310,8 @@ end subroutine
 !            txx(i) = txx(i) + mass(j)*hxx/rho(j)
 !            txx(j) = txx(j) + mass(i)*hxx/rho(i)                 
           else if (dim.eq.2) then           
-            parts%wxy(i) = parts%wxy(i) + parts%mass(j)*hxy/parts%rho(j)
-            parts%wxy(j) = parts%wxy(j) + parts%mass(i)*hxy/parts%rho(i)            
+            parts%wxy(i) = parts%wxy(i) + parts%mass(j)*hxy/parts%rho%r(j)
+            parts%wxy(j) = parts%wxy(j) + parts%mass(i)*hxy/parts%rho%r(i)            
           else if (dim.eq.3) then
 !            txy(i) = txy(i) + mass(j)*hxy/rho(j)
 !            txy(j) = txy(j) + mass(i)*hxy/rho(i) 
@@ -2329,7 +2357,7 @@ end subroutine
 
          if(yield<=0.)then    ! <
             yield=0.; soil%p%r(i)=-cohesion*tan(phi)**(-1.0)
-            soil%rho(i) = property%rho0
+            soil%rho%r(i) = property%rho0
          endif
 
 !         if(yield<=0.)then   ! Collapse
@@ -2698,12 +2726,12 @@ end subroutine
       do  k=1,water%niac
           i = water%pair_i(k)
           j = water%pair_j(k)  
-          rrw = water%w(k)/(water%rho(i)*soil%rho(j))
+          rrw = water%w(k)/(water%rho%r(i)*soil%rho%r(j))
 
 ! For staturated soil
 !        if(volume_fraction) cf = water%vof(i)*water%rho(i)*(-gravity)/ks
 !        if(water%volume_fraction) cf = water%vof(i)*soil%vof(j)*water%rho(i)*(-gravity)/ks
-        cf = water%vof%r(i)*soil%vof%r(j)*water%rho(i)*(-gravity)/ks
+        cf = water%vof%r(i)*soil%vof%r(j)*water%rho%r(i)*(-gravity)/ks
 
           !do d=1,dim
           !   sp = cf*(water%vx(d,i)-soil%vx(d,j))*rrw
@@ -2737,7 +2765,7 @@ end subroutine
       do k = 1, water%niac
          i = water%pair_i(k)   ! water
          j = water%pair_j(k)   ! soil
-         mprr = water%mass(i)*water%p%r(i)/(water%rho(i)*soil%rho(j))
+         mprr = water%mass(i)*water%p%r(i)/(water%rho%r(i)*soil%rho%r(j))
 !         mprr = water%mass(i)*(water%p(i)+soil%p(j))/       &      Bui2014
 !                (water%rho(i)*soil%rho(j))
 !         do d = 1, water%dim
@@ -2836,7 +2864,7 @@ end subroutine
       ntotal = parts%ntotal + parts%nvirt
 
       do i = 1, ntotal
-         parts%vof%r(i) = parts%rho(i)/sio2%rho0
+         parts%vof%r(i) = parts%rho%r(i)/sio2%rho0
       enddo
 
       return

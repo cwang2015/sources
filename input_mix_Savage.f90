@@ -53,6 +53,9 @@ call soil%take_virtual(tank,3)
 call soil%take_virtual(tank,5)
 call soil%take_virtual(tank,6)
 
+call parts%setup_ndim1
+call soil%setup_ndim1
+
 ! Basic settings for particles (vol,hsml,itype)
 ! vol means the volume of a cell. We calculate the mass of each particle according to mass = rho*vol
 
@@ -76,7 +79,7 @@ do i = 1,parts%ntotal+parts%nvirt
    parts%p%r(i) = wass%rho0*gravity*(parts%x(2,i)-water_surface)
    if(parts%zone(i)==6)parts%p%r(i)=0.0
 enddo
-
+parts%p%ndim1 = ntotal
 
 parts%c = wass%c
 
@@ -88,12 +91,13 @@ do i = 1, parts%ntotal + parts%nvirt
 enddo
 if(single_phase) parts%vof%r = 1.0
 if(.not.volume_fraction)  parts%vof%r = 1.0
+parts%vof%ndim1 = ntotal
 
 ! Density and Mass
 
 call initial_density(parts)
-parts%rho = parts%rho * parts%vof%r
-parts%mass = parts%vol * parts%rho     
+parts%rho%r = parts%rho%r * parts%vof%r
+parts%mass = parts%vol * parts%rho%r     
 
 ! ----------------------------------- For Soil --------------------------------
 ! Basic settings for particles (vol,hsml,itype)
@@ -125,6 +129,8 @@ do i = 1, soil%ntotal+soil%nvirt
    soil%syy%r(i) = -0.381*soil%p%r(i)
    soil%p%r(i)   =  0.619*soil%p%r(i)
 enddo
+soil%p%ndim1 = bntotal
+soil%sxx%ndim1 = bntotal; soil%sxy%ndim1 = bntotal; soil%syy%ndim1 = bntotal;
 
 soil%c = sand%c
 
@@ -132,11 +138,12 @@ soil%c = sand%c
 
 soil%vof%r = 0.55
 if(.not.volume_fraction)soil%vof%r = 1.0
+soil%vof%ndim1 = bntotal
 
 ! Density and Mass
 
-soil%rho  = sand%rho0*soil%vof%r
-soil%mass = soil%vol*soil%rho
+soil%rho%r  = sand%rho0*soil%vof%r
+soil%mass = soil%vol*soil%rho%r
 
 return
 end subroutine

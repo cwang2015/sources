@@ -537,7 +537,7 @@ dim  = parts%dim
 maxn = parts%maxn
 
 allocate(parts%vx(dim,maxn));  parts%vx  = 0.d0
-allocate(parts%rho(maxn));     parts%rho = 0.d0
+allocate(parts%rho); allocate(parts%rho%r(maxn)); parts%rho%r = 0.d0
 allocate(parts%p); allocate(parts%p%r(maxn)); parts%p%r = 0.d0
 allocate(parts%u(maxn));       parts%u   = 0.d0
 allocate(parts%c(maxn));       parts%c   = 0.d0
@@ -613,7 +613,9 @@ end subroutine
 !
       integer :: i, j, k, d, ntotal, it
       type(particles), pointer :: pl
-              
+      
+      call parts%setup_ndim1; call soil%setup_ndim1
+
       do it = 1, maxtimestep   
   
         itimestep = itimestep+1
@@ -730,8 +732,8 @@ implicit none
       do i = 1, pl%ntotal +pl%nvirt    ! originally only pl%ntotal       
             
          if (.not.summation_density) then    
-            pl%rho_min(i) = pl%rho(i)
-            pl%rho(i) = pl%rho(i) +(dt/2.)* pl%drho(i)
+            pl%rho_min(i) = pl%rho%r(i)
+            pl%rho%r(i) = pl%rho%r(i) +(dt/2.)* pl%drho(i)
          endif
 
          if(trim(pl%imaterial)=='water'.and.volume_fraction)then
@@ -778,7 +780,7 @@ implicit none
       do i=1,pl%ntotal +pl%nvirt     ! origionally pl%ntotal
          
          if (.not.summation_density ) then
-            pl%rho(i) = pl%rho(i) + (dt/2.)* pl%drho(i)
+            pl%rho%r(i) = pl%rho%r(i) + (dt/2.)* pl%drho(i)
          endif
 
          if(trim(pl%imaterial)=='water'.and.volume_fraction)then
@@ -823,7 +825,7 @@ implicit none
       do i=1,pl%ntotal +pl%nvirt  ! origionally pl%ntotal            
             
          if (.not.summation_density ) then 
-            pl%rho(i) = pl%rho_min(i) + dt*pl%drho(i)
+            pl%rho%r(i) = pl%rho_min(i) + dt*pl%drho(i)
          endif
 
          if(trim(pl%imaterial)=='water'.and.volume_fraction)then
@@ -912,8 +914,8 @@ do it = 1, maxtimestep
       do i = 1, pl%ntotal +pl%nvirt    ! originally only pl%ntotal       
             
          if (.not.summation_density) then    
-            pl%rho_min(i) = pl%rho(i)
-            pl%rho(i) = pl%rho(i) +(dt/2.)* pl%drho(i)
+            pl%rho_min(i) = pl%rho%r(i)
+            pl%rho%r(i) = pl%rho%r(i) +(dt/2.)* pl%drho(i)
          endif
           
          if(pl%itype(i)<0)cycle
@@ -937,7 +939,7 @@ do it = 1, maxtimestep
       do i=1,pl%ntotal +pl%nvirt     ! origionally pl%ntotal
          
          if(.not.summation_density )then
-            pl%rho(i) = pl%rho(i) + (dt/2.)* pl%drho(i)
+            pl%rho%r(i) = pl%rho%r(i) + (dt/2.)* pl%drho(i)
          endif
 
          if(pl%itype(i)<0)cycle
@@ -961,7 +963,7 @@ do it = 1, maxtimestep
        do i=1,pl%ntotal +pl%nvirt  ! origionally pl%ntotal            
             
          if(.not.summation_density )then 
-            pl%rho(i) = pl%rho_min(i) + dt*pl%drho(i)
+            pl%rho%r(i) = pl%rho_min(i) + dt*pl%drho(i)
          endif
 
          if(pl%itype(i)<0)cycle
@@ -1020,7 +1022,7 @@ allocate(lastrho(parts%maxn))
 allocate(temp2(parts%maxn))
     pl => parts
     lastvx = pl%vx
-    lastrho = pl%rho
+    lastrho = pl%rho%r
 
 do it = 1, maxtimestep 
     itimestep = itimestep+1
@@ -1056,7 +1058,7 @@ lastvx = temp1
 
 if(itimestep .eq. 1) then
     do i = 1, pl%ntotal+pl%nvirt
-          lastrho(i) = pl%rho(i) + dt * 2. * pl%drho(i)
+          lastrho(i) = pl%rho%r(i) + dt * 2. * pl%drho(i)
     enddo
 elseif(mod(itimestep,50) .ne. 0) then
     do i = 1, pl%ntotal+pl%nvirt
@@ -1064,11 +1066,11 @@ elseif(mod(itimestep,50) .ne. 0) then
     enddo
 else
    do i = 1, pl%ntotal+pl%nvirt
-          lastrho(i) = pl%rho(i) + dt* pl%drho(i)
+          lastrho(i) = pl%rho%r(i) + dt* pl%drho(i)
    enddo
 endif
-temp2 = pl%rho
-pl%rho = lastrho
+temp2 = pl%rho%r
+pl%rho%r = lastrho
 lastrho = temp2
 
    time = time + dt
@@ -1120,8 +1122,8 @@ do it = 1, maxtimestep
       do i = 1, pl%ntotal +pl%nvirt    ! originally only pl%ntotal       
             
          if (.not.summation_density) then    
-            pl%rho_min(i) = pl%rho(i)
-            pl%rho(i) = pl%rho(i) +(dt/2.)* pl%drho(i)
+            pl%rho_min(i) = pl%rho%r(i)
+            pl%rho%r(i) = pl%rho%r(i) +(dt/2.)* pl%drho(i)
          endif
  
          if(stress_integration==1)then
@@ -1162,7 +1164,7 @@ do it = 1, maxtimestep
       do i=1,pl%ntotal +pl%nvirt     ! origionally pl%ntotal
          
          if(.not.summation_density )then
-            pl%rho(i) = pl%rho(i) + (dt/2.)* pl%drho(i)
+            pl%rho%r(i) = pl%rho%r(i) + (dt/2.)* pl%drho(i)
          endif
 
          if(stress_integration==1)then
@@ -1207,7 +1209,7 @@ do it = 1, maxtimestep
       do i=1,pl%ntotal +pl%nvirt  ! origionally pl%ntotal            
             
          if(.not.summation_density )then 
-            pl%rho(i) = pl%rho_min(i) + dt*pl%drho(i)
+            pl%rho%r(i) = pl%rho_min(i) + dt*pl%drho(i)
          endif
                  
          if(stress_integration==1)then 
@@ -1331,7 +1333,7 @@ if(artificial_density)then
    !if(trim(pl%imaterial)=='water')then
       !!call renormalize_density_gradient(pl)
       !call art_density(pl)
-      call delta_sph(pl,pl%rho,pl%drho)
+      call delta_sph(pl,pl%rho%r,pl%drho)
    !endif
 endif
 
@@ -1370,20 +1372,24 @@ if(pl%imaterial=='water')then
    pl%dvx%x%r = -pl%vof%r*pl%df(pl%p%r,'x') + pl%df(pl%vof%r*pl%sxx%r,'x') + pl%df(pl%vof%r*pl%sxy%r,'y')
    pl%dvx%y%r = -pl%vof%r*pl%df(pl%p%r,'y') + pl%df(pl%vof%r*pl%sxy%r,'x') + pl%df(pl%vof%r*pl%syy%r,'y')
    else
-   pl%dvx%x%r = -pl%vof%r*pl%df_omp(pl%p%r,'x') + pl%df_omp(pl%vof%r*pl%sxx%r,'x') + pl%df_omp(pl%vof%r*pl%sxy%r,'y')
-   pl%dvx%y%r = -pl%vof%r*pl%df_omp(pl%p%r,'y') + pl%df_omp(pl%vof%r*pl%sxy%r,'x') + pl%df_omp(pl%vof%r*pl%syy%r,'y')           
+   pl%dvx%x = -pl%vof*pl%df_omp(pl%p,'x') + pl%df_omp(pl%vof*pl%sxx,'x') + pl%df_omp(pl%vof*pl%sxy,'y')
+   pl%dvx%y = -pl%vof*pl%df_omp(pl%p,'y') + pl%df_omp(pl%vof*pl%sxy,'x') + pl%df_omp(pl%vof*pl%syy,'y')           
    endif        
 
-   where (pl%rho.gt.0.0) pl%dvx%x%r = pl%dvx%x%r/pl%rho
-   where (pl%rho.gt.0.0) pl%dvx%y%r = pl%dvx%y%r/pl%rho
-
+   !where (pl%rho.gt.0.0) pl%dvx%x%r = pl%dvx%x%r/pl%rho%r
+   !where (pl%rho.gt.0.0) pl%dvx%y%r = pl%dvx%y%r/pl%rho%r
+   pl%dvx%x = pl%dvx%x/pl%rho
+   pl%dvx%y = pl%dvx%y/pl%rho
 else      
    !call int_force(pl)
    pl%dvx%x%r = -pl%df3_omp(pl%vof%r*pl%p%r,'x') + pl%df3_omp(pl%vof%r*pl%sxx%r,'x') + pl%df3_omp(pl%vof%r*pl%sxy%r,'y')
    pl%dvx%y%r = -pl%df3(pl%vof%r*pl%p%r,'y') + pl%df3(pl%vof%r*pl%sxy%r,'x') + pl%df3(pl%vof%r*pl%syy%r,'y')
 
-   where (pl%rho.gt.0.0) pl%dvx%x%r = pl%dvx%x%r/pl%rho
-   where (pl%rho.gt.0.0) pl%dvx%y%r = pl%dvx%y%r/pl%rho 
+   !where (pl%rho%r.gt.0.0) pl%dvx%x%r = pl%dvx%x%r/pl%rho%r
+   !where (pl%rho%r.gt.0.0) pl%dvx%y%r = pl%dvx%y%r/pl%rho%r 
+   pl%dvx%x = pl%dvx%x/pl%rho
+   pl%dvx%y = pl%dvx%y/pl%rho 
+
 endif      
 
 !if(trim(pl%imaterial)=='water'.and.water_tension_instability==2) &
@@ -1487,9 +1493,9 @@ endif
          if(volume_fraction_renorm)then
             if(mod(itimestep,40).eq.0) then
                ntotal = parts%ntotal+parts%nvirt
-               parts%rho(1:ntotal) = parts%rho(1:ntotal)/parts%vof%r(1:ntotal) 
+               parts%rho%r(1:ntotal) = parts%rho%r(1:ntotal)/parts%vof%r(1:ntotal) 
                parts%vof%r = parts%vof2
-               parts%rho(1:ntotal) = parts%rho(1:ntotal)*parts%vof%r(1:ntotal) 
+               parts%rho%r(1:ntotal) = parts%rho%r(1:ntotal)*parts%vof%r(1:ntotal) 
             endif
          endif
       endif
@@ -1536,19 +1542,19 @@ endif
      
 !if(summation_density) call sum_density(pl)
 call sum_density(pl)
-pl%drho = -pl%rho*(pl%df2(pl%vx(1,:),'x')+pl%df2(pl%vx(2,:),'y'))
+pl%drho = -pl%rho%r*(pl%df2(pl%vx(1,:),'x')+pl%df2(pl%vx(2,:),'y'))
       
 if(artificial_density)then
    !call renormalize_density_gradient(pl)
    !call art_density(pl)
-   call delta_sph(pl,pl%rho,pl%drho)
+   call delta_sph(pl,pl%rho%r,pl%drho)
 endif
        
 !---  Internal forces:
 
 !Calculate pressure
 
-where(pl%rho>0.0) pl%p%r = property%b*((pl%rho/property%rho0)**property%gamma-1)
+where(pl%rho%r>0.0) pl%p%r = property%b*((pl%rho%r/property%rho0)**property%gamma-1)
 
 !Calculate SPH sum for shear tensor Tab = va,b + vb,a - 2/3 delta_ab vc,c
 
@@ -1567,8 +1573,8 @@ pl%sxy%r = property%viscosity*pl%txy
 pl%dvx%x%r = - pl%df(pl%p%r,'x') + pl%df(pl%sxx%r,'x') + pl%df(pl%sxy%r,'y')
 pl%dvx%y%r = - pl%df(pl%p%r,'y') + pl%df(pl%sxy%r,'x') + pl%df(pl%syy%r,'y')
 
-where (pl%rho.gt.0.0) pl%dvx%x%r = pl%dvx%x%r/pl%rho
-where (pl%rho.gt.0.0) pl%dvx%y%r = pl%dvx%y%r/pl%rho
+where (pl%rho%r.gt.0.0) pl%dvx%x%r = pl%dvx%x%r/pl%rho%r
+where (pl%rho%r.gt.0.0) pl%dvx%y%r = pl%dvx%y%r/pl%rho%r
        
 !if(water_tension_instability==2) call tension_instability(pl) 
 
@@ -1641,7 +1647,7 @@ if(artificial_density)then
    !if(trim(pl%imaterial)=='water')then
       !!call renormalize_density_gradient(pl)
       !call art_density(pl)
-      call delta_sph(pl,pl%rho,pl%drho)
+      call delta_sph(pl,pl%rho%r,pl%drho)
    !endif
 endif
 
@@ -1665,8 +1671,8 @@ endif
 pl%dvx%x%r = - pl%df(pl%p%r,'x') + pl%df(pl%sxx%r,'x') + pl%df(pl%sxy%r,'y')
 pl%dvx%y%r = - pl%df(pl%p%r,'y') + pl%df(pl%sxy%r,'x') + pl%df(pl%syy%r,'y')
 
-where (pl%rho.gt.0.0) pl%dvx%x%r = pl%dvx%x%r/pl%rho
-where (pl%rho.gt.0.0) pl%dvx%y%r = pl%dvx%y%r/pl%rho       
+where (pl%rho%r.gt.0.0) pl%dvx%x%r = pl%dvx%x%r/pl%rho%r
+where (pl%rho%r.gt.0.0) pl%dvx%y%r = pl%dvx%y%r/pl%rho%r       
 
 ! --- Plasticity flow rule   ! This was done before Jaummann_rate, because we 
 !     we need txx,tyy,tzz, which was destroyed in Jaumann_rate!
@@ -1812,7 +1818,7 @@ end subroutine
 !      write(f_xv,*) hsml(1:ntotal)                                        
       write(f_xv,*) parts%vx(1,1:ntotal)
       write(f_xv,*) parts%vx(2,1:ntotal)
-      write(f_xv,*) parts%rho(1:ntotal)
+      write(f_xv,*) parts%rho%r(1:ntotal)
       write(f_xv,*) parts%zone(1:ntotal)
       write(f_xv,*) parts%vof2(1:ntotal)
       write(f_xv,*) parts%mass(1:ntotal)
@@ -1840,7 +1846,7 @@ end subroutine
       write(f_xv,*)  parts%syy%r(1:ntotal)
       write(f_xv,*)  parts%vx(1,1:ntotal)
       write(f_xv,*)  parts%vx(2,1:ntotal)
-      write(f_xv,*)  parts%rho(1:ntotal)
+      write(f_xv,*)  parts%rho%r(1:ntotal)
       write(f_xv,*)  parts%mass(1:ntotal)
       write(f_xv,*)  -parts%p%r(1:ntotal) + parts%syy%r(1:ntotal)
       write(f_xv,*)  parts%zone(1:ntotal)
@@ -1871,7 +1877,7 @@ end subroutine
       write(f_state,*)  soil%syy%r(1:ntotal2)
       write(f_state,*)  soil%vx(1,1:ntotal2)
       write(f_state,*)  soil%vx(2,1:ntotal2)
-      write(f_state,*)  soil%rho(1:ntotal2)
+      write(f_state,*)  soil%rho%r(1:ntotal2)
       write(f_state,*)  soil%mass(1:ntotal2)
       write(f_state,*)  -soil%p%r(1:ntotal2) + soil%syy%r(1:ntotal2)
       write(f_state,*)  soil%zone(1:ntotal2)
