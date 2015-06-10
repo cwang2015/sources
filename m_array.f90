@@ -4,12 +4,18 @@
 implicit none
 integer, parameter :: dp = kind(0.d0)
 
+type p2r
+     real(dp), pointer :: p => null()
+end type 
+
 type array
    integer :: ndim1
    real(dp), pointer, dimension(:) :: r  => null()
    type(array), pointer :: x => null(), y => null(), z => null()
    type(array), pointer :: xy => null(), xz => null(), yz => null()
    contains
+       procedure :: cmpt
+       procedure :: p2cmpt
        final :: array_final
 end type
 
@@ -80,6 +86,34 @@ enddo
 
 return
 end subroutine
+
+!--------------------------------------------
+      function cmpt(this,i) result(val)
+!--------------------------------------------
+implicit none
+class(array) this
+integer i
+real(dp) val(3)
+
+val(1) = this%x%r(i)
+val(2) = this%y%r(i)
+val(3) = 0
+
+end function
+
+!--------------------------------------------
+     function p2cmpt(this,i) result(p)
+!--------------------------------------------
+implicit none
+class(array) this
+integer i
+type(p2r) p(3)
+
+p(1)%p => this%x%r(i)
+p(2)%p => this%y%r(i)
+p(3)%p => null()
+
+end function
 
 !--------------------------------------------
        subroutine array_final(this)

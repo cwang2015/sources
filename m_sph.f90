@@ -536,7 +536,10 @@ integer dim,maxn
 dim  = parts%dim
 maxn = parts%maxn
 
-allocate(parts%vx(dim,maxn));  parts%vx  = 0.d0
+!allocate(parts%vx(dim,maxn));  parts%vx  = 0.d0
+allocate(parts%vx); allocate(parts%vx%x,parts%vx%y)
+allocate(parts%vx%x%r(maxn), parts%vx%y%r(maxn))
+parts%vx%x%r = 0.d0; parts%vx%y%r = 0.d0
 allocate(parts%rho); allocate(parts%rho%r(maxn)); parts%rho%r = 0.d0
 allocate(parts%p); allocate(parts%p%r(maxn)); parts%p%r = 0.d0
 allocate(parts%u(maxn));       parts%u   = 0.d0
@@ -728,6 +731,7 @@ end subroutine
       subroutine first_half
 ! ---------------------------------------------------------------------
 implicit none
+type(p2r) vxi(3), dvxi(3)
 
       do i = 1, pl%ntotal +pl%nvirt    ! originally only pl%ntotal       
             
@@ -759,15 +763,18 @@ implicit none
          endif
           
          if(pl%itype(i)<0)cycle
-         !do d = 1, pl%dim
+         vxi = pl%vx%p2cmpt(i); dvxi = pl%dvx%p2cmpt(i)
+         do d = 1, pl%dim
          !   pl%v_min(d, i) = pl%vx(d, i)
          !   pl%vx(d, i) = pl%vx(d, i) + (dt/2.)*pl%dvx(d, i)
-         !enddo
+            pl%v_min(d, i) = vxi(d)%p
+            vxi(d)%p = vxi(d)%p + (dt/2.)*dvxi(d)%p         
+         enddo
 
-            pl%v_min(1, i) = pl%vx(1, i)
-            pl%vx(1, i) = pl%vx(1, i) + (dt/2.)*pl%dvx%x%r(i)
-            pl%v_min(2, i) = pl%vx(2, i)
-            pl%vx(2, i) = pl%vx(2, i) + (dt/2.)*pl%dvx%y%r(i)
+            !pl%v_min(1, i) = pl%vx%x%r(i)
+            !pl%vx%x%r(i) = pl%vx%x%r(1, i) + (dt/2.)*pl%dvx%x%r(i)
+            !pl%v_min(2, i) = pl%vx%y%r(i)
+            !pl%vx%y%r(i) = pl%vx%y%r(i) + (dt/2.)*pl%dvx%y%r(i)
       enddo
 
       return
@@ -776,6 +783,7 @@ implicit none
       subroutine first_step
 ! -------------------------------------------------------------------
       implicit none
+      type(p2r) vxi(3), dvxi(3)
 
       do i=1,pl%ntotal +pl%nvirt     ! origionally pl%ntotal
          
@@ -802,17 +810,20 @@ implicit none
          endif
         
          if(pl%itype(i)<0)cycle
-         !do d = 1, pl%dim        
-         !   pl%vx(d, i) = pl%vx(d, i) + (dt/2.) * pl%dvx(d, i)   &
-         !               + pl%av(d, i)
-         !   pl%x(d, i) = pl%x(d, i) + dt * pl%vx(d, i)
-         !enddo           
-            pl%vx(1, i) = pl%vx(1, i) + (dt/2.) * pl%dvx%x%r(i)   &
-                        + pl%av(1, i)
-            pl%x(1, i) = pl%x(1, i) + dt * pl%vx(1, i)
-            pl%vx(2, i) = pl%vx(2, i) + (dt/2.) * pl%dvx%y%r(i)   &
-                        + pl%av(2, i)
-            pl%x(2, i) = pl%x(2, i) + dt * pl%vx(2, i)
+         vxi = pl%vx%p2cmpt(i); dvxi = pl%dvx%p2cmpt(i)
+         do d = 1, pl%dim        
+            !pl%vx(d, i) = pl%vx(d, i) + (dt/2.) * pl%dvx(d, i)   &
+            !            + pl%av(d, i)
+            !pl%x(d, i) = pl%x(d, i) + dt * pl%vx(d, i)
+            vxi(d)%p = vxi(d)%p + (dt/2.) * dvxi(d)%p + pl%av(d, i)
+            pl%x(d, i) = pl%x(d, i) + dt * vxi(d)%p            
+         enddo           
+            !pl%vx(1, i) = pl%vx(1, i) + (dt/2.) * pl%dvx%x%r(i)   &
+            !            + pl%av(1, i)
+            !pl%x(1, i) = pl%x(1, i) + dt * pl%vx(1, i)
+            !pl%vx(2, i) = pl%vx(2, i) + (dt/2.) * pl%dvx%y%r(i)   &
+            !            + pl%av(2, i)
+            !pl%x(2, i) = pl%x(2, i) + dt * pl%vx(2, i)
       enddo 
       
       return
@@ -821,6 +832,7 @@ implicit none
       subroutine second_half
 ! ------------------------------------------------------------------
       implicit none
+      type(p2r) vxi(3), dvxi(3)
 
       do i=1,pl%ntotal +pl%nvirt  ! origionally pl%ntotal            
             
@@ -847,17 +859,21 @@ implicit none
          endif
 
          if(pl%itype(i)<0)cycle
-         !do d = 1, pl%dim                   
-         !   pl%vx(d, i) = pl%v_min(d, i) + dt * pl%dvx(d, i)   &
-         !               + pl%av(d, i)
-         !   pl%x(d, i) = pl%x(d, i) + dt * pl%vx(d, i)                  
-         !enddo
-            pl%vx(1, i) = pl%v_min(1, i) + dt * pl%dvx%x%r(i)   &
-                        + pl%av(1, i)
-            pl%x(1, i) = pl%x(1, i) + dt * pl%vx(1, i)                  
-            pl%vx(2, i) = pl%v_min(2, i) + dt * pl%dvx%y%r(i)   &
-                        + pl%av(2, i)
-            pl%x(2, i) = pl%x(2, i) + dt * pl%vx(2, i)                              
+         vxi = pl%vx%p2cmpt(i); dvxi = pl%dvx%p2cmpt(i)
+         do d = 1, pl%dim                   
+            !pl%vx(d, i) = pl%v_min(d, i) + dt * pl%dvx(d, i)   &
+            !            + pl%av(d, i)
+            !pl%x(d, i) = pl%x(d, i) + dt * pl%vx(d, i)
+            vxi(d)%p = pl%v_min(d, i) + dt * dvxi(d)%p   &
+                        + pl%av(d, i)
+            pl%x(d, i) = pl%x(d, i) + dt * vxi(d)%p
+         enddo
+            !pl%vx(1, i) = pl%v_min(1, i) + dt * pl%dvx%x%r(i)   &
+            !            + pl%av(1, i)
+            !pl%x(1, i) = pl%x(1, i) + dt * pl%vx(1, i)                  
+            !pl%vx(2, i) = pl%v_min(2, i) + dt * pl%dvx%y%r(i)   &
+            !            + pl%av(2, i)
+            !pl%x(2, i) = pl%x(2, i) + dt * pl%vx(2, i)                              
       enddo
 
       return
@@ -892,6 +908,7 @@ implicit none
 
       end subroutine
 
+!DEC$IF(.FALSE.)
 !----------------------------------------------------------------------      
       subroutine time_integration_for_water
 !----------------------------------------------------------------------
@@ -1001,6 +1018,8 @@ enddo
 return
 end subroutine      
 
+!DEC$ENDIF
+!DEC$IF(.FALSE.)
 !----------------------------------------------------------------------      
       subroutine time_integration_for_water_by_verlet
 !----------------------------------------------------------------------
@@ -1097,7 +1116,9 @@ deallocate(temp2)
 return
 end subroutine      
          
+!DEC$ENDIF
 
+!DEC$IF(.FALSE.)
 !----------------------------------------------------------------------
              subroutine time_integration_for_soil
 !----------------------------------------------------------------------
@@ -1107,6 +1128,7 @@ implicit none
 
 integer :: i, j, k, d, ntotal, it
 type(particles), pointer :: pl
+type(p2r) vxi(3), dvxi(3)
               
 do it = 1, maxtimestep     
    itimestep = itimestep+1
@@ -1146,10 +1168,10 @@ do it = 1, maxtimestep
          !   pl%v_min(d, i) = pl%vx(d, i)
          !   pl%vx(d, i) = pl%vx(d, i) + (dt/2.)*pl%dvx(d, i)
          !enddo
-            pl%v_min(1, i) = pl%vx(1, i)
-            pl%vx(1, i) = pl%vx(1, i) + (dt/2.)*pl%dvx%x%r(i)
-            pl%v_min(2, i) = pl%vx(2, i)
-            pl%vx(2, i) = pl%vx(2, i) + (dt/2.)*pl%dvx%y%r(i)
+            !pl%v_min(1, i) = pl%vx(1, i)
+            !pl%vx(1, i) = pl%vx(1, i) + (dt/2.)*pl%dvx%x%r(i)
+            !pl%v_min(2, i) = pl%vx(2, i)
+            !pl%vx(2, i) = pl%vx(2, i) + (dt/2.)*pl%dvx%y%r(i)
       enddo 
 
       call drucker_prager_failure_criterion(pl)
@@ -1181,17 +1203,18 @@ do it = 1, maxtimestep
         
          if(pl%itype(i)<0)cycle
 
-         !do d = 1, pl%dim        
-         !   pl%vx(d, i) = pl%vx(d, i) + (dt/2.) * pl%dvx(d, i)   &
-         !               + pl%av(d, i)
-         !   pl%x(d, i) = pl%x(d, i) + dt * pl%vx(d, i)
-         !enddo           
-            pl%vx(1, i) = pl%vx(1, i) + (dt/2.) * pl%dvx%x%r(i)   &
-                        + pl%av(1, i)
-            pl%x(1, i) = pl%x(1, i) + dt * pl%vx(1, i)
-            pl%vx(2, i) = pl%vx(2, i) + (dt/2.) * pl%dvx%y%r(i)   &
-                        + pl%av(2, i)
-            pl%x(2, i) = pl%x(2, i) + dt * pl%vx(2, i)         
+         vxi = pl%vx%p2cmpt(i); dvxi = pl%dvx%p2cmpt(i)
+         do d = 1, pl%dim        
+            vxi%p(d) = vxi%p(d) + (dt/2.) * dvxi%p(d)   &
+                        + pl%av(d, i)
+            pl%x(d, i) = pl%x(d, i) + dt * vxi%p(d)
+         enddo           
+            !pl%vx(1, i) = pl%vx(1, i) + (dt/2.) * pl%dvx%x%r(i)   &
+            !            + pl%av(1, i)
+            !pl%x(1, i) = pl%x(1, i) + dt * pl%vx(1, i)
+            !pl%vx(2, i) = pl%vx(2, i) + (dt/2.) * pl%dvx%y%r(i)   &
+            !            + pl%av(2, i)
+            !pl%x(2, i) = pl%x(2, i) + dt * pl%vx(2, i)         
 
       enddo 
 
@@ -1225,17 +1248,18 @@ do it = 1, maxtimestep
          endif
 
          if(pl%itype(i)<0)cycle
-!         do d = 1, pl%dim                   
-!            pl%vx(d, i) = pl%v_min(d, i) + dt * pl%dvx(d, i)   &
-!                        + pl%av(d, i)
-!            pl%x(d, i) = pl%x(d, i) + dt * pl%vx(d, i)                  
-!         enddo
-            pl%vx(1, i) = pl%v_min(1, i) + dt * pl%dvx%x%r(i)   &
-                        + pl%av(1, i)
-            pl%x(1, i) = pl%x(1, i) + dt * pl%vx(1, i)                 
-            pl%vx(2, i) = pl%v_min(2, i) + dt * pl%dvx%y%r(i)   &
-                        + pl%av(2, i)
-            pl%x(2, i) = pl%x(2, i) + dt * pl%vx(2, i)                              
+         vxi = pl%vx%p2cmpt(i); dvxi = pl%dvx%p2cmpt(i)
+         do d = 1, pl%dim                   
+            vxi%p(d) = pl%v_min(d, i) + dt * dvxi%p(d)   &
+                        + pl%av(d, i)
+            pl%x(d, i) = pl%x(d, i) + dt * vxi%p(d)                  
+         enddo
+            !pl%vx(1, i) = pl%v_min(1, i) + dt * pl%dvx%x%r(i)   &
+            !            + pl%av(1, i)
+            !pl%x(1, i) = pl%x(1, i) + dt * pl%vx(1, i)                 
+            !pl%vx(2, i) = pl%v_min(2, i) + dt * pl%dvx%y%r(i)   &
+            !            + pl%av(2, i)
+            !pl%x(2, i) = pl%x(2, i) + dt * pl%vx(2, i)                              
       enddo
 
 !              if(plasticity==2)then
@@ -1265,6 +1289,7 @@ enddo
 return
 end subroutine
 
+!DEC$ENDIF
 
 !----------------------------------------------------------------------      
                    subroutine single_step
@@ -1542,7 +1567,7 @@ endif
      
 !if(summation_density) call sum_density(pl)
 call sum_density(pl)
-pl%drho = -pl%rho%r*(pl%df2(pl%vx(1,:),'x')+pl%df2(pl%vx(2,:),'y'))
+pl%drho = -pl%rho%r*(pl%df2(pl%vx%x%r,'x')+pl%df2(pl%vx%y%r,'y'))
       
 if(artificial_density)then
    !call renormalize_density_gradient(pl)
@@ -1558,9 +1583,9 @@ where(pl%rho%r>0.0) pl%p%r = property%b*((pl%rho%r/property%rho0)**property%gamm
 
 !Calculate SPH sum for shear tensor Tab = va,b + vb,a - 2/3 delta_ab vc,c
 
-pl%txx = 2./3.*(2.0*pl%df(pl%vx(1,:),'x')-pl%df(pl%vx(2,:),'y'))
-pl%txy = pl%df(pl%vx(1,:),'y')+pl%df(pl%vx(2,:),'x')
-pl%tyy = 2./3.*(2.0*pl%df(pl%vx(2,:),'y')-pl%df(pl%vx(1,:),'x'))
+pl%txx = 2./3.*(2.0*pl%df(pl%vx%x%r,'x')-pl%df(pl%vx%y%r,'y'))
+pl%txy = pl%df(pl%vx%x%r,'y')+pl%df(pl%vx%y%r,'x')
+pl%tyy = 2./3.*(2.0*pl%df(pl%vx%y%r,'y')-pl%df(pl%vx%x%r,'x'))
 
 !Newtonian fluid
 
@@ -1816,8 +1841,8 @@ end subroutine
 !      write(f_xv,*) u(1:ntotal)
 !      write(f_xv,*) itype(1:ntotal)
 !      write(f_xv,*) hsml(1:ntotal)                                        
-      write(f_xv,*) parts%vx(1,1:ntotal)
-      write(f_xv,*) parts%vx(2,1:ntotal)
+      write(f_xv,*) parts%vx%x%r(1:ntotal)
+      write(f_xv,*) parts%vx%y%r(1:ntotal)
       write(f_xv,*) parts%rho%r(1:ntotal)
       write(f_xv,*) parts%zone(1:ntotal)
       write(f_xv,*) parts%vof2(1:ntotal)
@@ -1844,8 +1869,8 @@ end subroutine
       write(f_xv,*)  parts%sxy%r(1:ntotal)
       write(f_xv,*)  parts%sxx%r(1:ntotal)
       write(f_xv,*)  parts%syy%r(1:ntotal)
-      write(f_xv,*)  parts%vx(1,1:ntotal)
-      write(f_xv,*)  parts%vx(2,1:ntotal)
+      write(f_xv,*)  parts%vx%x%r(1:ntotal)
+      write(f_xv,*)  parts%vx%y%r(1:ntotal)
       write(f_xv,*)  parts%rho%r(1:ntotal)
       write(f_xv,*)  parts%mass(1:ntotal)
       write(f_xv,*)  -parts%p%r(1:ntotal) + parts%syy%r(1:ntotal)
@@ -1875,8 +1900,8 @@ end subroutine
       write(f_state,*)  soil%sxy%r(1:ntotal2)
       write(f_state,*)  soil%sxx%r(1:ntotal2)
       write(f_state,*)  soil%syy%r(1:ntotal2)
-      write(f_state,*)  soil%vx(1,1:ntotal2)
-      write(f_state,*)  soil%vx(2,1:ntotal2)
+      write(f_state,*)  soil%vx%x%r(1:ntotal2)
+      write(f_state,*)  soil%vx%y%r(1:ntotal2)
       write(f_state,*)  soil%rho%r(1:ntotal2)
       write(f_state,*)  soil%mass(1:ntotal2)
       write(f_state,*)  -soil%p%r(1:ntotal2) + soil%syy%r(1:ntotal2)
