@@ -763,7 +763,7 @@ type(p2r) vxi(3), dvxi(3)
          endif
           
          if(pl%itype(i)<0)cycle
-         vxi = pl%vx%p2cmpt(i); dvxi = pl%dvx%p2cmpt(i)
+         vxi = pl%vx%cmpt(i); dvxi = pl%dvx%cmpt(i)
          do d = 1, pl%dim
          !   pl%v_min(d, i) = pl%vx(d, i)
          !   pl%vx(d, i) = pl%vx(d, i) + (dt/2.)*pl%dvx(d, i)
@@ -810,7 +810,7 @@ type(p2r) vxi(3), dvxi(3)
          endif
         
          if(pl%itype(i)<0)cycle
-         vxi = pl%vx%p2cmpt(i); dvxi = pl%dvx%p2cmpt(i)
+         vxi = pl%vx%cmpt(i); dvxi = pl%dvx%cmpt(i)
          do d = 1, pl%dim        
             !pl%vx(d, i) = pl%vx(d, i) + (dt/2.) * pl%dvx(d, i)   &
             !            + pl%av(d, i)
@@ -859,7 +859,7 @@ type(p2r) vxi(3), dvxi(3)
          endif
 
          if(pl%itype(i)<0)cycle
-         vxi = pl%vx%p2cmpt(i); dvxi = pl%dvx%p2cmpt(i)
+         vxi = pl%vx%cmpt(i); dvxi = pl%dvx%cmpt(i)
          do d = 1, pl%dim                   
             !pl%vx(d, i) = pl%v_min(d, i) + dt * pl%dvx(d, i)   &
             !            + pl%av(d, i)
@@ -1203,7 +1203,7 @@ do it = 1, maxtimestep
         
          if(pl%itype(i)<0)cycle
 
-         vxi = pl%vx%p2cmpt(i); dvxi = pl%dvx%p2cmpt(i)
+         vxi = pl%vx%cmpt(i); dvxi = pl%dvx%cmpt(i)
          do d = 1, pl%dim        
             vxi%p(d) = vxi%p(d) + (dt/2.) * dvxi%p(d)   &
                         + pl%av(d, i)
@@ -1248,7 +1248,7 @@ do it = 1, maxtimestep
          endif
 
          if(pl%itype(i)<0)cycle
-         vxi = pl%vx%p2cmpt(i); dvxi = pl%dvx%p2cmpt(i)
+         vxi = pl%vx%cmpt(i); dvxi = pl%dvx%cmpt(i)
          do d = 1, pl%dim                   
             vxi%p(d) = pl%v_min(d, i) + dt * dvxi%p(d)   &
                         + pl%av(d, i)

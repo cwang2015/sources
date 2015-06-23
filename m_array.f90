@@ -15,7 +15,7 @@ type array
    type(array), pointer :: xy => null(), xz => null(), yz => null()
    contains
        procedure :: cmpt
-       procedure :: p2cmpt
+       !procedure :: p2cmpt
        final :: array_final
 end type
 
@@ -88,21 +88,21 @@ return
 end subroutine
 
 !--------------------------------------------
-      function cmpt(this,i) result(val)
+!      function cmpt(this,i) result(val)
 !--------------------------------------------
-implicit none
-class(array) this
-integer i
-real(dp) val(3)
+!implicit none
+!class(array) this
+!integer i
+!real(dp) val(3)
 
-val(1) = this%x%r(i)
-val(2) = this%y%r(i)
-val(3) = 0
+!val(1) = this%x%r(i)
+!val(2) = this%y%r(i)
+!val(3) = 0
 
-end function
+!end function
 
 !--------------------------------------------
-     function p2cmpt(this,i) result(p)
+     function cmpt(this,i) result(p)
 !--------------------------------------------
 implicit none
 class(array) this

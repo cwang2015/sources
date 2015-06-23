@@ -102,7 +102,7 @@ real(dp) mingridx(3),maxgridx(3),dgeomx(3)
 
 !maxn: Maximum number of particles
 !max_interation : Maximum number of interaction pairs
-integer :: maxn = 2000, max_interaction = 10 * 2000
+integer :: maxn = 2100, max_interaction = 10 * 2100
   
 !SPH algorithm
 
@@ -1744,7 +1744,8 @@ end function
       double precision, pointer, dimension(:) :: mass, rho, vcc
       double precision, pointer, dimension(:,:) :: vx, dwdx
       integer i,j,k,d, dim, ntotal, niac
-      double precision dvx(3), hvcc, vx_i(3), vx_j(3)
+      double precision dvx(3), hvcc
+      type(p2r) vx_i(3), vx_j(3)
       
       pair_i => parts%pair_i
       pair_j => parts%pair_j
@@ -1767,7 +1768,7 @@ end function
         vx_i = parts%vx%cmpt(i); vx_j = parts%vx%cmpt(j)
         do d=1,dim
           !dvx(d) = vx(d,j) - vx(d,i) 
-          dvx(d) = vx_j(d) - vx_i(d) 
+          dvx(d) = vx_j(d)%p - vx_i(d)%p 
         enddo        
         hvcc = dvx(1)*dwdx(1,k)
         do d=2,dim
@@ -1986,7 +1987,8 @@ end subroutine
       class(particles) parts      
 
       integer ntotal,i,j,k,d    
-      double precision vcc, dvx(3), vx_i(3), vx_j(3), dwdx(3) 
+      double precision vcc, dvx(3), dwdx(3) 
+      type(p2r) vx_i(3), vx_j(3) 
       
       ntotal = parts%ntotal + parts%nvirt
 
@@ -2000,7 +2002,7 @@ end subroutine
         vx_i = parts%vx%cmpt(i); vx_j = parts%vx%cmpt(j)
         do d=1, parts%dim
           dwdx(d) = parts%dwdx(d,k) 
-          dvx(d) = vx_i(d) - vx_j(d) 
+          dvx(d) = vx_i(d)%p - vx_j(d)%p 
         enddo        
         !vcc = dvx(1)* parts%dwdx(1,k)        
         vcc = dvx(1)*dwdx(1)        
@@ -2043,7 +2045,7 @@ end subroutine
 
       type(numerical), pointer :: numeric
       real(dp) dx, dvx(3), alpha, beta, etq, piv, muv, vr, rr, h, mc, mrho, mhsml
-      real(dp) vx_i(3), vx_j(3)
+      type(p2r) vx_i(3), vx_j(3)
       integer i,j,k,d,dim,ntotal,niac
 
       ntotal   =  parts%ntotal + parts%nvirt
@@ -2063,7 +2065,7 @@ end subroutine
         vx_i = parts%vx%cmpt(i); vx_j = parts%vx%cmpt(j)
         do d=1,dim
           !dvx(d) = parts%vx(d,i) - parts%vx(d,j)
-          dvx(d) = vx_i(d) - vx_j(d)
+          dvx(d) = vx_i(d)%p - vx_j(d)%p
           dx     = parts%x(d,i)  - parts%x(d,j)
           vr     = vr + dvx(d)*dx
           rr     = rr + dx*dx
@@ -2155,7 +2157,8 @@ end subroutine
       implicit none
 
       class(particles),target :: parts
-      real(dp) vcc, dvx(3), epsilon, mrho, vx_i(3), vx_j(3)
+      real(dp) vcc, dvx(3), epsilon, mrho
+      type(p2r) vx_i(3), vx_j(3)
       integer i,j,k,d,ntotal,niac    
 
       ntotal = parts%ntotal
@@ -2171,7 +2174,7 @@ end subroutine
         vx_i = parts%vx%cmpt(i); vx_j = parts%vx%cmpt(j)
          do d=1,parts%dim
             !dvx(d) = parts%vx(d,i) - parts%vx(d,j)            
-            dvx(d) = vx_i(d) - vx_j(d)            
+            dvx(d) = vx_i(d)%p - vx_j(d)%p            
             parts%av(d, i) = parts%av(d,i) - parts%mass(j)*dvx(d)/mrho*parts%w(k)
             parts%av(d, j) = parts%av(d,j) + parts%mass(i)*dvx(d)/mrho*parts%w(k)       
          enddo                    
@@ -2192,7 +2195,8 @@ end subroutine
       implicit none
 
       class(particles) parts
-      real(dp) dvx(3), hxx, hyy, hzz, hxy, hxz, hyz, vx_i(3), vx_j(3)
+      real(dp) dvx(3), hxx, hyy, hzz, hxy, hxz, hyz
+      type(p2r) vx_i(3), vx_j(3)
       integer i, j, k, d, dim, ntotal, niac
 
       ntotal = parts%ntotal + parts%nvirt
@@ -2217,7 +2221,7 @@ end subroutine
           vx_i = parts%vx%cmpt(i); vx_j = parts%vx%cmpt(j)
           do d=1,dim
              !dvx(d) = parts%vx(d,j) - parts%vx(d,i)
-             dvx(d) = vx_j(d) - vx_i(d)
+             dvx(d) = vx_j(d)%p - vx_i(d)%p
           enddo
           if (dim.eq.1) then 
              hxx = 2.e0*dvx(1)*parts%dwdx(1,k)        
@@ -2275,7 +2279,8 @@ end subroutine
 
       class(particles) parts
       type(material), pointer :: soil
-      real(dp) dvx(3), hxx, hyy, hzz, hxy, hxz, hyz, G, vx_i(3), vx_j(3) 
+      real(dp) dvx(3), hxx, hyy, hzz, hxy, hxz, hyz, G
+      type(p2r) vx_i(3), vx_j(3) 
       integer i, j, k, d, dim, ntotal, niac
 
       ntotal = parts%ntotal + parts%nvirt
@@ -2307,7 +2312,7 @@ end subroutine
           vx_i = parts%vx%cmpt(i); vx_j = parts%vx%cmpt(j)
           do d=1,dim
             !dvx(d) = parts%vx(d,j) - parts%vx(d,i)
-            dvx(d) = vx_j(d) - vx_i(d)
+            dvx(d) = vx_j(d)%p - vx_i(d)%p
           enddo
           if (dim.eq.1) then 
             !hxx = 0.5e0*dvx(1)*dwdx(1,k)        
@@ -2718,8 +2723,8 @@ end subroutine
       implicit none
 
       type(particles) water, soil
-      double precision dx(3), ks, ns, gw, cf, sp, rrw, vx_i(3), vx_j(3)
-      type(p2r) dvx_i(3), dvx_j(3)
+      double precision dx(3), ks, ns, gw, cf, sp, rrw
+      type(p2r) vx_i(3), vx_j(3), dvx_i(3), dvx_j(3)
       type(material), pointer :: h2o,sio2  
       type(numerical), pointer :: numeric
       double precision gravity   
@@ -2747,12 +2752,12 @@ end subroutine
         cf = water%vof%r(i)*soil%vof%r(j)*water%rho%r(i)*(-gravity)/ks
 
           vx_i = water%vx%cmpt(i); vx_j = soil%vx%cmpt(j)
-          dvx_i = water%dvx%p2cmpt(i); dvx_j = soil%dvx%p2cmpt(j)
+          dvx_i = water%dvx%cmpt(i); dvx_j = soil%dvx%cmpt(j)
           do d=1,dim
              !sp = cf*(water%vx(d,i)-soil%vx(d,j))*rrw
              !water%dvx(d,i) = water%dvx(d,i) - soil%mass(j)*sp
              !soil%dvx(d,j)  = soil%dvx(d,j) + water%mass(i)*sp   
-             sp = cf*(vx_i(d)-vx_j(d))*rrw
+             sp = cf*(vx_i(d)%p-vx_j(d)%p)*rrw
              dvx_i(d)%p = dvx_i(d)%p - soil%mass(j)*sp
              dvx_j(d)%p = dvx_j(d)%p + water%mass(i)*sp   
           enddo
@@ -2847,7 +2852,8 @@ end subroutine
       type(particles) water, soil
       integer i,j,k,d, ntotal
       type(material), pointer :: sio2
-      double precision dvx(3),tmp, vx_i(3), vx_j(3)
+      double precision dvx(3),tmp
+      type(p2r) vx_i(3), vx_j(3)
 
       sio2 => soil%material
       ntotal = water%ntotal+water%nvirt
@@ -2860,7 +2866,7 @@ end subroutine
          vx_i = water%vx%cmpt(i); vx_j = soil%vx%cmpt(j)
          do d = 1, water%dim
             !dvx(d) = water%vx(d,i)-soil%vx(d,j)
-            dvx(d) = vx_i(d) - vx_j(d)
+            dvx(d) = vx_i(d)%p - vx_j(d)%p
          enddo 
          tmp = dvx(1)*water%dwdx(1,k)+dvx(2)*water%dwdx(2,k)
          water%dvof(i) = water%dvof(i)-soil%mass(j)*tmp/sio2%rho0
