@@ -102,7 +102,7 @@ real(dp) mingridx(3),maxgridx(3),dgeomx(3)
 
 !maxn: Maximum number of particles
 !max_interation : Maximum number of interaction pairs
-integer :: maxn = 2100, max_interaction = 10 * 2100
+integer :: maxn = 2000, max_interaction = 10 * 2000
   
 !SPH algorithm
 

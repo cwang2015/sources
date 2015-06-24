@@ -215,8 +215,8 @@ contains
       character(len=*)        :: cmd
       character(len=len(cmd)) :: pname, pvalu
       integer(kind=ik_3)     :: lenc, idx
-      integer(kind=ik_3)     :: ncoma, scount
-      external                :: scount      
+      integer(kind=ik_3)     :: ncoma !, scount
+!      external                :: scount      
 !       
       cmd  = trim(adjustl(cmd))
       lenc = len(cmd)
@@ -259,6 +259,65 @@ contains
 !
       return
       end subroutine
+
+!     ****************************************
+      subroutine trim_pvalu(pvalu,delimt,ndim)
+!     ****************************************
+!  Version 1.0  Sept. 03, 08   Chun WANG (SJTU) 62933888
+! ---------------------------------------------------------
+! Funtion: Remove the substring after the ndim^th delimiter
+! ---------------------------------------------------------
+      use constants
+!
+      implicit none
+!
+      character(len=*)   :: pvalu
+      character(len=1)   :: delimt
+      integer(kind=ik_3)  :: ndim, scount, lenp, i
+!      
+      pvalu = adjustl(pvalu)
+      lenp  = len_trim(pvalu)
+!
+      scount = 0
+      do i = 1, lenp
+         if(pvalu(i:i).eq.delimt)then
+           scount = scount + 1
+         endif
+         if(scount.eq.ndim)then 
+           pvalu(i:lenp) = ""
+           exit
+         endif
+      enddo
+      pvalu = trim(adjustl(pvalu))
+!
+      return
+      end subroutine
+         
+!     ************************
+      function scount(str,chr)
+!     ************************
+!  Version 1.0  Sept. 02, 08  Chun WANG (SJTU) 62933888
+! -----------------------------------------------------
+!  Function:  Find how many times chr appeared in str.
+! -----------------------------------------------------
+      use constants
+!
+      implicit none
+!
+      character(len=*) :: str
+      character        :: chr
+      integer(kind=ik_3)  :: scount, i, len_str
+!      
+      len_str = len_trim(str)
+!
+      scount = 0
+      do i = 1, len_str
+         if(str(i:i).eq.chr) scount = scount + 1
+      enddo
+!     
+      return
+      end function
+
 
 !     ****************************
       subroutine usr_def_parameter      &
