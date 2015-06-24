@@ -575,8 +575,13 @@ max_interaction = parts%max_interaction
 
 if(.not.associated(parts%itype)) allocate(parts%itype(maxn))
 if(.not.associated(parts%x))     allocate(parts%x(dim,maxn))
-if(.not.associated(parts%vol))   allocate(parts%vol(maxn))
-if(.not.associated(parts%mass))  allocate(parts%mass(maxn))
+!if(.not.associated(parts%vol))   allocate(parts%vol(maxn))
+if(.not.associated(parts%vol))then
+    allocate(parts%vol); allocate(parts%vol%r(maxn))
+endif
+if(.not.associated(parts%mass)) then
+    allocate(parts%mass); allocate(parts%mass%r(maxn))
+endif
 if(.not.associated(parts%hsml))  allocate(parts%hsml(maxn))
 
 return
@@ -1452,12 +1457,12 @@ endif
 
 !Calculate internal force for water phase !! -phi_f Grad(p)
 if(pl%imaterial=='water')then
-   if(pl%nthreads==1)then
+    if(pl%nthreads==1)then
    pl%dvx%x%r = -pl%vof%r*pl%df(pl%p%r,'x') + pl%df(pl%vof%r*pl%sxx%r,'x') + pl%df(pl%vof%r*pl%sxy%r,'y')
    pl%dvx%y%r = -pl%vof%r*pl%df(pl%p%r,'y') + pl%df(pl%vof%r*pl%sxy%r,'x') + pl%df(pl%vof%r*pl%syy%r,'y')
-   else
+    else
    pl%dvx%x = -pl%vof*pl%df_omp(pl%p,'x') + pl%df_omp(pl%vof*pl%sxx,'x') + pl%df_omp(pl%vof*pl%sxy,'y')
-   pl%dvx%y = -pl%vof*pl%df_omp(pl%p,'y') + pl%df_omp(pl%vof*pl%sxy,'x') + pl%df_omp(pl%vof*pl%syy,'y')           
+   pl%dvx%y = -pl%vof*pl%df_omp(pl%p,'y') + pl%df_omp(pl%vof*pl%sxy,'x') + pl%df_omp(pl%vof*pl%syy,'y')  
    endif        
 
    !where (pl%rho.gt.0.0) pl%dvx%x%r = pl%dvx%x%r/pl%rho%r
@@ -1466,9 +1471,8 @@ if(pl%imaterial=='water')then
    pl%dvx%y = pl%dvx%y/pl%rho
 else      
    !call int_force(pl)
-   pl%dvx%x%r = -pl%df3_omp(pl%vof%r*pl%p%r,'x') + pl%df3_omp(pl%vof%r*pl%sxx%r,'x') + pl%df3_omp(pl%vof%r*pl%sxy%r,'y')
-   pl%dvx%y%r = -pl%df3(pl%vof%r*pl%p%r,'y') + pl%df3(pl%vof%r*pl%sxy%r,'x') + pl%df3(pl%vof%r*pl%syy%r,'y')
-
+   pl%dvx%x = -pl%df3_omp(pl%vof*pl%p,'x') + pl%df3_omp(pl%vof*pl%sxx,'x') + pl%df3_omp(pl%vof*pl%sxy,'y')
+   pl%dvx%y = -pl%df3_omp(pl%vof*pl%p,'y') + pl%df3_omp(pl%vof*pl%sxy,'x') + pl%df3_omp(pl%vof*pl%syy,'y')
    !where (pl%rho%r.gt.0.0) pl%dvx%x%r = pl%dvx%x%r/pl%rho%r
    !where (pl%rho%r.gt.0.0) pl%dvx%y%r = pl%dvx%y%r/pl%rho%r 
    pl%dvx%x = pl%dvx%x/pl%rho
@@ -1879,7 +1883,7 @@ end subroutine
      
       itype  => parts%itype
       x      => parts%x
-      mass   => parts%mass
+      mass   => parts%mass%r
       hsml   => parts%hsml
       p      => parts%p%r
 
@@ -1905,7 +1909,7 @@ end subroutine
       write(f_xv,*) parts%rho%r(1:ntotal)
       write(f_xv,*) parts%zone(1:ntotal)
       write(f_xv,*) parts%vof2(1:ntotal)
-      write(f_xv,*) parts%mass(1:ntotal)
+      write(f_xv,*) parts%mass%r(1:ntotal)
 
              elseif(trim(parts%imaterial)=='soil')then
 
@@ -1931,7 +1935,7 @@ end subroutine
       write(f_xv,*)  parts%vx%x%r(1:ntotal)
       write(f_xv,*)  parts%vx%y%r(1:ntotal)
       write(f_xv,*)  parts%rho%r(1:ntotal)
-      write(f_xv,*)  parts%mass(1:ntotal)
+      write(f_xv,*)  parts%mass%r(1:ntotal)
       write(f_xv,*)  -parts%p%r(1:ntotal) + parts%syy%r(1:ntotal)
       write(f_xv,*)  parts%zone(1:ntotal)
       write(f_other,*) time, -parts%p%r(395)+parts%syy%r(395)
@@ -1962,7 +1966,7 @@ end subroutine
       write(f_state,*)  soil%vx%x%r(1:ntotal2)
       write(f_state,*)  soil%vx%y%r(1:ntotal2)
       write(f_state,*)  soil%rho%r(1:ntotal2)
-      write(f_state,*)  soil%mass(1:ntotal2)
+      write(f_state,*)  soil%mass%r(1:ntotal2)
       write(f_state,*)  -soil%p%r(1:ntotal2) + soil%syy%r(1:ntotal2)
       write(f_state,*)  soil%zone(1:ntotal2)
       !write(f_other,*) time, -soil%p(420)+soil%syy(420)
