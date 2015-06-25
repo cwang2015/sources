@@ -17,7 +17,7 @@ call time_print
 call time_elapsed(s1)
 
 !call getarg(1,cas_file)
-!write(*,*) 'cas_file:', cas_file
+write(*,*) 'cas_file:', cas_file
 cas_file = '..\data\cas_mix_Savage'
 call read_cas
 
@@ -25,8 +25,7 @@ call open_files
 
 call allocate_sph
 
-call input
-write(*,*) "ssssssssss"              
+call input           
    write(*,*)'  **************************************************'
    write(*,*)'  Initial particle configuration generated   '   
    write(*,*)'  Total number of real particles   ', parts%ntotal    

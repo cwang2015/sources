@@ -102,7 +102,7 @@ real(dp) mingridx(3),maxgridx(3),dgeomx(3)
 
 !maxn: Maximum number of particles
 !max_interation : Maximum number of interaction pairs
-integer :: maxn = 2000, max_interaction = 10 * 2000
+integer :: maxn = 1200000, max_interaction = 10 * 1200000
   
 !SPH algorithm
 
@@ -182,10 +182,13 @@ integer :: skf = 4
    type(array), pointer :: szz => null(), sxy => null()
    real(dp), pointer, dimension(:) :: sxz => null(), syz => null()
  
-! Shear strain rate 
-   real(dp), pointer, dimension(:) :: txx => null(), tyy => null()
-   real(dp), pointer, dimension(:) :: tzz => null(), txy => null()
-   real(dp), pointer, dimension(:) :: txz => null(), tyz => null()
+! Shear strain rate
+   type(array), pointer :: txx => null(), tyy => null()
+   type(array), pointer :: tzz => null(), txy => null()
+   type(array), pointer :: txz => null(), tyz => null()
+!   real(dp), pointer, dimension(:) :: txx => null(), tyy => null()
+!   real(dp), pointer, dimension(:) :: tzz => null(), txy => null()
+!   real(dp), pointer, dimension(:) :: txz => null(), tyz => null()
 ! Bulk strain rate, i.e. divergency of velocity
    real(dp), pointer, dimension(:) :: vcc => null()
 
@@ -205,7 +208,7 @@ integer :: skf = 4
    real(dp), pointer, dimension(:) :: sxz_min => null(), syz_min => null()
 
 ! Acceleration
-   real(dp), pointer, dimension(:)     :: drho => null()
+   type(array), pointer :: drho => null()
    !real(dp), pointer, dimension(:,:)   :: dvx  => null()
    type(array), pointer :: dvx  => null()
    real(dp), pointer, dimension(:)     :: du   => null()
@@ -823,12 +826,15 @@ integer ntotal, bntotal
 ntotal = parts%ntotal + parts%nvirt
 
 if(associated(parts%rho))parts%rho%ndim1 = ntotal
+if(associated(parts%drho))parts%drho%ndim1 = ntotal
 if(associated(parts%mass))parts%mass%ndim1 = ntotal
 if(associated(parts%p))parts%p%ndim1 = ntotal
 if(associated(parts%vof))parts%vof%ndim1 = ntotal
 if(associated(parts%sxx))parts%sxx%ndim1 = ntotal
 if(associated(parts%sxy))parts%sxy%ndim1 = ntotal
 if(associated(parts%syy))parts%syy%ndim1 = ntotal
+if(associated(parts%vx%x))parts%vx%x%ndim1 = ntotal
+if(associated(parts%vx%y))parts%vx%y%ndim1 = ntotal
 if(associated(parts%dvx%x))parts%dvx%x%ndim1 = ntotal
 if(associated(parts%dvx%y))parts%dvx%y%ndim1 = ntotal
 if(associated(parts%vol))parts%vol%ndim1 = ntotal
@@ -1449,15 +1455,17 @@ end subroutine
 !-------------------------------------------
 implicit none
 
-real(dp) f(:)
+type(array) :: f
 character(len=1) x
 class(particles) parts
-real(dp), allocatable :: df(:)
+type(array) :: df
 real(dp), pointer, dimension(:) :: dwdx
 real(dp) fwx
-integer i, j, k
+integer i, j, k, ntotal
+ntotal = parts%ntotal +parts%nvirt
 
-allocate(df(size(f))); df = 0.
+allocate(df%r(ntotal)); df = 0.
+df%ndim1 = ntotal
 
 if(x=='x')dwdx=>parts%dwdx(1,:)
 if(x=='y')dwdx=>parts%dwdx(2,:)
@@ -1465,9 +1473,9 @@ if(x=='y')dwdx=>parts%dwdx(2,:)
 do k=1,parts%niac
    i = parts%pair_i(k)
    j = parts%pair_j(k)
-   fwx = (f(i)+f(j))*dwdx(k)
-   df(i) = df(i) + parts%mass%r(j)/parts%rho%r(j)*fwx
-   df(j) = df(j) - parts%mass%r(i)/parts%rho%r(i)*fwx
+   fwx = (f%r(i)+f%r(j))*dwdx(k)
+   df%r(i) = df%r(i) + parts%mass%r(j)/parts%rho%r(j)*fwx
+   df%r(j) = df%r(j) - parts%mass%r(i)/parts%rho%r(i)*fwx
 enddo
 
 end function
@@ -1543,10 +1551,10 @@ end function
 !----------------------------------------------
 implicit none
 
-real(dp) f(:)
+type(array) :: f
 character(len=1) x
 class(particles) parts
-real(dp), allocatable, dimension(:) :: val
+type(array) :: val
 !real(dp), allocatable, dimension(:,:) :: df_local
 real(dp), pointer, dimension(:) :: dwdx
 real(dp) fwx
@@ -1558,7 +1566,7 @@ ntotal = parts%ntotal + parts%nvirt
 nthreads = parts%nthreads
 !write(*,*) 'sadf', nthreads
 
-allocate(val(ntotal*nthreads))
+allocate(val%r(ntotal*nthreads))
 !if(nthreads>1)then
 !   allocate(df_local(ntotal,nthreads))
    call parts%get_niac_start_end
@@ -1572,7 +1580,7 @@ if(x=='y')dwdx=>parts%dwdx(2,:)
 do it = 1, parts%nthreads
    do i = 1, ntotal
       ii = i + (it-1)*ntotal
-      val(ii) = 0.d0
+      val%r(ii) = 0.d0
    enddo
    do k = parts%niac_start(it), parts%niac_end(it)
 
@@ -1580,10 +1588,10 @@ do it = 1, parts%nthreads
 !do k=1,parts%niac
    i = parts%pair_i(k)
    j = parts%pair_j(k)
-   fwx = (f(i)+f(j))*dwdx(k)
+   fwx = (f%r(i)+f%r(j))*dwdx(k)
    ii = i + (it-1)*ntotal; jj = j + (it-1)*ntotal
-   val(ii) = val(ii) + parts%mass%r(j)/parts%rho%r(j)*fwx
-   val(jj) = val(jj) - parts%mass%r(i)/parts%rho%r(i)*fwx   
+   val%r(ii) = val%r(ii) + parts%mass%r(j)/parts%rho%r(j)*fwx
+   val%r(jj) = val%r(jj) - parts%mass%r(i)/parts%rho%r(i)*fwx   
 !   df_local(i,it) = df_local(i,it) + parts%mass(j)/parts%rho(j)*fwx
 !   df_local(j,it) = df_local(j,it) - parts%mass(i)/parts%rho(i)*fwx
    enddo !k
@@ -1596,7 +1604,7 @@ do i = 1, ntotal
    !val(i) = 0.d0
    do it = 2, nthreads
       ii = i + (it-1)*ntotal
-      val(i) = val(i)+val(ii)
+      val%r(i) = val%r(i)+val%r(ii)
    enddo
 enddo   
 !$omp end do
@@ -1610,15 +1618,17 @@ end function
 !-------------------------------------------
 implicit none
 
-real(dp) f(:)
+type(array) :: f
 character(len=1) x
 class(particles) parts
-real(dp), allocatable :: df2(:)
+type(array) :: df2
 real(dp), pointer, dimension(:) :: dwdx
 real(dp) fwx
-integer i, j, k
+integer i, j, k, ntotal
+ntotal = parts%ntotal +parts%nvirt
 
-allocate(df2(size(f))); df2 = 0.
+allocate(df2%r(ntotal)); df2 = 0.
+df2%ndim1 = ntotal
 
 if(x=='x')dwdx=>parts%dwdx(1,:)
 if(x=='y')dwdx=>parts%dwdx(2,:)
@@ -1626,13 +1636,13 @@ if(x=='y')dwdx=>parts%dwdx(2,:)
 do k=1,parts%niac
    i = parts%pair_i(k)
    j = parts%pair_j(k)
-   fwx = (f(j)-f(i))*dwdx(k)
-   df2(i) = df2(i) + parts%mass%r(j)*fwx
-   df2(j) = df2(j) + parts%mass%r(i)*fwx
+   fwx = (f%r(j)-f%r(i))*dwdx(k)
+   df2%r(i) = df2%r(i) + parts%mass%r(j)*fwx
+   df2%r(j) = df2%r(j) + parts%mass%r(i)*fwx
 enddo
 
 do i = 1, parts%ntotal + parts%nvirt 
-   df2(i) = df2(i)/parts%rho%r(i)
+   df2%r(i) = df2%r(i)/parts%rho%r(i)
 enddo   
 
 end function
@@ -1644,15 +1654,17 @@ end function
 !------------------------------------------- 
 implicit none
 
-real(dp) f(:)
+type(array) :: f
 character(len=1) x
 class(particles) parts
-real(dp),allocatable :: df3(:)
+type(array) :: df3
 real(dp), pointer, dimension(:) :: dwdx
 real(dp) fwx
-integer i,j,k
+integer i,j,k,ntotal
+ntotal = parts%ntotal + parts%nvirt
 
-allocate(df3(size(f))); df3 = 0.
+allocate(df3%r(ntotal)); df3 = 0.
+df3%ndim1 = ntotal
 
 if(x=='x')dwdx=>parts%dwdx(1,:)
 if(x=='y')dwdx=>parts%dwdx(2,:)
@@ -1660,13 +1672,13 @@ if(x=='y')dwdx=>parts%dwdx(2,:)
 do k=1,parts%niac
    i = parts%pair_i(k)
    j = parts%pair_j(k)
-   fwx = ((f(i)/parts%rho%r(i)**2)+(f(j)/parts%rho%r(j)**2))*dwdx(k)
-   df3(i) = df3(i) + parts%mass%r(j)*fwx
-   df3(j) = df3(j) - parts%mass%r(i)*fwx
+   fwx = ((f%r(i)/parts%rho%r(i)**2)+(f%r(j)/parts%rho%r(j)**2))*dwdx(k)
+   df3%r(i) = df3%r(i) + parts%mass%r(j)*fwx
+   df3%r(j) = df3%r(j) - parts%mass%r(i)*fwx
 enddo
 
 do i = 1, parts%ntotal + parts%nvirt
-   df3(i) = df3(i)*parts%rho%r(i)
+   df3%r(i) = df3%r(i)*parts%rho%r(i)
 enddo
 
 end function
@@ -1997,7 +2009,7 @@ end subroutine
       ntotal = parts%ntotal + parts%nvirt
 
       do i = 1, ntotal
-        parts%drho(i) = 0.
+        parts%drho%r(i) = 0.
       enddo
      
       do k=1,parts%niac      
@@ -2014,8 +2026,8 @@ end subroutine
           !vcc = vcc + dvx(d)*parts%dwdx(d,k)
           vcc = vcc + dvx(d)*dwdx(d)
         enddo    
-        parts%drho(i) = parts%drho(i) + parts%mass%r(j)*vcc
-        parts%drho(j) = parts%drho(j) + parts%mass%r(i)*vcc       
+        parts%drho%r(i) = parts%drho%r(i) + parts%mass%r(j)*vcc
+        parts%drho%r(j) = parts%drho%r(j) + parts%mass%r(i)*vcc       
       enddo    
 
       end subroutine
@@ -2032,9 +2044,9 @@ end subroutine
       ntotal = parts%ntotal + parts%nvirt
       liquid => parts%material
 
-      parts%sxx%r(1:ntotal) = liquid%viscosity*parts%txx(1:ntotal)
-      parts%syy%r(1:ntotal) = liquid%viscosity*parts%tyy(1:ntotal)
-      parts%sxy%r(1:ntotal) = liquid%viscosity*parts%txy(1:ntotal)
+      parts%sxx%r(1:ntotal) = liquid%viscosity*parts%txx%r(1:ntotal)
+      parts%syy%r(1:ntotal) = liquid%viscosity*parts%tyy%r(1:ntotal)
+      parts%sxy%r(1:ntotal) = liquid%viscosity*parts%txy%r(1:ntotal)
 
       return
       end subroutine
@@ -2206,15 +2218,15 @@ end subroutine
       ntotal = parts%ntotal + parts%nvirt
       niac = parts%niac; dim = parts%dim
 
-      parts%txx(1:ntotal) = 0.e0
+      parts%txx%r(1:ntotal) = 0.e0
       if(dim>=2)then
-         parts%tyy(1:ntotal) = 0.e0
-         parts%txy(1:ntotal) = 0.e0
+         parts%tyy%r(1:ntotal) = 0.e0
+         parts%txy%r(1:ntotal) = 0.e0
       endif
       if(dim==3)then
-         parts%tzz(1:ntotal) = 0.e0
-         parts%txz(1:ntotal) = 0.e0
-         parts%tyz(1:ntotal) = 0.e0
+         parts%tzz%r(1:ntotal) = 0.e0
+         parts%txz%r(1:ntotal) = 0.e0
+         parts%tyz%r(1:ntotal) = 0.e0
       endif
       
 !     Calculate SPH sum for shear tensor Tab = va,b + vb,a - 2/3 delta_ab vc,c
@@ -2248,15 +2260,15 @@ end subroutine
           hyy = 2.e0/3.e0*hyy
           hzz = 2.e0/3.e0*hzz
           if (dim.eq.1) then 
-             parts%txx(i) = parts%txx(i) + parts%mass%r(j)*hxx/parts%rho%r(j)
-             parts%txx(j) = parts%txx(j) + parts%mass%r(i)*hxx/parts%rho%r(i)             
+             parts%txx%r(i) = parts%txx%r(i) + parts%mass%r(j)*hxx/parts%rho%r(j)
+             parts%txx%r(j) = parts%txx%r(j) + parts%mass%r(i)*hxx/parts%rho%r(i)             
           else if (dim.eq.2) then           
-             parts%txx(i) = parts%txx(i) + parts%mass%r(j)*hxx/parts%rho%r(j)
-             parts%txx(j) = parts%txx(j) + parts%mass%r(i)*hxx/parts%rho%r(i)   
-             parts%txy(i) = parts%txy(i) + parts%mass%r(j)*hxy/parts%rho%r(j)
-             parts%txy(j) = parts%txy(j) + parts%mass%r(i)*hxy/parts%rho%r(i)            
-             parts%tyy(i) = parts%tyy(i) + parts%mass%r(j)*hyy/parts%rho%r(j)
-             parts%tyy(j) = parts%tyy(j) + parts%mass%r(i)*hyy/parts%rho%r(i)          
+             parts%txx%r(i) = parts%txx%r(i) + parts%mass%r(j)*hxx/parts%rho%r(j)
+             parts%txx%r(j) = parts%txx%r(j) + parts%mass%r(i)*hxx/parts%rho%r(i)   
+             parts%txy%r(i) = parts%txy%r(i) + parts%mass%r(j)*hxy/parts%rho%r(j)
+             parts%txy%r(j) = parts%txy%r(j) + parts%mass%r(i)*hxy/parts%rho%r(i)            
+             parts%tyy%r(i) = parts%tyy%r(i) + parts%mass%r(j)*hyy/parts%rho%r(j)
+             parts%tyy%r(j) = parts%tyy%r(j) + parts%mass%r(i)*hyy/parts%rho%r(i)          
           else if (dim.eq.3) then
 !             txx(i) = txx(i) + mass(j)*hxx/rho(j)
 !             txx(j) = txx(j) + mass(i)*hxx/rho(i)   
@@ -2295,9 +2307,9 @@ end subroutine
 !     Hook's law
 
       do i = 1, ntotal
-         parts%dsxx(i) = parts%dsxx(i)+G*parts%txx(i)   ! No accumulation origionaly
-         parts%dsxy(i) = parts%dsxy(i)+G*parts%txy(i)
-         parts%dsyy(i) = parts%dsyy(i)+G*parts%tyy(i)
+         parts%dsxx(i) = parts%dsxx(i)+G*parts%txx%r(i)   ! No accumulation origionaly
+         parts%dsxy(i) = parts%dsxy(i)+G*parts%txy%r(i)
+         parts%dsyy(i) = parts%dsyy(i)+G*parts%tyy%r(i)
       enddo
 
 !         if(parts%soil_pressure==2)then
@@ -2558,9 +2570,9 @@ end subroutine
       do i = 1, ntotal
                             !if(parts%fail(i)==1)then
 
-      exx = parts%txx(i)/2.+parts%vcc(i)/3.   ! Due to this, this should before Jaumman
-      exy = parts%txy(i)/2.
-      eyy = parts%tyy(i)/2.+parts%vcc(i)/3.
+      exx = parts%txx%r(i)/2.+parts%vcc(i)/3.   ! Due to this, this should before Jaumman
+      exy = parts%txy%r(i)/2.
+      eyy = parts%tyy%r(i)/2.+parts%vcc(i)/3.
 
       sde = sxx(i)*exx+2.*sxy(i)*exy+syy(i)*eyy
       J2 = (sxx(i)**2.+2.*sxy(i)**2.+syy(i)**2.+(sxx(i)+syy(i))**2.)/2.
@@ -2623,9 +2635,9 @@ end subroutine
       do i = 1, ntotal
                             !if(parts%fail(i)==1)then
 
-      exx = parts%txx(i)/2.+parts%vcc(i)/3.   ! Due to this, this should before Jaumman
-      exy = parts%txy(i)/2.
-      eyy = parts%tyy(i)/2.+parts%vcc(i)/3.
+      exx = parts%txx%r(i)/2.+parts%vcc(i)/3.   ! Due to this, this should before Jaumman
+      exy = parts%txy%r(i)/2.
+      eyy = parts%tyy%r(i)/2.+parts%vcc(i)/3.
 
       sde = sxx(i)*exx+2.*sxy(i)*exy+syy(i)*eyy
       J2 = (sxx(i)**2.+2.*sxy(i)**2.+syy(i)**2.+(sxx(i)+syy(i))**2.)/2.
@@ -2687,9 +2699,9 @@ end subroutine
       do i = 1, ntotal
                             if(parts%fail(i)==1)then
 
-      exx = parts%txx(i)/2.+parts%vcc(i)/3.   ! Due to this, this should before Jaumman
-      exy = parts%txy(i)/2.
-      eyy = parts%tyy(i)/2.+parts%vcc(i)/3.
+      exx = parts%txx%r(i)/2.+parts%vcc(i)/3.   ! Due to this, this should before Jaumman
+      exy = parts%txy%r(i)/2.
+      eyy = parts%tyy%r(i)/2.+parts%vcc(i)/3.
 
       sde = sxx(i)*exx+2.*sxy(i)*exy+syy(i)*eyy
       J2 = (sxx(i)**2.+2.*sxy(i)**2.+syy(i)**2.+(sxx(i)+syy(i))**2.)/2.

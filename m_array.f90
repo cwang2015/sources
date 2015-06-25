@@ -22,10 +22,13 @@ end type
 interface assignment(=)
   module procedure :: array_equal_array
   module procedure :: array_equal_double_real
+  module procedure :: array_equal_real
 end interface
 
 interface operator(+)
    module procedure :: array_add_array 
+   module procedure :: array_add_double_real 
+   module procedure :: double_real_add_array 
 end interface
 
 interface operator(-)
@@ -38,6 +41,7 @@ interface operator(*)
    module procedure :: array_mul_real
    module procedure :: array_mul_double_real
    module procedure :: double_real_mul_array
+   module procedure :: real_mul_array
 end interface
 
 interface operator(/)
@@ -87,7 +91,25 @@ enddo
 
 return
 end subroutine
+    
+!--------------------------------------------
+    subroutine array_equal_real(a,b)
+!--------------------------------------------        
+implicit none
+type(array),intent(INOUT) :: a
+real,intent(IN)    :: b
+integer ndim1,i
 
+ndim1 = a%ndim1
+
+!$omp parallel do
+do i = 1, ndim1
+   a%r(i) = b
+enddo
+!$omp end parallel do
+
+return
+end subroutine
 !--------------------------------------------
 !      function cmpt(this,i) result(val)
 !--------------------------------------------
@@ -150,6 +172,54 @@ enddo
 
 end function
 
+!--------------------------------------------
+    function array_add_double_real(a,b) result(c)
+!--------------------------------------------
+implicit none
+type(array), intent(in) :: a
+real(dp), intent(in) :: b
+type(array), allocatable :: c
+integer ndim1,i
+
+!if(a%ndim1/=b%ndim1)stop 'Cannot add arrays!'
+
+ndim1 = a%ndim1
+allocate(c)
+allocate(c%r(ndim1))
+c%ndim1 = ndim1
+
+!$omp parallel do
+do i = 1, ndim1
+   c%r(i) = a%r(i) + b
+enddo
+!$omp end parallel do
+
+end function
+    
+!--------------------------------------------
+    function double_real_add_array(b,a) result(c)
+!--------------------------------------------
+implicit none
+type(array), intent(in) :: a
+real(dp), intent(in) :: b
+type(array), allocatable :: c
+integer ndim1,i
+
+!if(a%ndim1/=b%ndim1)stop 'Cannot add arrays!'
+
+ndim1 = a%ndim1
+allocate(c)
+allocate(c%r(ndim1))
+c%ndim1 = ndim1
+
+!$omp parallel do
+do i = 1, ndim1
+   c%r(i) = a%r(i) + b
+enddo
+!$omp end parallel do
+
+end function    
+    
 !--------------------------------------------
     function array_sub_array(a,b) result(c)
 !--------------------------------------------
@@ -267,6 +337,28 @@ end function
 implicit none
 type(array), intent(in) :: a
 real(dp), intent(in) :: r
+type(array), allocatable :: c
+integer ndim1,i
+
+ndim1 = a%ndim1
+allocate(c)
+allocate(c%r(ndim1))
+c%ndim1 = ndim1
+
+!$omp parallel do
+do i = 1, ndim1
+   c%r(i) = r*a%r(i)
+enddo
+!$omp end parallel do
+
+end function    
+
+!--------------------------------------------------
+    function real_mul_array(r,a) result(c)
+!--------------------------------------------------
+implicit none
+type(array), intent(in) :: a
+real, intent(in) :: r
 type(array), allocatable :: c
 integer ndim1,i
 

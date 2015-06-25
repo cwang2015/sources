@@ -124,7 +124,8 @@ type(numerical), target :: numeric
 type(particles), target :: parts, soil
 
 ! Working arrays
-double precision, pointer, dimension(:) :: txx=>null(), tyy=>null(), txy=>null()
+   type(array), pointer :: txx => null(), tyy => null(), txy =>null()
+!double precision, pointer, dimension(:) :: txx=>null(), tyy=>null(), txy=>null()
 
 !Numerical paramters
 double precision :: dt, time = 0.d0
@@ -503,16 +504,17 @@ call allocate_particles_fields(parts)
 
 ! Working arrays outside particles type
 
-allocate(txx(maxn), tyy(maxn), txy(maxn))
+allocate(txx, tyy, txy)
+allocate(txx%r(maxn),tyy%r(maxn),txy%r(maxn))
 txx = 0.d0; tyy = 0.d0; txy = 0.d0
 
 parts%txx => txx; parts%tyy => tyy; parts%txy => txy
 
 if(trim(parts%imaterial)=='water')then
    allocate(parts%sxx,parts%sxy,parts%syy)
-   parts%sxx%r => txx; parts%syy%r => tyy; parts%sxy%r => txy
+   parts%sxx%r => txx%r; parts%syy%r => tyy%r; parts%sxy%r => txy%r
 elseif(trim(parts%imaterial)=='soil')then
-   parts%wxy => txy
+   parts%wxy => txy%r
 endif   
 
 ! Material assignment
@@ -551,7 +553,7 @@ soil%celldata => parts%celldata
 call allocate_particles_fields(soil)
 
 soil%txx => txx; soil%tyy => tyy; soil%txy => txy
-soil%wxy => txy
+soil%wxy => txy%r
 
 soil%material => SiO2
 soil%numeric => numeric
@@ -616,7 +618,7 @@ allocate(parts%rho_min(maxn));     parts%rho_min = 0.d0
 allocate(parts%u_min(maxn));       parts%u_min   = 0.d0
 
 ! Accelerations
-allocate(parts%drho(maxn));    parts%drho= 0.d0
+allocate(parts%drho);allocate(parts%drho%r(maxn));    parts%drho= 0.d0
 allocate(parts%dvx); allocate(parts%dvx%x,parts%dvx%y)
 allocate(parts%dvx%x%r(maxn)); parts%dvx%x%r = 0.d0  
 allocate(parts%dvx%y%r(maxn)); parts%dvx%y%r = 0.d0  
@@ -801,7 +803,7 @@ type(p2r) vxi(3), dvxi(3)
             
          if (.not.summation_density) then    
             pl%rho_min(i) = pl%rho%r(i)
-            pl%rho%r(i) = pl%rho%r(i) +(dt/2.)* pl%drho(i)
+            pl%rho%r(i) = pl%rho%r(i) +(dt/2.)* pl%drho%r(i)
          endif
 
          if(trim(pl%imaterial)=='water'.and.volume_fraction)then
@@ -852,7 +854,7 @@ type(p2r) vxi(3), dvxi(3)
       do i=1,pl%ntotal +pl%nvirt     ! origionally pl%ntotal
          
          if (.not.summation_density ) then
-            pl%rho%r(i) = pl%rho%r(i) + (dt/2.)* pl%drho(i)
+            pl%rho%r(i) = pl%rho%r(i) + (dt/2.)* pl%drho%r(i)
          endif
 
          if(trim(pl%imaterial)=='water'.and.volume_fraction)then
@@ -901,7 +903,7 @@ type(p2r) vxi(3), dvxi(3)
       do i=1,pl%ntotal +pl%nvirt  ! origionally pl%ntotal            
             
          if (.not.summation_density ) then 
-            pl%rho%r(i) = pl%rho_min(i) + dt*pl%drho(i)
+            pl%rho%r(i) = pl%rho_min(i) + dt*pl%drho%r(i)
          endif
 
          if(trim(pl%imaterial)=='water'.and.volume_fraction)then
@@ -1422,7 +1424,7 @@ if(artificial_density)then
    !if(trim(pl%imaterial)=='water')then
       !!call renormalize_density_gradient(pl)
       !call art_density(pl)
-      call delta_sph(pl,pl%rho%r,pl%drho)
+      call delta_sph(pl,pl%rho%r,pl%drho%r)
    !endif
 endif
 
@@ -1458,8 +1460,8 @@ endif
 !Calculate internal force for water phase !! -phi_f Grad(p)
 if(pl%imaterial=='water')then
     if(pl%nthreads==1)then
-   pl%dvx%x%r = -pl%vof%r*pl%df(pl%p%r,'x') + pl%df(pl%vof%r*pl%sxx%r,'x') + pl%df(pl%vof%r*pl%sxy%r,'y')
-   pl%dvx%y%r = -pl%vof%r*pl%df(pl%p%r,'y') + pl%df(pl%vof%r*pl%sxy%r,'x') + pl%df(pl%vof%r*pl%syy%r,'y')
+   pl%dvx%x = -pl%vof*pl%df(pl%p,'x') + pl%df(pl%vof*pl%sxx,'x') + pl%df(pl%vof*pl%sxy,'y')
+   pl%dvx%y = -pl%vof*pl%df(pl%p,'y') + pl%df(pl%vof*pl%sxy,'x') + pl%df(pl%vof*pl%syy,'y')
     else
    pl%dvx%x = -pl%vof*pl%df_omp(pl%p,'x') + pl%df_omp(pl%vof*pl%sxx,'x') + pl%df_omp(pl%vof*pl%sxy,'y')
    pl%dvx%y = -pl%vof*pl%df_omp(pl%p,'y') + pl%df_omp(pl%vof*pl%sxy,'x') + pl%df_omp(pl%vof*pl%syy,'y')  
@@ -1630,12 +1632,12 @@ endif
      
 !if(summation_density) call sum_density(pl)
 call sum_density(pl)
-pl%drho = -pl%rho%r*(pl%df2(pl%vx%x%r,'x')+pl%df2(pl%vx%y%r,'y'))
+pl%drho = -pl%rho*(pl%df2(pl%vx%x,'x')+pl%df2(pl%vx%y,'y'))
       
 if(artificial_density)then
    !call renormalize_density_gradient(pl)
    !call art_density(pl)
-   call delta_sph(pl,pl%rho%r,pl%drho)
+   call delta_sph(pl,pl%rho%r,pl%drho%r)
 endif
        
 !---  Internal forces:
@@ -1646,23 +1648,23 @@ where(pl%rho%r>0.0) pl%p%r = property%b*((pl%rho%r/property%rho0)**property%gamm
 
 !Calculate SPH sum for shear tensor Tab = va,b + vb,a - 2/3 delta_ab vc,c
 
-pl%txx = 2./3.*(2.0*pl%df(pl%vx%x%r,'x')-pl%df(pl%vx%y%r,'y'))
-pl%txy = pl%df(pl%vx%x%r,'y')+pl%df(pl%vx%y%r,'x')
-pl%tyy = 2./3.*(2.0*pl%df(pl%vx%y%r,'y')-pl%df(pl%vx%x%r,'x'))
+pl%txx = 2./3.*(2.0*pl%df(pl%vx%x,'x')-pl%df(pl%vx%y,'y'))
+pl%txy = pl%df(pl%vx%x,'y')+pl%df(pl%vx%y,'x')
+pl%tyy = 2./3.*(2.0*pl%df(pl%vx%y,'y')-pl%df(pl%vx%x,'x'))
 
 !Newtonian fluid
 
-pl%sxx%r = property%viscosity*pl%txx
-pl%syy%r = property%viscosity*pl%tyy
-pl%sxy%r = property%viscosity*pl%txy
+pl%sxx = property%viscosity*pl%txx
+pl%syy = property%viscosity*pl%tyy
+pl%sxy = property%viscosity*pl%txy
 
 !Calculate internal force
 
-pl%dvx%x%r = - pl%df(pl%p%r,'x') + pl%df(pl%sxx%r,'x') + pl%df(pl%sxy%r,'y')
-pl%dvx%y%r = - pl%df(pl%p%r,'y') + pl%df(pl%sxy%r,'x') + pl%df(pl%syy%r,'y')
+pl%dvx%x = - pl%df(pl%p,'x') + pl%df(pl%sxx,'x') + pl%df(pl%sxy,'y')
+pl%dvx%y = - pl%df(pl%p,'y') + pl%df(pl%sxy,'x') + pl%df(pl%syy,'y')
 
-where (pl%rho%r.gt.0.0) pl%dvx%x%r = pl%dvx%x%r/pl%rho%r
-where (pl%rho%r.gt.0.0) pl%dvx%y%r = pl%dvx%y%r/pl%rho%r
+pl%dvx%x = pl%dvx%x/pl%rho
+pl%dvx%y = pl%dvx%y/pl%rho
        
 !if(water_tension_instability==2) call tension_instability(pl) 
 
@@ -1672,7 +1674,7 @@ if (visc_artificial) call pl%art_visc
     
 !---  External forces:
 
-pl%dvx%y%r = pl%dvx%y%r + gravity
+pl%dvx%y = pl%dvx%y + gravity
 
 !call repulsive_force(pl)
 
@@ -1735,7 +1737,7 @@ if(artificial_density)then
    !if(trim(pl%imaterial)=='water')then
       !!call renormalize_density_gradient(pl)
       !call art_density(pl)
-      call delta_sph(pl,pl%rho%r,pl%drho)
+      call delta_sph(pl,pl%rho%r,pl%drho%r)
    !endif
 endif
 
@@ -1756,11 +1758,11 @@ endif
 
 !call int_force1(pl)
 
-pl%dvx%x%r = - pl%df(pl%p%r,'x') + pl%df(pl%sxx%r,'x') + pl%df(pl%sxy%r,'y')
-pl%dvx%y%r = - pl%df(pl%p%r,'y') + pl%df(pl%sxy%r,'x') + pl%df(pl%syy%r,'y')
+pl%dvx%x = - pl%df(pl%p,'x') + pl%df(pl%sxx,'x') + pl%df(pl%sxy,'y')
+pl%dvx%y = - pl%df(pl%p,'y') + pl%df(pl%sxy,'x') + pl%df(pl%syy,'y')
 
-where (pl%rho%r.gt.0.0) pl%dvx%x%r = pl%dvx%x%r/pl%rho%r
-where (pl%rho%r.gt.0.0) pl%dvx%y%r = pl%dvx%y%r/pl%rho%r       
+pl%dvx%x = pl%dvx%x/pl%rho
+pl%dvx%y = pl%dvx%y/pl%rho       
 
 ! --- Plasticity flow rule   ! This was done before Jaummann_rate, because we 
 !     we need txx,tyy,tzz, which was destroyed in Jaumann_rate!

@@ -71,7 +71,8 @@ call parts%setup_itype
 ! Set initial conditions of particles
 ! ...Velocity
 
-parts%vx = 0.d0
+parts%vx%x = 0.d0
+parts%vx%y = 0.d0
 
 ! ...Stress. You must define the free surface first.
 water_surface = 0.1
@@ -119,7 +120,8 @@ call soil%setup_itype
 ! Set initial conditions of particles
 ! ...Velocity
 
-soil%vx = 0.d0
+soil%vx%x = 0.d0
+soil%vx%y = 0.d0
 
 ! ...Stress. You must define the free surface first.
 soil_surface = 0.048
