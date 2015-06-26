@@ -102,7 +102,7 @@ real(dp) mingridx(3),maxgridx(3),dgeomx(3)
 
 !maxn: Maximum number of particles
 !max_interation : Maximum number of interaction pairs
-integer :: maxn = 1200000, max_interaction = 10 * 1200000
+integer :: maxn = 8000, max_interaction = 10 * 8000
   
 !SPH algorithm
 
@@ -159,9 +159,9 @@ integer :: skf = 4
 
 ! Volume of Fraction
    type(array), pointer :: vof  => null()
-   real(dp), pointer, dimension(:)   :: vof2=>null() ! phi_f= 1-phi_s
-   real(dp), pointer, dimension(:)   :: dvof  => null()
-   real(dp), pointer, dimension(:)   :: vof_min  => null()
+   type(array), pointer :: vof2=>null() ! phi_f= 1-phi_s
+   type(array), pointer :: dvof  => null()
+   type(array), pointer :: vof_min  => null()
 
 ! Field variables
    !real(dp), pointer, dimension(:)   :: rho  => null()
@@ -171,60 +171,77 @@ integer :: skf = 4
    !real(dp), pointer, dimension(:)   :: p    => null()
    type(array), pointer :: p => null()
    !real(dp), pointer, dimension(:)   :: eta  => null()   
-   real(dp), pointer, dimension(:)   :: c    => null()   
-   real(dp), pointer, dimension(:)   :: u    => null()
+!   real(dp), pointer, dimension(:)   :: c    => null()   
+   type(array), pointer :: c => null()
+!   real(dp), pointer, dimension(:)   :: u    => null()
 
 ! Stress tensor 
+   type(array), pointer :: str => null()
    !type(tensor), pointer, dimension(:)   :: st   => null() 
    !real(dp), pointer, dimension(:) :: sxx => null(), syy => null()
-   type(array), pointer :: sxx => null(), syy => null()
+!   type(array), pointer :: sxx => null(), syy => null()
    !real(dp), pointer, dimension(:) :: szz => null(), sxy => null()
-   type(array), pointer :: szz => null(), sxy => null()
-   real(dp), pointer, dimension(:) :: sxz => null(), syz => null()
+!   type(array), pointer :: szz => null(), sxy => null()
+!   real(dp), pointer, dimension(:) :: sxz => null(), syz => null()
  
 ! Shear strain rate
-   type(array), pointer :: txx => null(), tyy => null()
-   type(array), pointer :: tzz => null(), txy => null()
-   type(array), pointer :: txz => null(), tyz => null()
+   type(array), pointer :: tab => null()
+!   type(array), pointer :: txx => null(), tyy => null()
+!   type(array), pointer :: tzz => null(), txy => null()
+!   type(array), pointer :: txz => null(), tyz => null()
 !   real(dp), pointer, dimension(:) :: txx => null(), tyy => null()
 !   real(dp), pointer, dimension(:) :: tzz => null(), txy => null()
 !   real(dp), pointer, dimension(:) :: txz => null(), tyz => null()
 ! Bulk strain rate, i.e. divergency of velocity
-   real(dp), pointer, dimension(:) :: vcc => null()
-
+!   real(dp), pointer, dimension(:) :: vcc => null()
+   type(array), pointer :: vcc => null()
+        
 ! Accumulative deviatoric strain
-   real(dp), pointer, dimension(:) :: epsilon_p => null()
-
+!   real(dp), pointer, dimension(:) :: epsilon_p => null()
+   type(array), pointer :: epsilon_p => null()
 ! Rotation tensor
-   real(dp), pointer, dimension(:) :: wxy => null()
-
+!   real(dp), pointer, dimension(:) :: wxy => null()
+   type(array), pointer :: wxy => null()
 ! Old values
-   real(dp), pointer, dimension(:)   :: rho_min => null()
-   real(dp), pointer, dimension(:,:) :: v_min   => null()
-   real(dp), pointer, dimension(:)   :: u_min   => null()
-   real(dp), pointer, dimension(:)   :: p_min   => null()
-   real(dp), pointer, dimension(:) :: sxx_min => null(), syy_min => null()
-   real(dp), pointer, dimension(:) :: szz_min => null(), sxy_min => null()
-   real(dp), pointer, dimension(:) :: sxz_min => null(), syz_min => null()
+!   real(dp), pointer, dimension(:)   :: rho_min => null()
+   type(array), pointer :: rho_min => null()
+   type(array), pointer :: v_min => null()
+!   real(dp), pointer, dimension(:,:) :: v_min   => null()
+!   real(dp), pointer, dimension(:)   :: u_min   => null()
+!   type(array), pointer :: u_min => null()
+!   real(dp), pointer, dimension(:)   :: p_min   => null()
+   type(array), pointer :: p_min   => null()
+   type(array), pointer :: str_min => null()
+!   real(dp), pointer, dimension(:) :: sxx_min => null(), syy_min => null()
+!   real(dp), pointer, dimension(:) :: szz_min => null(), sxy_min => null()
+!   real(dp), pointer, dimension(:) :: sxz_min => null(), syz_min => null()
 
 ! Acceleration
    type(array), pointer :: drho => null()
    !real(dp), pointer, dimension(:,:)   :: dvx  => null()
    type(array), pointer :: dvx  => null()
-   real(dp), pointer, dimension(:)     :: du   => null()
-   real(dp), pointer, dimension(:)     :: dp   => null()
-   real(dp), pointer, dimension(:,:)   :: av   => null()
+!   real(dp), pointer, dimension(:)     :: du   => null()
+!   type(array), pointer :: du   => null()
+!   real(dp), pointer, dimension(:)     :: dp   => null()
+   type(array), pointer :: dp   => null()
+!   real(dp), pointer, dimension(:,:)   :: av   => null()
+   type(array), pointer :: av   => null()
+
 !   type(tensor), pointer, dimension(:) :: dst  => null()
-   real(dp), pointer, dimension(:) :: dsxx => null(), dsyy => null()
-   real(dp), pointer, dimension(:) :: dszz => null(), dsxy => null()
-   real(dp), pointer, dimension(:) :: dsxz => null(), dsyz => null()
+   type(array), pointer :: dstr => null()
+!   real(dp), pointer, dimension(:) :: dsxx => null(), dsyy => null()
+!   real(dp), pointer, dimension(:) :: dszz => null(), dsxy => null()
+!   real(dp), pointer, dimension(:) :: dsxz => null(), dsyz => null()
 
 ! For plasticity corrector step (return mapping algorithm)
-   real(dp), pointer, dimension(:) :: dsxx2 => null(), dsyy2 => null()
-   real(dp), pointer, dimension(:) :: dsxy2 => null(),   dp2 => null()
+   type(array), pointer :: dstr2 => null()
+!   real(dp), pointer, dimension(:) :: dsxx2 => null(), dsyy2 => null()
+!   real(dp), pointer, dimension(:) :: dsxy2 => null(),  
+!   real(dp), pointer, dimension(:) :: dp2 => null()
+   type(array), pointer :: dp2 => null()
 
 ! Density gradient
-   real(dp), pointer, dimension(:,:)     :: drhodx => null()
+!   type(array), pointer :: drhodx => null()
 
 ! For soil failure
    integer :: nfail = 0
@@ -829,15 +846,50 @@ if(associated(parts%rho))parts%rho%ndim1 = ntotal
 if(associated(parts%drho))parts%drho%ndim1 = ntotal
 if(associated(parts%mass))parts%mass%ndim1 = ntotal
 if(associated(parts%p))parts%p%ndim1 = ntotal
+!if(associated(parts%wxy))parts%wxy%ndim1 = ntotal
 if(associated(parts%vof))parts%vof%ndim1 = ntotal
-if(associated(parts%sxx))parts%sxx%ndim1 = ntotal
-if(associated(parts%sxy))parts%sxy%ndim1 = ntotal
-if(associated(parts%syy))parts%syy%ndim1 = ntotal
+if(associated(parts%vof2))parts%vof2%ndim1 = ntotal
+if(associated(parts%dvof))parts%dvof%ndim1 = ntotal
+if(associated(parts%vof_min))parts%vof_min%ndim1 = ntotal
+if(associated(parts%str%x))parts%str%x%ndim1 = ntotal
+if(associated(parts%str%xy))parts%str%xy%ndim1 = ntotal
+if(associated(parts%str%y))parts%str%y%ndim1 = ntotal
+if(associated(parts%dstr))then
+   if(associated(parts%dstr%x))parts%dstr%x%ndim1 = ntotal
+   if(associated(parts%dstr%xy))parts%dstr%xy%ndim1 = ntotal
+   if(associated(parts%dstr%y))parts%dstr%y%ndim1 = ntotal
+endif
+if(associated(parts%dstr2))then
+   if(associated(parts%dstr2%x))parts%dstr2%x%ndim1 = ntotal
+   if(associated(parts%dstr2%xy))parts%dstr2%xy%ndim1 = ntotal
+   if(associated(parts%dstr2%y))parts%dstr2%y%ndim1 = ntotal
+endif
+!if(associated(parts%tab%x))parts%tab%x%ndim1 = ntotal
+!if(associated(parts%tab%xy))parts%tab%xy%ndim1 = ntotal
+!if(associated(parts%tab%y))parts%tab%y%ndim1 = ntotal
+if(associated(parts%vcc))parts%vcc%ndim1 = ntotal
+if(associated(parts%v_min%x))parts%v_min%x%ndim1 = ntotal
+if(associated(parts%v_min%y))parts%v_min%y%ndim1 = ntotal
+if(associated(parts%epsilon_p))parts%epsilon_p%ndim1 = ntotal
 if(associated(parts%vx%x))parts%vx%x%ndim1 = ntotal
 if(associated(parts%vx%y))parts%vx%y%ndim1 = ntotal
 if(associated(parts%dvx%x))parts%dvx%x%ndim1 = ntotal
 if(associated(parts%dvx%y))parts%dvx%y%ndim1 = ntotal
 if(associated(parts%vol))parts%vol%ndim1 = ntotal
+if(associated(parts%rho_min))parts%rho_min%ndim1 = ntotal
+!if(associated(parts%u_min))parts%u_min%ndim1 = ntotal
+if(associated(parts%p_min))parts%p_min%ndim1 = ntotal
+if(associated(parts%str_min))then
+   if(associated(parts%str_min%x))parts%str_min%x%ndim1 = ntotal
+   if(associated(parts%str_min%y))parts%str_min%y%ndim1 = ntotal
+   if(associated(parts%str_min%xy))parts%str_min%xy%ndim1 = ntotal
+endif
+if(associated(parts%dp))parts%dp%ndim1 = ntotal
+if(associated(parts%av%x))parts%av%x%ndim1 = ntotal
+if(associated(parts%av%y))parts%av%y%ndim1 = ntotal
+if(associated(parts%dp2))parts%dp2%ndim1 = ntotal
+!if(associated(parts%drhodx))parts%drhodx%ndim1 = ntotal
+if(associated(parts%c))parts%c%ndim1 = ntotal
 
 return
 end subroutine
@@ -1767,7 +1819,7 @@ end function
       pair_j => parts%pair_j
       mass   => parts%mass%r
       rho    => parts%rho%r
-      vcc    => parts%vcc
+      vcc    => parts%vcc%r
       !vx     => parts%vx
       dwdx   => parts%dwdx
 
@@ -1854,7 +1906,7 @@ end function
 !                              endif
 
          !parts%c(1:ntotal) = water%c         
-         parts%c(1:ntotal) = water%c*(parts%rho%r(1:ntotal)/(water%rho0*parts%vof%r(1:ntotal)))**3.0         
+         parts%c%r(1:ntotal) = water%c*(parts%rho%r(1:ntotal)/(water%rho0*parts%vof%r(1:ntotal)))**3.0         
 
       elseif(parts%imaterial=='soil')then
 
@@ -1863,7 +1915,7 @@ end function
 !         parts%p(1:ntotal) = soil%k*(parts%rho(1:ntotal)/soil%rho0-1)
 !!         parts%p(1:ntotal) = parts%p(1:ntotal)
 !!     &                      -soil%k*parts%vcc(1:ntotal)*0.000005   !*dt
-         parts%c(1:ntotal) = soil%c
+         parts%c%r(1:ntotal) = soil%c
 
       endif
 
@@ -1886,7 +1938,7 @@ parts%p%r(1:ntotal) = water%b*((parts%rho%r(1:ntotal)/(water%rho0  &
                    *parts%vof%r(1:ntotal))) &   !!! False density
                   **water%gamma-1)
 
-parts%c(1:ntotal) = water%c*(parts%rho%r(1:ntotal)/(water%rho0*parts%vof%r(1:ntotal)))**3.0         
+parts%c%r(1:ntotal) = water%c*(parts%rho%r(1:ntotal)/(water%rho0*parts%vof%r(1:ntotal)))**3.0         
 
 return
 end subroutine
@@ -1929,7 +1981,7 @@ soil => parts%material
 parts%p%r(1:ntotal) = soil%k*(parts%rho%r(1:ntotal)/soil%rho0-1)
 ! parts%p(1:ntotal) = parts%p(1:ntotal)  &
 !                    -soil%k*parts%vcc(1:ntotal)*0.000005   !*dt
-parts%c(1:ntotal) = soil%c
+parts%c%r(1:ntotal) = soil%c
 
 return      
 end subroutine
@@ -2043,10 +2095,11 @@ end subroutine
 
       ntotal = parts%ntotal + parts%nvirt
       liquid => parts%material
+      parts%tab%x%ndim1 = ntotal; parts%tab%y%ndim1 = ntotal; parts%tab%xy%ndim1 = ntotal
 
-      parts%sxx%r(1:ntotal) = liquid%viscosity*parts%txx%r(1:ntotal)
-      parts%syy%r(1:ntotal) = liquid%viscosity*parts%tyy%r(1:ntotal)
-      parts%sxy%r(1:ntotal) = liquid%viscosity*parts%txy%r(1:ntotal)
+      parts%str%x = liquid%viscosity*parts%tab%x
+      parts%str%y = liquid%viscosity*parts%tab%y
+      parts%str%xy = liquid%viscosity*parts%tab%xy
 
       return
       end subroutine
@@ -2097,7 +2150,7 @@ end subroutine
           
 !     Calculate PIv_ij = (-alpha muv_ij c_ij + beta muv_ij^2) / rho_ij
 
-          mc   = 0.5e0*(parts%c(i) + parts%c(j))
+          mc   = 0.5e0*(parts%c%r(i) + parts%c%r(j))
           mrho = 0.5e0*(parts%rho%r(i) + parts%rho%r(j))
           piv  = (beta*muv - alpha*mc)*muv/mrho              
 
@@ -2158,8 +2211,8 @@ end subroutine
             !h = h + (dx(d)*muv - (drhodx(d,i)+drhodx(d,j)))*dwdx(d,k)
             h = h + dx(d)*muv*parts%dwdx(d,k)
          enddo
-         df(i) = df(i) + delta*parts%hsml(i)*parts%c(i)*parts%mass%r(j)*h/parts%rho%r(j)
-         df(j) = df(j) - delta*parts%hsml(j)*parts%c(j)*parts%mass%r(i)*h/parts%rho%r(i)
+         df(i) = df(i) + delta*parts%hsml(i)*parts%c%r(i)*parts%mass%r(j)*h/parts%rho%r(j)
+         df(j) = df(j) - delta*parts%hsml(j)*parts%c%r(j)*parts%mass%r(i)*h/parts%rho%r(i)
       enddo
 
       return
@@ -2174,33 +2227,36 @@ end subroutine
 
       class(particles),target :: parts
       real(dp) vcc, dvx(3), epsilon, mrho
-      type(p2r) vx_i(3), vx_j(3)
+      type(p2r) vx_i(3), vx_j(3), av_i(3), av_j(3)
       integer i,j,k,d,ntotal,niac    
 
       ntotal = parts%ntotal
       niac   = parts%niac
       epsilon = parts%numeric%epsilon
       
-      parts%av = 0.d0
+      parts%av%x = 0.d0; parts%av%y = 0.d0
      
       do k=1,niac       
          i = parts%pair_i(k)
          j = parts%pair_j(k)       
          mrho = (parts%rho%r(i)+parts%rho%r(j))/2.0
         vx_i = parts%vx%cmpt(i); vx_j = parts%vx%cmpt(j)
+        av_i = parts%av%cmpt(i); av_j = parts%av%cmpt(j)
          do d=1,parts%dim
             !dvx(d) = parts%vx(d,i) - parts%vx(d,j)            
             dvx(d) = vx_i(d)%p - vx_j(d)%p            
-            parts%av(d, i) = parts%av(d,i) - parts%mass%r(j)*dvx(d)/mrho*parts%w(k)
-            parts%av(d, j) = parts%av(d,j) + parts%mass%r(i)*dvx(d)/mrho*parts%w(k)       
+            av_i(d)%p = av_i(d)%p - parts%mass%r(j)*dvx(d)/mrho*parts%w(k)
+            av_j(d)%p = av_j(d)%p + parts%mass%r(i)*dvx(d)/mrho*parts%w(k)       
          enddo                    
       enddo  
         
-      do i = 1, ntotal
-         do d = 1, parts%dim
-            parts%av(d,i) = epsilon * parts%av(d,i)
-         enddo 
-      enddo             
+!      do i = 1, ntotal
+!         do d = 1, parts%dim
+!            av_i(d)%p = epsilon * av_i(d)%p
+!         enddo 
+!      enddo
+
+      parts%av%x = epsilon * parts%av%x; parts%av%y = epsilon * parts%av%y
 
       return
       end subroutine
@@ -2217,16 +2273,16 @@ end subroutine
 
       ntotal = parts%ntotal + parts%nvirt
       niac = parts%niac; dim = parts%dim
-
-      parts%txx%r(1:ntotal) = 0.e0
+      
+      parts%tab%x%r(1:ntotal) = 0.e0
       if(dim>=2)then
-         parts%tyy%r(1:ntotal) = 0.e0
-         parts%txy%r(1:ntotal) = 0.e0
+         parts%tab%y%r(1:ntotal) = 0.e0
+         parts%tab%xy%r(1:ntotal) = 0.e0
       endif
       if(dim==3)then
-         parts%tzz%r(1:ntotal) = 0.e0
-         parts%txz%r(1:ntotal) = 0.e0
-         parts%tyz%r(1:ntotal) = 0.e0
+         parts%tab%z%r(1:ntotal) = 0.e0
+         parts%tab%xz%r(1:ntotal) = 0.e0
+         parts%tab%yz%r(1:ntotal) = 0.e0
       endif
       
 !     Calculate SPH sum for shear tensor Tab = va,b + vb,a - 2/3 delta_ab vc,c
@@ -2260,15 +2316,15 @@ end subroutine
           hyy = 2.e0/3.e0*hyy
           hzz = 2.e0/3.e0*hzz
           if (dim.eq.1) then 
-             parts%txx%r(i) = parts%txx%r(i) + parts%mass%r(j)*hxx/parts%rho%r(j)
-             parts%txx%r(j) = parts%txx%r(j) + parts%mass%r(i)*hxx/parts%rho%r(i)             
+             parts%tab%x%r(i) = parts%tab%x%r(i) + parts%mass%r(j)*hxx/parts%rho%r(j)
+             parts%tab%x%r(j) = parts%tab%x%r(j) + parts%mass%r(i)*hxx/parts%rho%r(i)             
           else if (dim.eq.2) then           
-             parts%txx%r(i) = parts%txx%r(i) + parts%mass%r(j)*hxx/parts%rho%r(j)
-             parts%txx%r(j) = parts%txx%r(j) + parts%mass%r(i)*hxx/parts%rho%r(i)   
-             parts%txy%r(i) = parts%txy%r(i) + parts%mass%r(j)*hxy/parts%rho%r(j)
-             parts%txy%r(j) = parts%txy%r(j) + parts%mass%r(i)*hxy/parts%rho%r(i)            
-             parts%tyy%r(i) = parts%tyy%r(i) + parts%mass%r(j)*hyy/parts%rho%r(j)
-             parts%tyy%r(j) = parts%tyy%r(j) + parts%mass%r(i)*hyy/parts%rho%r(i)          
+             parts%tab%x%r(i) = parts%tab%x%r(i) + parts%mass%r(j)*hxx/parts%rho%r(j)
+             parts%tab%x%r(j) = parts%tab%x%r(j) + parts%mass%r(i)*hxx/parts%rho%r(i)   
+             parts%tab%xy%r(i) = parts%tab%xy%r(i) + parts%mass%r(j)*hxy/parts%rho%r(j)
+             parts%tab%xy%r(j) = parts%tab%xy%r(j) + parts%mass%r(i)*hxy/parts%rho%r(i)            
+             parts%tab%y%r(i) = parts%tab%y%r(i) + parts%mass%r(j)*hyy/parts%rho%r(j)
+             parts%tab%y%r(j) = parts%tab%y%r(j) + parts%mass%r(i)*hyy/parts%rho%r(i)          
           else if (dim.eq.3) then
 !             txx(i) = txx(i) + mass(j)*hxx/rho(j)
 !             txx(j) = txx(j) + mass(i)*hxx/rho(i)   
@@ -2307,14 +2363,14 @@ end subroutine
 !     Hook's law
 
       do i = 1, ntotal
-         parts%dsxx(i) = parts%dsxx(i)+G*parts%txx%r(i)   ! No accumulation origionaly
-         parts%dsxy(i) = parts%dsxy(i)+G*parts%txy%r(i)
-         parts%dsyy(i) = parts%dsyy(i)+G*parts%tyy%r(i)
+         parts%dstr%x%r(i) = parts%dstr%x%r(i)+G*parts%tab%x%r(i)   ! No accumulation origionaly
+         parts%dstr%xy%r(i) = parts%dstr%xy%r(i)+G*parts%tab%xy%r(i)
+         parts%dstr%y%r(i) = parts%dstr%y%r(i)+G*parts%tab%y%r(i)
       enddo
 
 !         if(parts%soil_pressure==2)then
       do i = 1, ntotal
-         parts%dp(i)   = parts%dp(i) - soil%k*parts%vcc(i)  !!! simultaneous pressure  
+         parts%dp%r(i)   = parts%dp%r(i) - soil%k*parts%vcc%r(i)  !!! simultaneous pressure  
       enddo
 !         endif         
      
@@ -2343,8 +2399,8 @@ end subroutine
 !            txx(i) = txx(i) + mass(j)*hxx/rho(j)
 !            txx(j) = txx(j) + mass(i)*hxx/rho(i)                 
           else if (dim.eq.2) then           
-            parts%wxy(i) = parts%wxy(i) + parts%mass%r(j)*hxy/parts%rho%r(j)
-            parts%wxy(j) = parts%wxy(j) + parts%mass%r(i)*hxy/parts%rho%r(i)            
+            parts%wxy%r(i) = parts%wxy%r(i) + parts%mass%r(j)*hxy/parts%rho%r(j)
+            parts%wxy%r(j) = parts%wxy%r(j) + parts%mass%r(i)*hxy/parts%rho%r(i)            
           else if (dim.eq.3) then
 !            txy(i) = txy(i) + mass(j)*hxy/rho(j)
 !            txy(j) = txy(j) + mass(i)*hxy/rho(i) 
@@ -2358,9 +2414,9 @@ end subroutine
 !   Jaumann rate
 
       do i = 1, ntotal
-         parts%dsxx(i) = parts%dsxx(i)+2.0*parts%sxy%r(i)*parts%wxy(i)
-         parts%dsxy(i) = parts%dsxy(i)-(parts%sxx%r(i)-parts%syy%r(i))*parts%wxy(i)
-         parts%dsyy(i) = parts%dsyy(i)-2.0*parts%sxy%r(i)*parts%wxy(i)
+         parts%dstr%x%r(i) = parts%dstr%x%r(i)+2.0*parts%str%xy%r(i)*parts%wxy%r(i)
+         parts%dstr%xy%r(i) = parts%dstr%xy%r(i)-(parts%str%x%r(i)-parts%str%y%r(i))*parts%wxy%r(i)
+         parts%dstr%y%r(i) = parts%dstr%y%r(i)-2.0*parts%str%xy%r(i)*parts%wxy%r(i)
       enddo         
 
       return
@@ -2384,7 +2440,7 @@ end subroutine
       k = 0
       soil%fail = 0
       do i = 1, ntotal
-         tmax  = sqrt(((soil%sxx%r(i)-soil%syy%r(i))/2)**2+soil%sxy%r(i)**2)
+         tmax  = sqrt(((soil%str%x%r(i)-soil%str%y%r(i))/2)**2+soil%str%xy%r(i)**2)
          if(tmax<1.e-6)cycle
          yield = cohesion*cos(phi)+soil%p%r(i)*sin(phi)
 
@@ -2404,9 +2460,9 @@ end subroutine
             k = k + 1
             soil%fail(i) = 1 
             skale = yield/tmax
-            soil%sxx%r(i) = skale * soil%sxx%r(i)
-            soil%sxy%r(i) = skale * soil%sxy%r(i)
-            soil%syy%r(i) = skale * soil%syy%r(i)
+            soil%str%x%r(i) = skale * soil%str%x%r(i)
+            soil%str%xy%r(i) = skale * soil%str%xy%r(i)
+            soil%str%y%r(i) = skale * soil%str%y%r(i)
          endif
          !sxx(i) = 0.; sxy(i) = 0.; syy(i) = 0.
       enddo
@@ -2456,7 +2512,7 @@ end subroutine
 
          I1 = 3.*soil%p%r(i) 
 
-         J2 = soil%sxx%r(i)**2.+2.*soil%sxy%r(i)**2.+soil%syy%r(i)**2.+(soil%sxx%r(i)+soil%syy%r(i))**2.
+         J2 = soil%str%x%r(i)**2.+2.*soil%str%xy%r(i)**2.+soil%str%y%r(i)**2.+(soil%str%x%r(i)+soil%str%y%r(i))**2.
          J2 = sqrt(J2/2.)+1.d-6
          !if(J2<1.e-6)cycle
 
@@ -2465,9 +2521,9 @@ end subroutine
             k = k + 1
             soil%fail(i) = 1 
             skale = alpha1*I1/J2
-            soil%sxx%r(i) = skale * soil%sxx%r(i)
-            soil%sxy%r(i) = skale * soil%sxy%r(i)
-            soil%syy%r(i) = skale * soil%syy%r(i)
+            soil%str%x%r(i) = skale * soil%str%x%r(i)
+            soil%str%xy%r(i) = skale * soil%str%xy%r(i)
+            soil%str%y%r(i) = skale * soil%str%y%r(i)
         endif
 
       enddo
@@ -2517,7 +2573,7 @@ end subroutine
 
          I1 = 3.*soil%p%r(i) 
 
-         J2 = soil%sxx%r(i)**2.+2.*soil%sxy%r(i)**2.+soil%syy%r(i)**2.+(soil%sxx%r(i)+soil%syy%r(i))**2.
+         J2 = soil%str%x%r(i)**2.+2.*soil%str%xy%r(i)**2.+soil%str%y%r(i)**2.+(soil%str%x%r(i)+soil%str%y%r(i))**2.
          J2 = sqrt(J2/2.)+1.d-6
          !if(J2<1.e-6)cycle
 
@@ -2553,13 +2609,13 @@ end subroutine
 
       ntotal = parts%ntotal + parts%nvirt
 
-      dsxx => parts%dsxx
-      dsxy => parts%dsxy
-      dsyy => parts%dsyy
-      vcc  => parts%vcc
-      sxx => parts%sxx%r
-      sxy => parts%sxy%r
-      syy => parts%syy%r
+      dsxx => parts%dstr%x%r
+      dsxy => parts%dstr%xy%r
+      dsyy => parts%dstr%y%r
+      vcc  => parts%vcc%r
+      sxx => parts%str%x%r
+      sxy => parts%str%xy%r
+      syy => parts%str%y%r
 
       property => parts%material
       phi = property%phi
@@ -2570,9 +2626,9 @@ end subroutine
       do i = 1, ntotal
                             !if(parts%fail(i)==1)then
 
-      exx = parts%txx%r(i)/2.+parts%vcc(i)/3.   ! Due to this, this should before Jaumman
-      exy = parts%txy%r(i)/2.
-      eyy = parts%tyy%r(i)/2.+parts%vcc(i)/3.
+      exx = parts%tab%x%r(i)/2.+parts%vcc%r(i)/3.   ! Due to this, this should before Jaumman
+      exy = parts%tab%xy%r(i)/2.
+      eyy = parts%tab%y%r(i)/2.+parts%vcc%r(i)/3.
 
       sde = sxx(i)*exx+2.*sxy(i)*exy+syy(i)*eyy
       J2 = (sxx(i)**2.+2.*sxy(i)**2.+syy(i)**2.+(sxx(i)+syy(i))**2.)/2.
@@ -2589,11 +2645,11 @@ end subroutine
       dsyy(i) = dsyy(i)-dlambda*(G/sqrt(J2)*syy(i))
 
       !parts%p(i) = parts%p(i) + 3.*k*alpha*dlambda*0.000005   !!! simultaneous pressure
-      parts%dp(i) = parts%dp(i) + 3.*k*alpha*dlambda
+      parts%dp%r(i) = parts%dp%r(i) + 3.*k*alpha*dlambda
 
 ! Accumulative deviatoric strain
  
-      parts%epsilon_p(i) = parts%epsilon_p(i)    &
+      parts%epsilon_p%r(i) = parts%epsilon_p%r(i)    &
                          + dlambda*sxy(i)/(2*sqrt(J2))*0.000005
 
                             !endif ! Fail
@@ -2618,13 +2674,13 @@ end subroutine
 
       ntotal = parts%ntotal + parts%nvirt
 
-      dsxx2 => parts%dsxx2
-      dsxy2 => parts%dsxy2
-      dsyy2 => parts%dsyy2
-      vcc  => parts%vcc
-      sxx => parts%sxx%r
-      sxy => parts%sxy%r
-      syy => parts%syy%r
+      dsxx2 => parts%dstr2%x%r
+      dsxy2 => parts%dstr2%xy%r
+      dsyy2 => parts%dstr2%y%r
+      vcc  => parts%vcc%r
+      sxx => parts%str%x%r
+      sxy => parts%str%xy%r
+      syy => parts%str%y%r
 
       property => parts%material
       phi = property%phi
@@ -2635,9 +2691,9 @@ end subroutine
       do i = 1, ntotal
                             !if(parts%fail(i)==1)then
 
-      exx = parts%txx%r(i)/2.+parts%vcc(i)/3.   ! Due to this, this should before Jaumman
-      exy = parts%txy%r(i)/2.
-      eyy = parts%tyy%r(i)/2.+parts%vcc(i)/3.
+      exx = parts%tab%x%r(i)/2.+parts%vcc%r(i)/3.   ! Due to this, this should before Jaumman
+      exy = parts%tab%xy%r(i)/2.
+      eyy = parts%tab%y%r(i)/2.+parts%vcc%r(i)/3.
 
       sde = sxx(i)*exx+2.*sxy(i)*exy+syy(i)*eyy
       J2 = (sxx(i)**2.+2.*sxy(i)**2.+syy(i)**2.+(sxx(i)+syy(i))**2.)/2.
@@ -2653,7 +2709,7 @@ end subroutine
       dsyy2(i) = -dlambda*(G/sqrt(J2)*syy(i))
 
       !parts%p(i) = parts%p(i) + 3.*k*alpha*dlambda*0.000005   !!! simultaneous pressure
-      parts%dp2(i) =  3.*k*alpha*dlambda
+      parts%dp2%r(i) =  3.*k*alpha*dlambda
 
 ! Accumulative deviatoric strain
  
@@ -2682,13 +2738,13 @@ end subroutine
 
       ntotal = parts%ntotal + parts%nvirt
 
-      dsxx => parts%dsxx
-      dsxy => parts%dsxy
-      dsyy => parts%dsyy
-      vcc  => parts%vcc
-      sxx => parts%sxx%r
-      sxy => parts%sxy%r
-      syy => parts%syy%r
+      dsxx => parts%dstr%x%r
+      dsxy => parts%dstr%xy%r
+      dsyy => parts%dstr%y%r
+      vcc  => parts%vcc%r
+      sxx => parts%str%x%r
+      sxy => parts%str%xy%r
+      syy => parts%str%y%r
 
       property => parts%material
       phi = property%phi
@@ -2699,9 +2755,9 @@ end subroutine
       do i = 1, ntotal
                             if(parts%fail(i)==1)then
 
-      exx = parts%txx%r(i)/2.+parts%vcc(i)/3.   ! Due to this, this should before Jaumman
-      exy = parts%txy%r(i)/2.
-      eyy = parts%tyy%r(i)/2.+parts%vcc(i)/3.
+      exx = parts%tab%x%r(i)/2.+parts%vcc%r(i)/3.   ! Due to this, this should before Jaumman
+      exy = parts%tab%xy%r(i)/2.
+      eyy = parts%tab%y%r(i)/2.+parts%vcc%r(i)/3.
 
       sde = sxx(i)*exx+2.*sxy(i)*exy+syy(i)*eyy
       J2 = (sxx(i)**2.+2.*sxy(i)**2.+syy(i)**2.+(sxx(i)+syy(i))**2.)/2.
@@ -2718,11 +2774,11 @@ end subroutine
       dsyy(i) = dsyy(i)-dlambda*(G/sqrt(J2)*syy(i))
 
       !parts%p(i) = parts%p(i) + 3.*k*alpha*dlambda*0.000005   !!! simultaneous pressure
-      parts%dp(i) = parts%dp(i) + 3.*k*alpha*dlambda
+      parts%dp%r(i) = parts%dp%r(i) + 3.*k*alpha*dlambda
 
 ! Accumulative deviatoric strain
  
-      parts%epsilon_p(i) = parts%epsilon_p(i)       & 
+      parts%epsilon_p%r(i) = parts%epsilon_p%r(i)       & 
                          + dlambda*sxy(i)/(2*sqrt(J2))*0.000005
 
                             endif ! Fail
@@ -2848,11 +2904,11 @@ end subroutine
       do k = 1, water%niac
          i = water%pair_i(k)
          j = water%pair_j(k)
-         water%vof2(i) = water%vof2(i)+soil%mass%r(j)*water%w(k)
+         water%vof2%r(i) = water%vof2%r(i)+soil%mass%r(j)*water%w(k)
       enddo
 
       do k = 1, water%ntotal+water%nvirt
-         water%vof2(k) = 1.d0 - water%vof2(k)/sio2%rho0
+         water%vof2%r(k) = 1.d0 - water%vof2%r(k)/sio2%rho0
       enddo
 
       return
@@ -2885,7 +2941,7 @@ end subroutine
             dvx(d) = vx_i(d)%p - vx_j(d)%p
          enddo 
          tmp = dvx(1)*water%dwdx(1,k)+dvx(2)*water%dwdx(2,k)
-         water%dvof(i) = water%dvof(i)-soil%mass%r(j)*tmp/sio2%rho0
+         water%dvof%r(i) = water%dvof%r(i)-soil%mass%r(j)*tmp/sio2%rho0
       enddo
 
       return

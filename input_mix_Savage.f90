@@ -16,8 +16,8 @@ double precision element_size, soil_submerged_depth
 
 !call tank%set(xl=0.2d0,yl=0.1d0,m=80,n=40)
 !call tank%set(xl=0.25d0,yl=0.125d0,m=100,n=50)
-call tank%set(xl=0.26d0,yl=0.13d0,m=52,n=26)
-!call tank%set(xl=0.26d0,yl=0.13d0,m=104,n=52)
+!call tank%set(xl=0.26d0,yl=0.13d0,m=52,n=26)
+call tank%set(xl=0.26d0,yl=0.13d0,m=104,n=52)
 npoint = tank%m*tank%n
 allocate(tank%x(npoint),tank%y(npoint),tank%zone(npoint))
 call tank%cell_center
@@ -131,9 +131,9 @@ do i = 1,soil%ntotal+soil%nvirt
    if(soil%zone(i)==3.or.soil%zone(i)==5.or.soil%zone(i)==6)soil%p%r(i)=0.0
 enddo
 do i = 1, soil%ntotal+soil%nvirt   
-   soil%sxy%r(i) = 0.d0
-   soil%sxx%r(i) =  0.1905*soil%p%r(i)
-   soil%syy%r(i) = -0.381*soil%p%r(i)
+   soil%str%xy%r(i) = 0.d0
+   soil%str%x%r(i) =  0.1905*soil%p%r(i)
+   soil%str%y%r(i) = -0.381*soil%p%r(i)
    soil%p%r(i)   =  0.619*soil%p%r(i)
 enddo
 !soil%p%ndim1 = bntotal

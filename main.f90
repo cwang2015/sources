@@ -16,9 +16,9 @@ double precision s1, s2
 call time_print
 call time_elapsed(s1)
 
-!call getarg(1,cas_file)
+call getarg(1,cas_file)
 write(*,*) 'cas_file:', cas_file
-cas_file = '..\data\cas_mix_Savage'
+!cas_file = '..\data\cas_mix_Savage'
 call read_cas
 
 call open_files      
