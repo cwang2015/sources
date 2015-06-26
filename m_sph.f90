@@ -810,16 +810,16 @@ end subroutine
 implicit none
 type(p2r) vxi(3), dvxi(3), v_mini(3)
 
-      do i = 1, pl%ntotal +pl%nvirt    ! originally only pl%ntotal       
+!      do i = 1, pl%ntotal +pl%nvirt    ! originally only pl%ntotal       
             
          if (.not.summation_density) then    
-            pl%rho_min%r(i) = pl%rho%r(i)
-            pl%rho%r(i) = pl%rho%r(i) +(dt/2.)* pl%drho%r(i)
+            pl%rho_min = pl%rho
+            pl%rho = pl%rho +(dt/2.)* pl%drho
          endif
 
          if(trim(pl%imaterial)=='water'.and.volume_fraction)then
-            pl%vof_min%r(i) = pl%vof%r(i)
-            pl%vof%r(i) = pl%vof%r(i)+(dt/2.)*pl%dvof%r(i) 
+            pl%vof_min = pl%vof
+            pl%vof = pl%vof+(dt/2.)*pl%dvof 
          endif
  
          if(trim(pl%imaterial)=='soil')then
@@ -828,17 +828,19 @@ type(p2r) vxi(3), dvxi(3), v_mini(3)
          !pl%sxy(i) = pl%sxy(i) + dt*pl%dsxy(i)
          !pl%syy(i) = pl%syy(i) + dt*pl%dsyy(i)
                   elseif(stress_integration==2)then
-         pl%str_min%x%r(i) = pl%str%x%r(i)
-         pl%str_min%xy%r(i) = pl%str%xy%r(i)
-         pl%str_min%y%r(i) = pl%str%y%r(i)
-         pl%p_min%r(i)   = pl%p%r(i)
-         pl%str%x%r(i) = pl%str%x%r(i) + (dt/2.)*pl%dstr%x%r(i)
-         pl%str%xy%r(i) = pl%str%xy%r(i) + (dt/2.)*pl%dstr%xy%r(i)
-         pl%str%y%r(i) = pl%str%y%r(i) + (dt/2.)*pl%dstr%y%r(i)
-         pl%p%r(i) = pl%p%r(i) + (dt/2.)*pl%dp%r(i)      !!!simultaneous pressure
+         pl%str_min%x = pl%str%x
+         pl%str_min%xy = pl%str%xy
+         pl%str_min%y = pl%str%y
+         pl%p_min   = pl%p
+         pl%str%x = pl%str%x + (dt/2.)*pl%dstr%x
+         pl%str%xy = pl%str%xy + (dt/2.)*pl%dstr%xy
+         pl%str%y = pl%str%y + (dt/2.)*pl%dstr%y
+         !pl%str = pl%str + (dt/2.) * pl%dstr
+         pl%p = pl%p + (dt/2.)*pl%dp      !!!simultaneous pressure
                   endif
          endif
           
+      do i = 1, pl%ntotal +pl%nvirt    ! originally only pl%ntotal       
          if(pl%itype(i)<0)cycle
          vxi = pl%vx%cmpt(i); dvxi = pl%dvx%cmpt(i); v_mini = pl%v_min%cmpt(i)
          do d = 1, pl%dim
