@@ -1542,7 +1542,7 @@ type(array) f
 character(len=1) x
 class(particles) parts
 type(array) :: df_omp
-real(dp), allocatable, dimension(:,:) :: df_local
+real(dp), allocatable, dimension(:) :: df_local
 !real(dp) df_omp(parts%maxn)
 !real(dp) df_local(parts%maxn,8)
 real(dp), pointer, dimension(:) :: dwdx
@@ -1557,19 +1557,21 @@ nthreads = parts%nthreads
 df_omp%ndim1 = ntotal
 allocate(df_omp%r(ntotal))
 if(nthreads>1)then
-   allocate(df_local(ntotal,nthreads))
+   allocate(df_local(ntotal))
    call parts%get_niac_start_end
 endif   
 
 if(x=='x')dwdx=>parts%dwdx(1,:)
 if(x=='y')dwdx=>parts%dwdx(2,:)
+   do i = 1, ntotal
+      df_local(i) = 0.d0
+   enddo
 
 !$omp parallel
-!$omp do private(i,j,k,fwx)
+!$omp do private(i,j,k,fwx) reduction(+:df_local)
+
 do it = 1, parts%nthreads
-   do i = 1, ntotal
-      df_local(i,it) = 0.d0
-   enddo
+
    do k = parts%niac_start(it), parts%niac_end(it)
 
 
@@ -1577,8 +1579,8 @@ do it = 1, parts%nthreads
    i = parts%pair_i(k)
    j = parts%pair_j(k)
    fwx = (f%r(i)+f%r(j))*dwdx(k)
-   df_local(i,it) = df_local(i,it) + parts%mass%r(j)/parts%rho%r(j)*fwx
-   df_local(j,it) = df_local(j,it) - parts%mass%r(i)/parts%rho%r(i)*fwx
+   df_local(i) = df_local(i) + parts%mass%r(j)/parts%rho%r(j)*fwx
+   df_local(j) = df_local(j) - parts%mass%r(i)/parts%rho%r(i)*fwx
    enddo !k
 enddo !it
 !$omp end do
@@ -1586,10 +1588,10 @@ enddo !it
 
 !$omp do private(it)
 do i = 1, ntotal
-   df_omp%r(i) = 0.d0
-   do it = 1, nthreads
-      df_omp%r(i) = df_omp%r(i)+df_local(i,it)
-   enddo
+   !df_omp%r(i) = 0.d0
+   !do it = 1, nthreads
+      df_omp%r(i) = df_local(i)
+   !enddo
 enddo   
 !$omp end do
 !$omp end parallel
