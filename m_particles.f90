@@ -102,7 +102,7 @@ real(dp) mingridx(3),maxgridx(3),dgeomx(3)
 
 !maxn: Maximum number of particles
 !max_interation : Maximum number of interaction pairs
-integer :: maxn = 8000, max_interaction = 10 * 8000
+integer :: maxn = 2000, max_interaction = 10 * 2000
   
 !SPH algorithm
 
@@ -299,6 +299,8 @@ integer :: skf = 4
        procedure :: df2
        procedure :: df3
        procedure :: df3_omp
+       procedure :: df4
+       procedure :: df4_omp
        procedure :: velocity_divergence
 !       procedure :: time_integration_for_water
 !       procedure :: find_particle_nearest2_point
@@ -1516,7 +1518,7 @@ real(dp) fwx
 integer i, j, k, ntotal
 ntotal = parts%ntotal +parts%nvirt
 
-allocate(df%r(ntotal)); df = 0.
+allocate(df%r(ntotal)); df = 0.d0
 df%ndim1 = ntotal
 
 if(x=='x')dwdx=>parts%dwdx(1,:)
@@ -1803,6 +1805,102 @@ enddo
 
 end function
 
+! Calculate partial derivatives of a field
+!-------------------------------------------
+          function df4(parts,f,x)
+!-------------------------------------------
+implicit none
+
+type(array) :: f
+character(len=1) x
+class(particles) parts
+type(array),allocatable :: df4
+real(dp), pointer, dimension(:) :: dwdx
+real(dp) fwx
+integer i, j, k, ntotal
+ntotal = parts%ntotal +parts%nvirt
+
+allocate(df4); allocate(df4%r(ntotal)); df4 = 0.d0
+df4%ndim1 = ntotal
+
+if(x=='x')dwdx=>parts%dwdx(1,:)
+if(x=='y')dwdx=>parts%dwdx(2,:)
+
+do k=1,parts%niac
+   i = parts%pair_i(k)
+   j = parts%pair_j(k)
+   fwx = (f%r(j)-f%r(i))*dwdx(k)
+   df4%r(i) = df4%r(i) + parts%mass%r(j)/parts%rho%r(j)*fwx
+   df4%r(j) = df4%r(j) + parts%mass%r(i)/parts%rho%r(i)*fwx
+enddo
+
+end function
+
+!-------------------------------------------
+          function df4_omp(parts,f,x)
+!-------------------------------------------
+implicit none
+
+type(array) f
+character(len=1) x
+class(particles) parts
+type(array) :: df4_omp
+real(dp), allocatable, dimension(:) :: df4_local
+!real(dp) df_omp(parts%maxn)
+!real(dp) df_local(parts%maxn,8)
+real(dp), pointer, dimension(:) :: dwdx
+real(dp) fwx
+integer i, j, k, ntotal, it, nthreads
+
+!write(*,*) 'In df_omp...'
+
+ntotal = parts%ntotal + parts%nvirt
+nthreads = parts%nthreads
+
+df4_omp%ndim1 = ntotal
+allocate(df4_omp%r(ntotal))
+if(nthreads>1)then
+   allocate(df4_local(ntotal))
+   call parts%get_niac_start_end
+endif   
+
+if(x=='x')dwdx=>parts%dwdx(1,:)
+if(x=='y')dwdx=>parts%dwdx(2,:)
+   do i = 1, ntotal
+      df4_local(i) = 0.d0
+   enddo
+
+!$omp parallel
+!$omp do private(i,j,k,fwx) reduction(+:df4_local)
+
+do it = 1, parts%nthreads
+
+   do k = parts%niac_start(it), parts%niac_end(it)
+
+
+!do k=1,parts%niac
+   i = parts%pair_i(k)
+   j = parts%pair_j(k)
+   fwx = (f%r(j)-f%r(i))*dwdx(k)
+   df4_local(i) = df4_local(i) + parts%mass%r(j)/parts%rho%r(j)*fwx
+   df4_local(j) = df4_local(j) + parts%mass%r(i)/parts%rho%r(i)*fwx
+   enddo !k
+enddo !it
+!$omp end do
+!$omp barrier
+
+!$omp do private(it)
+do i = 1, ntotal
+   !df_omp%r(i) = 0.d0
+   !do it = 1, nthreads
+      df4_omp%r(i) = df4_local(i)
+   !enddo
+enddo   
+!$omp end do
+!$omp end parallel
+
+!deallocate(df_local)
+end function
 
 !-----------------------------------------------------------------------
       subroutine velocity_divergence(parts)

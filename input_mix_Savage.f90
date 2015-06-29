@@ -19,6 +19,7 @@ double precision element_size, soil_submerged_depth
 call tank%set(xl=0.26d0,yl=0.13d0,m=52,n=26)
 !call tank%set(xl=0.26d0,yl=0.13d0,m=104,n=52)
 !call tank%set(xl=0.26d0,yl=0.13d0,m=208,n=104)
+!call tank%set(xl=0.26d0,yl=0.13d0,m=416,n=208)
 npoint = tank%m*tank%n
 allocate(tank%x(npoint),tank%y(npoint),tank%zone(npoint))
 call tank%cell_center

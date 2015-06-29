@@ -864,30 +864,31 @@ type(p2r) vxi(3), dvxi(3), v_mini(3)
       implicit none
       type(p2r) vxi(3), dvxi(3), v_mini(3), avi(3)
 
-      do i=1,pl%ntotal +pl%nvirt     ! origionally pl%ntotal
+!      do i=1,pl%ntotal +pl%nvirt     ! origionally pl%ntotal
          
          if (.not.summation_density ) then
-            pl%rho%r(i) = pl%rho%r(i) + (dt/2.)* pl%drho%r(i)
+            pl%rho = pl%rho + (dt/2.)* pl%drho
          endif
 
          if(trim(pl%imaterial)=='water'.and.volume_fraction)then
-            pl%vof%r(i) = pl%vof%r(i)+(dt/2.)*pl%dvof%r(i)
+            pl%vof = pl%vof+(dt/2.)*pl%dvof
          endif
 
          if(trim(pl%imaterial)=='soil')then
                   if(stress_integration==1)then
-         pl%str%x%r(i) = pl%str%x%r(i) + dt*pl%dstr%x%r(i)
-         pl%str%xy%r(i) = pl%str%xy%r(i) + dt*pl%dstr%xy%r(i)
-         pl%str%y%r(i) = pl%str%y%r(i) + dt*pl%dstr%y%r(i)
-         pl%p%r(i)   = pl%p%r(i)   + dt*pl%dp%r(i)       !!! simultaneous pressure
+         pl%str%x = pl%str%x + dt*pl%dstr%x
+         pl%str%xy = pl%str%xy + dt*pl%dstr%xy
+         pl%str%y = pl%str%y + dt*pl%dstr%y
+         pl%p   = pl%p   + dt*pl%dp       !!! simultaneous pressure
                   elseif(stress_integration==2)then
-         pl%str%x%r(i) = pl%str%x%r(i) + (dt/2.)*pl%dstr%x%r(i)
-         pl%str%xy%r(i) = pl%str%xy%r(i) + (dt/2.)*pl%dstr%xy%r(i)
-         pl%str%y%r(i) = pl%str%y%r(i) + (dt/2.)*pl%dstr%y%r(i)
-         pl%p%r(i)   = pl%p%r(i) + (dt/2.)*pl%dp%r(i)    !!! simultaneous pressure
+         pl%str%x = pl%str%x + (dt/2.)*pl%dstr%x
+         pl%str%xy = pl%str%xy + (dt/2.)*pl%dstr%xy
+         pl%str%y = pl%str%y + (dt/2.)*pl%dstr%y
+         pl%p   = pl%p + (dt/2.)*pl%dp    !!! simultaneous pressure
                   endif
          endif
         
+      do i=1,pl%ntotal +pl%nvirt     ! origionally pl%ntotal
          if(pl%itype(i)<0)cycle
          vxi = pl%vx%cmpt(i); dvxi = pl%dvx%cmpt(i); avi = pl%av%cmpt(i)
          do d = 1, pl%dim        
@@ -912,7 +913,7 @@ type(p2r) vxi(3), dvxi(3), v_mini(3)
 ! ------------------------------------------------------------------
       implicit none
       type(p2r) vxi(3), dvxi(3), v_mini(3),avi(3)
-
+      !$omp parallel do private(d,vxi,dvxi,v_mini,avi)
       do i=1,pl%ntotal +pl%nvirt  ! origionally pl%ntotal            
             
          if (.not.summation_density ) then 
@@ -1452,7 +1453,14 @@ endif
        
 !---  Internal forces:
 
-call shear_strain_rate(pl)   
+call shear_strain_rate(pl)
+!pl%tab%x%ndim1 = pl%ntotal+pl%nvirt
+!pl%tab%xy%ndim1 = pl%tab%x%ndim1; pl%tab%y%ndim1 = pl%tab%x%ndim1
+!write(*,*) pl%tab%x%ndim1,pl%vx%x%ndim1
+!pl%tab%x = 2.d0/3.d0*(2.d0*pl%df4(pl%vx%x,'x')-pl%df4(pl%vx%y,'y'))
+!pl%tab%xy = pl%df4(pl%vx%x,'y')+pl%df4(pl%vx%y,'x')
+!pl%tab%y = 2.d0/3.d0*(2.d0*pl%df4(pl%vx%y,'y')-pl%df4(pl%vx%x,'x'))
+
 if(trim(pl%imaterial)=='soil')call velocity_divergence(pl)
 
 call pressure(pl)
@@ -1473,18 +1481,19 @@ endif
 
 !Calculate internal force for water phase !! -phi_f Grad(p)
 if(pl%imaterial=='water')then
-    if(pl%nthreads==1)then
-   pl%dvx%x = -pl%vof*pl%df(pl%p,'x') + pl%df(pl%vof*pl%str%x,'x') + pl%df(pl%vof*pl%str%xy,'y')
-   pl%dvx%y = -pl%vof*pl%df(pl%p,'y') + pl%df(pl%vof*pl%str%xy,'x') + pl%df(pl%vof*pl%str%y,'y')
-    else
+   !if(pl%nthreads==1)then
+   !pl%dvx%x = -pl%vof*pl%df(pl%p,'x') + pl%df(pl%vof*pl%str%x,'x') + pl%df(pl%vof*pl%str%xy,'y')
+   !pl%dvx%y = -pl%vof*pl%df(pl%p,'y') + pl%df(pl%vof*pl%str%xy,'x') + pl%df(pl%vof*pl%str%y,'y')
+   !else
    pl%dvx%x = -pl%vof*pl%df_omp(pl%p,'x') + pl%df_omp(pl%vof*pl%str%x,'x') + pl%df_omp(pl%vof*pl%str%xy,'y')
    pl%dvx%y = -pl%vof*pl%df_omp(pl%p,'y') + pl%df_omp(pl%vof*pl%str%xy,'x') + pl%df_omp(pl%vof*pl%str%y,'y')  
-   endif        
-
-   !where (pl%rho.gt.0.0) pl%dvx%x%r = pl%dvx%x%r/pl%rho%r
-   !where (pl%rho.gt.0.0) pl%dvx%y%r = pl%dvx%y%r/pl%rho%r
+   !endif        
+   write(*,*) pl%dvx%x%r(1:50),pl%dvx%y%r(1:50)
+   !where (pl%rho%r.gt.0.0) pl%dvx%x%r = pl%dvx%x%r/pl%rho%r
+   !where (pl%rho%r.gt.0.0) pl%dvx%y%r = pl%dvx%y%r/pl%rho%r
    pl%dvx%x = pl%dvx%x/pl%rho
    pl%dvx%y = pl%dvx%y/pl%rho
+   !write(*,*) pl%dvx%x%r(1:50),pl%dvx%y%r(1:50)
 else      
    !call int_force(pl)
    pl%dvx%x = -pl%df3_omp(pl%vof*pl%p,'x') + pl%df3_omp(pl%vof*pl%str%x,'x') + pl%df3_omp(pl%vof*pl%str%xy,'y')
@@ -1544,7 +1553,7 @@ if(trim(pl%imaterial)=='water'.and.water_artificial_volume)  &
           call pl%repulsive_force
 !      endif
 
-pl%dvx%y%r = pl%dvx%y%r + gravity
+pl%dvx%y = pl%dvx%y + gravity
 
 !     Calculating the neighboring particles and undating HSML
       
@@ -1597,9 +1606,9 @@ endif
          if(volume_fraction_renorm)then
             if(mod(itimestep,40).eq.0) then
                ntotal = parts%ntotal+parts%nvirt
-               parts%rho%r(1:ntotal) = parts%rho%r(1:ntotal)/parts%vof%r(1:ntotal) 
-               parts%vof%r(1:ntotal) = parts%vof2%r(1:ntotal)
-               parts%rho%r(1:ntotal) = parts%rho%r(1:ntotal)*parts%vof%r(1:ntotal) 
+               parts%rho = parts%rho/parts%vof 
+               parts%vof = parts%vof2
+               parts%rho = parts%rho*parts%vof 
             endif
          endif
       endif
