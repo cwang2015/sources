@@ -294,6 +294,7 @@ integer :: skf = 4
        procedure :: av_vel
        procedure :: repulsive_force
        procedure :: df
+       procedure :: df00
        procedure :: df_omp
        procedure :: df_omp2
        procedure :: df2
@@ -1504,22 +1505,22 @@ return
 end subroutine
 
 ! Calculate partial derivatives of a field
-!-------------------------------------------
-          function df(parts,f,x)
-!-------------------------------------------
+!--------------------------------------------
+          function df00(parts,f,x) result(res)
+!--------------------------------------------
 implicit none
 
 type(array) :: f
 character(len=1) x
 class(particles) parts
-type(array) :: df
+type(array) :: res
 real(dp), pointer, dimension(:) :: dwdx
 real(dp) fwx
 integer i, j, k, ntotal
 ntotal = parts%ntotal +parts%nvirt
 
-allocate(df%r(ntotal)); df = 0.d0
-df%ndim1 = ntotal
+allocate(res%r(ntotal))
+res%ndim1 = ntotal; res = 0.d0
 
 if(x=='x')dwdx=>parts%dwdx(1,:)
 if(x=='y')dwdx=>parts%dwdx(2,:)
@@ -1528,8 +1529,37 @@ do k=1,parts%niac
    i = parts%pair_i(k)
    j = parts%pair_j(k)
    fwx = (f%r(i)+f%r(j))*dwdx(k)
-   df%r(i) = df%r(i) + parts%mass%r(j)/parts%rho%r(j)*fwx
-   df%r(j) = df%r(j) - parts%mass%r(i)/parts%rho%r(i)*fwx
+   res%r(i) = res%r(i) + parts%mass%r(j)/parts%rho%r(j)*fwx
+   res%r(j) = res%r(j) - parts%mass%r(i)/parts%rho%r(i)*fwx
+enddo
+
+end function
+
+! Calculate partial derivatives of a field
+!-------------------------------------------
+          function df(parts,f,x)
+!-------------------------------------------
+implicit none
+
+real(dp) f(:)
+character(len=1) x
+class(particles) parts
+real(dp), allocatable :: df(:)
+real(dp), pointer, dimension(:) :: dwdx
+real(dp) fwx
+integer i, j, k
+
+allocate(df(size(f))); df = 0.
+
+if(x=='x')dwdx=>parts%dwdx(1,:)
+if(x=='y')dwdx=>parts%dwdx(2,:)
+
+do k=1,parts%niac
+   i = parts%pair_i(k)
+   j = parts%pair_j(k)
+   fwx = (f(i)+f(j))*dwdx(k)
+   df(i) = df(i) + parts%mass%r(j)/parts%rho%r(j)*fwx
+   df(j) = df(j) - parts%mass%r(i)/parts%rho%r(i)*fwx
 enddo
 
 end function

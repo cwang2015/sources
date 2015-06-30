@@ -82,6 +82,7 @@ real(dp),intent(IN)    :: b
 integer ndim1,i
 
 ndim1 = a%ndim1
+if(ndim1==0) stop 'array_equal_real: ndim1=0'
 
 !$omp parallel do
 do i = 1, ndim1
@@ -101,6 +102,7 @@ real,intent(IN)    :: b
 integer ndim1,i
 
 ndim1 = a%ndim1
+if(ndim1==0) stop 'array_equal_real: ndim1=0'
 
 !$omp parallel do
 do i = 1, ndim1
@@ -181,7 +183,7 @@ real(dp), intent(in) :: b
 type(array), allocatable :: c
 integer ndim1,i
 
-!if(a%ndim1/=b%ndim1)stop 'Cannot add arrays!'
+if(a%ndim1==0)stop 'array_add_double_real: ndim1=0!'
 
 ndim1 = a%ndim1
 allocate(c)
@@ -205,7 +207,7 @@ real(dp), intent(in) :: b
 type(array), allocatable :: c
 integer ndim1,i
 
-!if(a%ndim1/=b%ndim1)stop 'Cannot add arrays!'
+if(a%ndim1==0)stop 'double_real_add_array: ndim1=0!'
 
 ndim1 = a%ndim1
 allocate(c)

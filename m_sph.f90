@@ -1482,13 +1482,15 @@ endif
 !Calculate internal force for water phase !! -phi_f Grad(p)
 if(pl%imaterial=='water')then
    !if(pl%nthreads==1)then
-   !pl%dvx%x = -pl%vof*pl%df(pl%p,'x') + pl%df(pl%vof*pl%str%x,'x') + pl%df(pl%vof*pl%str%xy,'y')
-   !pl%dvx%y = -pl%vof*pl%df(pl%p,'y') + pl%df(pl%vof*pl%str%xy,'x') + pl%df(pl%vof*pl%str%y,'y')
+   pl%dvx%x%r = -pl%vof%r*pl%df(pl%p%r,'x') + pl%df(pl%vof%r*pl%str%x%r,'x') + pl%df(pl%vof%r*pl%str%xy%r,'y')
+   pl%dvx%y%r = -pl%vof%r*pl%df(pl%p%r,'y') + pl%df(pl%vof%r*pl%str%xy%r,'x') + pl%df(pl%vof%r*pl%str%y%r,'y')
+   pl%dvx%x = -pl%vof*pl%df00(pl%p,'x') + pl%df00(pl%vof*pl%str%x,'x') + pl%df00(pl%vof*pl%str%xy,'y')
+   pl%dvx%y = -pl%vof*pl%df00(pl%p,'y') + pl%df00(pl%vof*pl%str%xy,'x') + pl%df00(pl%vof*pl%str%y,'y')   
    !else
-   pl%dvx%x = -pl%vof*pl%df_omp(pl%p,'x') + pl%df_omp(pl%vof*pl%str%x,'x') + pl%df_omp(pl%vof*pl%str%xy,'y')
-   pl%dvx%y = -pl%vof*pl%df_omp(pl%p,'y') + pl%df_omp(pl%vof*pl%str%xy,'x') + pl%df_omp(pl%vof*pl%str%y,'y')  
+   !pl%dvx%x = -pl%vof*pl%df_omp(pl%p,'x') + pl%df_omp(pl%vof*pl%str%x,'x') + pl%df_omp(pl%vof*pl%str%xy,'y')
+   !pl%dvx%y = -pl%vof*pl%df_omp(pl%p,'y') + pl%df_omp(pl%vof*pl%str%xy,'x') + pl%df_omp(pl%vof*pl%str%y,'y')  
    !endif        
-   write(*,*) pl%dvx%x%r(1:50),pl%dvx%y%r(1:50)
+   !write(*,*) pl%dvx%x%r(1:50),pl%dvx%y%r(1:50)
    !where (pl%rho%r.gt.0.0) pl%dvx%x%r = pl%dvx%x%r/pl%rho%r
    !where (pl%rho%r.gt.0.0) pl%dvx%y%r = pl%dvx%y%r/pl%rho%r
    pl%dvx%x = pl%dvx%x/pl%rho
@@ -1671,9 +1673,9 @@ where(pl%rho%r>0.0) pl%p%r = property%b*((pl%rho%r/property%rho0)**property%gamm
 
 !Calculate SPH sum for shear tensor Tab = va,b + vb,a - 2/3 delta_ab vc,c
 
-pl%tab%x = 2./3.*(2.0*pl%df(pl%vx%x,'x')-pl%df(pl%vx%y,'y'))
-pl%tab%xy = pl%df(pl%vx%x,'y')+pl%df(pl%vx%y,'x')
-pl%tab%y = 2./3.*(2.0*pl%df(pl%vx%y,'y')-pl%df(pl%vx%x,'x'))
+pl%tab%x%r = 2./3.*(2.0*pl%df(pl%vx%x%r,'x')-pl%df(pl%vx%y%r,'y'))
+pl%tab%xy%r = pl%df(pl%vx%x%r,'y')+pl%df(pl%vx%y%r,'x')
+pl%tab%y%r = 2./3.*(2.0*pl%df(pl%vx%y%r,'y')-pl%df(pl%vx%x%r,'x'))
 
 !Newtonian fluid
 
@@ -1683,8 +1685,8 @@ pl%str%xy = property%viscosity*pl%tab%xy
 
 !Calculate internal force
 
-pl%dvx%x = - pl%df(pl%p,'x') + pl%df(pl%str%x,'x') + pl%df(pl%str%xy,'y')
-pl%dvx%y = - pl%df(pl%p,'y') + pl%df(pl%str%xy,'x') + pl%df(pl%str%y,'y')
+pl%dvx%x%r = - pl%df(pl%p%r,'x') + pl%df(pl%str%x%r,'x') + pl%df(pl%str%xy%r,'y')
+pl%dvx%y%r = - pl%df(pl%p%r,'y') + pl%df(pl%str%xy%r,'x') + pl%df(pl%str%y%r,'y')
 
 pl%dvx%x = pl%dvx%x/pl%rho
 pl%dvx%y = pl%dvx%y/pl%rho
@@ -1781,8 +1783,8 @@ endif
 
 !call int_force1(pl)
 
-pl%dvx%x = - pl%df(pl%p,'x') + pl%df(pl%str%x,'x') + pl%df(pl%str%xy,'y')
-pl%dvx%y = - pl%df(pl%p,'y') + pl%df(pl%str%xy,'x') + pl%df(pl%str%y,'y')
+pl%dvx%x%r = - pl%df(pl%p%r,'x') + pl%df(pl%str%x%r,'x') + pl%df(pl%str%xy%r,'y')
+pl%dvx%y%r = - pl%df(pl%p%r,'y') + pl%df(pl%str%xy%r,'x') + pl%df(pl%str%y%r,'y')
 
 pl%dvx%x = pl%dvx%x/pl%rho
 pl%dvx%y = pl%dvx%y/pl%rho       
