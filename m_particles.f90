@@ -2329,7 +2329,8 @@ end subroutine
       implicit none
 
       class(particles) parts
-      real(dp), dimension(:) :: f,df
+      type(array) f
+      type(array) df
       real(dp), allocatable, dimension(:) :: local
       real(dp) dx(3),delta, muv, rr, h
       integer i,j,k,d,ntotal,niac,dim,it
@@ -2339,6 +2340,9 @@ end subroutine
       ntotal   =  parts%ntotal + parts%nvirt
       niac     =  parts%niac; dim = parts%dim            
       delta    = parts%numeric%delta
+      
+!      f%ndim1 = ntotal
+!      df%ndim1 = ntotal
       
      !$omp parallel 
      !$omp do private(i,it,j,d,k,rr,muv,dx,h) reduction(+:local)
@@ -2354,8 +2358,8 @@ end subroutine
             dx(d)  =  parts%x(d,i) -  parts%x(d,j)
             rr     = rr + dx(d)*dx(d)
          enddo
-            
-         muv = 2.0*(f(i)-f(j))/rr
+
+         muv = 2.0*(f%r(i)-f%r(j))/rr
 
          h = 0.d0
          do d=1,dim
@@ -2373,7 +2377,7 @@ end subroutine
      !$omp do private(it)
      do i = 1,ntotal
 !        do it = 1,parts%nthreads
-             df(i) =  local(i)
+             df%r(i) =  local(i)
 !        enddo
      enddo
      !$omp end do

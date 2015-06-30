@@ -1439,7 +1439,7 @@ if(artificial_density)then
    !if(trim(pl%imaterial)=='water')then
       !!call renormalize_density_gradient(pl)
       !call art_density(pl)
-      call delta_sph_omp(pl,pl%rho%r,pl%drho%r)
+      call delta_sph_omp(pl,pl%rho,pl%drho)
    !endif
 endif
 
@@ -1534,14 +1534,14 @@ if (visc_artificial) call pl%art_visc
 
 if(trim(pl%imaterial)=='soil'.and.soil_artificial_stress)then
         !call art_stress(pl)
-   call pl%delta_sph_omp(pl%p%r,pl%dp%r)
-   call pl%delta_sph_omp(pl%str%x%r,pl%dstr%x%r)
-   call pl%delta_sph_omp(pl%str%xy%r,pl%dstr%xy%r)
-   call pl%delta_sph_omp(pl%str%y%r,pl%dstr%y%r)
+   call pl%delta_sph_omp(pl%p,pl%dp)
+   call pl%delta_sph_omp(pl%str%x,pl%dstr%x)
+   call pl%delta_sph_omp(pl%str%xy,pl%dstr%xy)
+   call pl%delta_sph_omp(pl%str%y,pl%dstr%y)
 endif        
 if(trim(pl%imaterial)=='water'.and.water_artificial_volume)  &
         !call art_volume_fraction_water2(pl)
-        call pl%delta_sph_omp(pl%vof%r,pl%dvof%r)
+        call pl%delta_sph_omp(pl%vof,pl%dvof)
 
 !--- Damping
 !       if(trim(pl%imaterial)=='soil') call damping_stress(pl)
