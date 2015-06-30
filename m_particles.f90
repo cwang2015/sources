@@ -2333,33 +2333,37 @@ end subroutine
       type(array) df
       real(dp), allocatable, dimension(:) :: local
       real(dp) dx(3),delta, muv, rr, h
-      integer i,j,k,d,ntotal,niac,dim,it
+      integer i,j,k,d,ntotal,niac,dim,it,nthreads
 
 !      write(*,*) 'In art_density...'
 
       ntotal   =  parts%ntotal + parts%nvirt
-      niac     =  parts%niac; dim = parts%dim            
+      niac     =  parts%niac; dim = parts%dim; nthreads = parts%nthreads            
       delta    = parts%numeric%delta
       
 !      f%ndim1 = ntotal
 !      df%ndim1 = ntotal
-      
-     !$omp parallel 
-     !$omp do private(i,it,j,d,k,rr,muv,dx,h) reduction(+:local)
-     do it = 1,parts%nthreads
-         do i =1,ntotal
-             local = 0.
-         enddo
-      do k=parts%niac_start(it),parts%niac_end(it)
-         i = parts%pair_i(k)
-         j = parts%pair_j(k)
-         rr = 0.e0
-         do d=1,dim
-            dx(d)  =  parts%x(d,i) -  parts%x(d,j)
-            rr     = rr + dx(d)*dx(d)
-         enddo
 
-         muv = 2.0*(f%r(i)-f%r(j))/rr
+      if(nthreads>1)then
+         allocate(local(ntotal))
+         call parts%get_niac_start_end
+      endif   
+      do i =1,ntotal
+         local(i) = 0.d0
+      enddo
+
+     !$omp parallel 
+     !$omp do private(i,j,d,k,rr,muv,dx,h) reduction(+:local)
+     do it = 1,parts%nthreads 
+        do k = parts%niac_start(it),parts%niac_end(it)
+           i = parts%pair_i(k)
+           j = parts%pair_j(k)
+           rr = 0.e0
+           do d=1,dim
+              dx(d)  =  parts%x(d,i) -  parts%x(d,j)
+              rr     = rr + dx(d)*dx(d)
+           enddo
+           muv = 2.0*(f%r(i)-f%r(j))/rr
 
          h = 0.d0
          do d=1,dim
@@ -2377,7 +2381,7 @@ end subroutine
      !$omp do private(it)
      do i = 1,ntotal
 !        do it = 1,parts%nthreads
-             df%r(i) =  local(i)
+             df%r(i) =  df%r(i) + local(i)
 !        enddo
      enddo
      !$omp end do
