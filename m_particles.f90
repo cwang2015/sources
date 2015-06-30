@@ -294,7 +294,6 @@ integer :: skf = 4
        procedure :: av_vel
        procedure :: repulsive_force
        procedure :: df
-       procedure :: df00
        procedure :: df_omp
        procedure :: df_omp2
        procedure :: df2
@@ -1506,7 +1505,7 @@ end subroutine
 
 ! Calculate partial derivatives of a field
 !--------------------------------------------
-          function df00(parts,f,x) result(res)
+          function df(parts,f,x) result(res)
 !--------------------------------------------
 implicit none
 
@@ -1535,34 +1534,6 @@ enddo
 
 end function
 
-! Calculate partial derivatives of a field
-!-------------------------------------------
-          function df(parts,f,x)
-!-------------------------------------------
-implicit none
-
-real(dp) f(:)
-character(len=1) x
-class(particles) parts
-real(dp), allocatable :: df(:)
-real(dp), pointer, dimension(:) :: dwdx
-real(dp) fwx
-integer i, j, k
-
-allocate(df(size(f))); df = 0.
-
-if(x=='x')dwdx=>parts%dwdx(1,:)
-if(x=='y')dwdx=>parts%dwdx(2,:)
-
-do k=1,parts%niac
-   i = parts%pair_i(k)
-   j = parts%pair_j(k)
-   fwx = (f(i)+f(j))*dwdx(k)
-   df(i) = df(i) + parts%mass%r(j)/parts%rho%r(j)*fwx
-   df(j) = df(j) - parts%mass%r(i)/parts%rho%r(i)*fwx
-enddo
-
-end function
 
 ! Calculate partial derivatives of a field
 !-------------------------------------------
