@@ -291,6 +291,7 @@ integer :: skf = 4
        procedure :: newtonian_fluid
        procedure :: art_visc
        procedure :: delta_sph
+       procedure :: delta_sph_omp
        procedure :: av_vel
        procedure :: repulsive_force
        procedure :: df
@@ -2321,6 +2322,65 @@ end subroutine
 
 !     Subroutine to calculate the average velocity to correct velocity
 !     for preventing.penetration (monaghan, 1992)      
+
+!-------------------------------------------------------------------
+      subroutine delta_sph_omp(parts,f,df)
+!-------------------------------------------------------------------
+      implicit none
+
+      class(particles) parts
+      real(dp), dimension(:) :: f,df
+      real(dp), allocatable, dimension(:) :: local
+      real(dp) dx(3),delta, muv, rr, h
+      integer i,j,k,d,ntotal,niac,dim,it
+
+!      write(*,*) 'In art_density...'
+
+      ntotal   =  parts%ntotal + parts%nvirt
+      niac     =  parts%niac; dim = parts%dim            
+      delta    = parts%numeric%delta
+      
+     !$omp parallel 
+     !$omp do private(i,it,j,d,k,rr,muv,dx,h) reduction(+:local)
+     do it = 1,parts%nthreads
+         do i =1,ntotal
+             local = 0.
+         enddo
+      do k=parts%niac_start(it),parts%niac_end(it)
+         i = parts%pair_i(k)
+         j = parts%pair_j(k)
+         rr = 0.e0
+         do d=1,dim
+            dx(d)  =  parts%x(d,i) -  parts%x(d,j)
+            rr     = rr + dx(d)*dx(d)
+         enddo
+            
+         muv = 2.0*(f(i)-f(j))/rr
+
+         h = 0.d0
+         do d=1,dim
+            !h = h + (dx(d)*muv - (drhodx(d,i)+drhodx(d,j)))*dwdx(d,k)
+            h = h + dx(d)*muv*parts%dwdx(d,k)
+         enddo
+!          df(i) = df(i) + delta*parts%hsml(i)*parts%c(i)*parts%mass(j)*h/parts%rho(j)
+!          df(j) = df(j) - delta*parts%hsml(j)*parts%c(j)*parts%mass(i)*h/parts%rho(i)
+         local(i) = local(i) + delta*parts%hsml(i)*parts%c%r(i)*parts%mass%r(j)*h/parts%rho%r(j)
+         local(j) = local(j) - delta*parts%hsml(j)*parts%c%r(j)*parts%mass%r(i)*h/parts%rho%r(i)
+      enddo
+     enddo
+     !$omp enddo
+     !$omp barrier
+     !$omp do private(it)
+     do i = 1,ntotal
+!        do it = 1,parts%nthreads
+             df(i) =  local(i)
+!        enddo
+     enddo
+     !$omp end do
+     !$omp end parallel
+      return
+      end subroutine
+      
 !----------------------------------------------------------------------      
       subroutine av_vel(parts)
 !----------------------------------------------------------------------   
