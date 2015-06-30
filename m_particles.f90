@@ -1821,8 +1821,8 @@ real(dp) fwx
 integer i, j, k, ntotal
 ntotal = parts%ntotal +parts%nvirt
 
-allocate(df4); allocate(df4%r(ntotal)); df4 = 0.d0
-df4%ndim1 = ntotal
+allocate(df4); allocate(df4%r(ntotal))
+df4%ndim1 = ntotal; ; df4 = 0.d0
 
 if(x=='x')dwdx=>parts%dwdx(1,:)
 if(x=='y')dwdx=>parts%dwdx(2,:)
