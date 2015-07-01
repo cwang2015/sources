@@ -1913,8 +1913,8 @@ implicit none
 type(array) :: f
 class(particles) parts
 type(array),allocatable :: div
-double precision df(3)
-real(dp),pointer,dimension(:) :: hdiv
+real(dp) df(3)
+real(dp) :: hdiv
 real(dp),pointer,dimension(:,:) :: dwdx
 integer, pointer, dimension(:) :: pair_i, pair_j
 integer i,j,k,ntotal,nthreads,niac,dim,d
@@ -1926,11 +1926,11 @@ niac = parts%niac; dim = parts%dim
 dwdx =>parts%dwdx
 
 allocate(div);allocate(div%r(ntotal))
-div%ndim1 = ntotal;div = 0.e0
+div%ndim1 = ntotal;div = 0.d0
 
 do k = 1,niac
-   i = pair_i(k)
-   j = pair_j(k)
+   i = parts%pair_i(k)
+   j = parts%pair_j(k)
    f_i = f%cmpt(i); f_j = f%cmpt(j)
    do d=1,dim
        df(d) = f_j(d)%p - f_i(d)%p
