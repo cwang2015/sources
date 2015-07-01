@@ -102,7 +102,7 @@ real(dp) mingridx(3),maxgridx(3),dgeomx(3)
 
 !maxn: Maximum number of particles
 !max_interation : Maximum number of interaction pairs
-integer :: maxn = 2000, max_interaction = 10 * 2000
+integer :: maxn = 20000, max_interaction = 10 * 20000
   
 !SPH algorithm
 
@@ -1685,8 +1685,8 @@ real(dp) fwx
 integer i, j, k, ntotal
 ntotal = parts%ntotal +parts%nvirt
 
-allocate(df2%r(ntotal)); df2 = 0.
-df2%ndim1 = ntotal
+allocate(df2%r(ntotal))
+df2%ndim1 = ntotal; df2 = 0.d0
 
 if(x=='x')dwdx=>parts%dwdx(1,:)
 if(x=='y')dwdx=>parts%dwdx(2,:)
@@ -1721,8 +1721,8 @@ real(dp) fwx
 integer i,j,k,ntotal
 ntotal = parts%ntotal + parts%nvirt
 
-allocate(df3%r(ntotal)); df3 = 0.
-df3%ndim1 = ntotal
+allocate(df3%r(ntotal))
+df3%ndim1 = ntotal; df3 = 0.d0
 
 if(x=='x')dwdx=>parts%dwdx(1,:)
 if(x=='y')dwdx=>parts%dwdx(2,:)
@@ -2528,7 +2528,7 @@ end subroutine
       niac = parts%niac; dim = parts%dim
       soil => parts%material
       G = soil%e/(2.0*(1+soil%niu))
-
+!$omp parallel do
 !     Hook's law
 
       do i = 1, ntotal
@@ -2538,50 +2538,18 @@ end subroutine
       enddo
 
 !         if(parts%soil_pressure==2)then
+!$omp parallel do
       do i = 1, ntotal
          parts%dp%r(i)   = parts%dp%r(i) - soil%k*parts%vcc%r(i)  !!! simultaneous pressure  
       enddo
 !         endif         
      
 !     spin tensor
+      parts%wxy = 0.5*(parts%df4(parts%vx%x,'y')-parts%df4(parts%vx%y,'x'))
 
-      parts%wxy = 0.d0
-
-      do k=1,niac
-          i = parts%pair_i(k)
-          j = parts%pair_j(k)
-          vx_i = parts%vx%cmpt(i); vx_j = parts%vx%cmpt(j)
-          do d=1,dim
-            !dvx(d) = parts%vx(d,j) - parts%vx(d,i)
-            dvx(d) = vx_j(d)%p - vx_i(d)%p
-          enddo
-          if (dim.eq.1) then 
-            !hxx = 0.5e0*dvx(1)*dwdx(1,k)        
-          else if (dim.eq.2) then           
-            hxy = 0.5e0*(dvx(1)*parts%dwdx(2,k) - dvx(2)*parts%dwdx(1,k))
-          else if (dim.eq.3) then
-!            hxy = dvx(1)*dwdx(2,k) + dvx(2)*dwdx(1,k)
-!            hxz = dvx(1)*dwdx(3,k) + dvx(3)*dwdx(1,k)          
-!            hyz = dvx(2)*dwdx(3,k) + dvx(3)*dwdx(2,k)
-          endif                              
-          if (dim.eq.1) then 
-!            txx(i) = txx(i) + mass(j)*hxx/rho(j)
-!            txx(j) = txx(j) + mass(i)*hxx/rho(i)                 
-          else if (dim.eq.2) then           
-            parts%wxy%r(i) = parts%wxy%r(i) + parts%mass%r(j)*hxy/parts%rho%r(j)
-            parts%wxy%r(j) = parts%wxy%r(j) + parts%mass%r(i)*hxy/parts%rho%r(i)            
-          else if (dim.eq.3) then
-!            txy(i) = txy(i) + mass(j)*hxy/rho(j)
-!            txy(j) = txy(j) + mass(i)*hxy/rho(i) 
-!            txz(i) = txz(i) + mass(j)*hxz/rho(j)
-!            txz(j) = txz(j) + mass(i)*hxz/rho(i)                     
-!            tyz(i) = tyz(i) + mass(j)*hyz/rho(j)
-!            tyz(j) = tyz(j) + mass(i)*hyz/rho(i)   
-          endif                              
-       enddo
-   
 !   Jaumann rate
 
+!$omp parallel do
       do i = 1, ntotal
          parts%dstr%x%r(i) = parts%dstr%x%r(i)+2.0*parts%str%xy%r(i)*parts%wxy%r(i)
          parts%dstr%xy%r(i) = parts%dstr%xy%r(i)-(parts%str%x%r(i)-parts%str%y%r(i))*parts%wxy%r(i)
