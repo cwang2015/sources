@@ -303,6 +303,8 @@ integer :: skf = 4
        procedure :: df4
        procedure :: df4_omp
        procedure :: div
+       procedure :: div_omp
+       procedure :: div2
        procedure :: velocity_divergence
 !       procedure :: time_integration_for_water
 !       procedure :: find_particle_nearest2_point
@@ -1945,6 +1947,70 @@ enddo
 
 end function
 
+!-------------------------------------------
+          function div_omp(parts,f)
+!-------------------------------------------
+implicit none
+
+type(array) :: f
+class(particles) parts
+type(array),allocatable :: div_omp
+real(dp) df(3)
+real(dp) :: hdiv
+real(dp),pointer,dimension(:,:) :: dwdx
+integer, pointer, dimension(:) :: pair_i, pair_j
+real(dp), allocatable, dimension(:) :: local
+integer i,j,k,ntotal,nthreads,niac,dim,d,it
+type(p2r) f_i(3),f_j(3)
+
+ntotal = parts%ntotal + parts%nvirt
+nthreads = parts%nthreads
+niac = parts%niac; dim = parts%dim
+dwdx =>parts%dwdx
+
+allocate(div_omp);allocate(div_omp%r(ntotal))
+div_omp%ndim1 = ntotal;div_omp = 0.d0
+
+if(nthreads>1)then
+   allocate(local(ntotal))
+   call parts%get_niac_start_end
+endif   
+
+do i = 1, ntotal
+   local(i) = 0.d0
+enddo
+
+!$omp parallel
+!$omp do private(i,j,d,f_i,f_j,df,k,hdiv) reduction(+:local)
+do it = 1, parts%nthreads
+   do k = parts%niac_start(it), parts%niac_end(it)
+   i = parts%pair_i(k)
+   j = parts%pair_j(k)
+   f_i = f%cmpt(i); f_j = f%cmpt(j)
+   do d=1,dim
+       df(d) = f_j(d)%p - f_i(d)%p
+   enddo
+   hdiv = df(1)*dwdx(1,k)
+   do d = 2,dim
+     hdiv = hdiv + df(d)*dwdx(d,k)
+   enddo
+   local(i) = local(i) + parts%mass%r(j)*hdiv/parts%rho%r(j)
+   local(j) = local(j) + parts%mass%r(i)*hdiv/parts%rho%r(i)
+   enddo
+enddo
+!$omp end do
+!$omp barrier
+
+!$omp do
+do i = 1, ntotal
+      div_omp%r(i) = local(i)
+enddo   
+!$omp end do
+!$omp end parallel
+
+end function
+
+
 !-----------------------------------------------------------------------
       subroutine velocity_divergence(parts)
 !-----------------------------------------------------------------------
@@ -1991,6 +2057,49 @@ end function
    
       return
       end subroutine
+
+!-------------------------------------------
+          function div2(parts,f) result(res)
+!-------------------------------------------
+implicit none
+
+type(array) :: f
+class(particles) parts
+type(array),allocatable :: res
+real(dp) df(3)
+real(dp) :: temp
+real(dp),pointer,dimension(:,:) :: dwdx
+integer, pointer, dimension(:) :: pair_i, pair_j
+integer i,j,k,ntotal,nthreads,niac,dim,d
+type(p2r) f_i(3),f_j(3)
+
+ntotal = parts%ntotal + parts%nvirt
+nthreads = parts%nthreads
+niac = parts%niac; dim = parts%dim
+dwdx =>parts%dwdx
+
+allocate(res);allocate(res%r(ntotal))
+res%ndim1 = ntotal; res = 0.d0
+
+do k = 1,niac
+   i = parts%pair_i(k)
+   j = parts%pair_j(k)
+   f_i = f%cmpt(i); f_j = f%cmpt(j)
+   do d=1,dim
+       df(d) = f_j(d)%p - f_i(d)%p
+   enddo
+   temp = df(1)*dwdx(1,k)
+   do d = 2,dim
+     temp = temp + df(d)*dwdx(d,k)
+   enddo
+   res%r(i) = res%r(i) + parts%mass%r(j)*temp
+   res%r(j) = res%r(j) + parts%mass%r(i)*temp
+enddo
+do i = 1, ntotal
+   res%r(i) =  res%r(i)/parts%rho%r(i)
+enddo
+
+end function
 
 !---------------------------------------------------------------------
       subroutine initial_density(parts)

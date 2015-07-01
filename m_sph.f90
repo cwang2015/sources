@@ -1432,7 +1432,8 @@ endif
 !if(summation_density)then      
 !if(mod(itimestep,30)==0) call sum_density(pl)
 !else             
-    call con_density(pl)         
+    !call con_density(pl)         
+    pl%drho = -pl.rho*pl.div2(pl.vx)
 !endif
       
 if(artificial_density)then
@@ -1461,7 +1462,7 @@ pl%tab%x = 2.d0/3.d0*(2.d0*pl%df4(pl%vx%x,'x')-pl%df4(pl%vx%y,'y'))
 pl%tab%xy = pl%df4(pl%vx%x,'y')+pl%df4(pl%vx%y,'x')
 pl%tab%y = 2.d0/3.d0*(2.d0*pl%df4(pl%vx%y,'y')-pl%df4(pl%vx%x,'x'))
 
-if(trim(pl%imaterial)=='soil') pl%vcc = pl%div(pl%vx)
+if(trim(pl%imaterial)=='soil') pl%vcc = pl%div_omp(pl%vx)
 !call velocity_divergence(pl)
 
 call pressure(pl)
