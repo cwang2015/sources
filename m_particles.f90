@@ -305,6 +305,7 @@ integer :: skf = 4
        procedure :: div
        procedure :: div_omp
        procedure :: div2
+       procedure :: div22
        procedure :: velocity_divergence
 !       procedure :: time_integration_for_water
 !       procedure :: find_particle_nearest2_point
@@ -2070,7 +2071,8 @@ real(dp) df(3)
 real(dp) :: temp
 real(dp),pointer,dimension(:,:) :: dwdx
 integer, pointer, dimension(:) :: pair_i, pair_j
-integer i,j,k,ntotal,nthreads,niac,dim,d
+real(dp), allocatable, dimension(:) :: local
+integer i,j,k,ntotal,nthreads,niac,dim,d, it
 type(p2r) f_i(3),f_j(3)
 
 ntotal = parts%ntotal + parts%nvirt
@@ -2081,23 +2083,93 @@ dwdx =>parts%dwdx
 allocate(res);allocate(res%r(ntotal))
 res%ndim1 = ntotal; res = 0.d0
 
-do k = 1,niac
+allocate(local(ntotal))
+call parts%get_niac_start_end
+
+!$omp parallel
+!$omp do
+do i = 1, ntotal
+   local(i) = 0.d0
+enddo
+
+!$omp do private(i,j,f_i,f_j,d,df,temp) reduction(+:local)
+do k = 1, niac
    i = parts%pair_i(k)
    j = parts%pair_j(k)
    f_i = f%cmpt(i); f_j = f%cmpt(j)
+   temp = 0.d0
    do d=1,dim
-       df(d) = f_j(d)%p - f_i(d)%p
+      df(d) = f_j(d)%p - f_i(d)%p
+      temp = temp + df(d)*dwdx(d,k)
    enddo
-   temp = df(1)*dwdx(1,k)
-   do d = 2,dim
-     temp = temp + df(d)*dwdx(d,k)
-   enddo
-   res%r(i) = res%r(i) + parts%mass%r(j)*temp
-   res%r(j) = res%r(j) + parts%mass%r(i)*temp
-enddo
+   local(i) = local(i) + parts%mass%r(j)*temp
+   local(j) = local(j) + parts%mass%r(i)*temp
+enddo !k
+
+!$omp do
 do i = 1, ntotal
-   res%r(i) =  res%r(i)/parts%rho%r(i)
+   res%r(i) =  local(i)/parts%rho%r(i)
 enddo
+
+!$omp end parallel
+
+end function
+
+!-------------------------------------------
+          function div22(parts,f) result(res)
+!-------------------------------------------
+implicit none
+
+type(array) :: f
+class(particles) parts
+type(array),allocatable :: res
+real(dp) df(3)
+real(dp) :: temp
+real(dp),pointer,dimension(:,:) :: dwdx
+integer, pointer, dimension(:) :: pair_i, pair_j
+real(dp), allocatable, dimension(:) :: local
+integer i,j,k,ntotal,nthreads,niac,dim,d, it
+type(p2r) f_i(3),f_j(3)
+
+ntotal = parts%ntotal + parts%nvirt
+nthreads = parts%nthreads
+niac = parts%niac; dim = parts%dim
+dwdx =>parts%dwdx
+
+allocate(res);allocate(res%r(ntotal))
+res%ndim1 = ntotal; res = 0.d0
+
+allocate(local(ntotal))
+call parts%get_niac_start_end
+
+!$omp parallel
+!$omp do
+do i = 1, ntotal
+   local(i) = 0.d0
+enddo
+
+!$omp do private(k,i,j,f_i,f_j,d,df,temp) reduction(+:local)
+do it = 1, parts%nthreads
+do k = parts%niac_start(it),parts%niac_end(it)
+   i = parts%pair_i(k)
+   j = parts%pair_j(k)
+   f_i = f%cmpt(i); f_j = f%cmpt(j)
+   temp = 0.d0
+   do d=1,dim
+      df(d) = f_j(d)%p - f_i(d)%p
+      temp = temp + df(d)*dwdx(d,k)
+   enddo
+   local(i) = local(i) + parts%mass%r(j)*temp
+   local(j) = local(j) + parts%mass%r(i)*temp
+enddo !k
+enddo !it
+
+!$omp do
+do i = 1, ntotal
+   res%r(i) =  local(i)/parts%rho%r(i)
+enddo
+
+!$omp end parallel
 
 end function
 
