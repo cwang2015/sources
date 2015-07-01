@@ -302,6 +302,7 @@ integer :: skf = 4
        procedure :: df3_omp
        procedure :: df4
        procedure :: df4_omp
+       procedure :: div
        procedure :: velocity_divergence
 !       procedure :: time_integration_for_water
 !       procedure :: find_particle_nearest2_point
@@ -1904,6 +1905,46 @@ enddo
 !deallocate(df_local)
 end function
 
+!-------------------------------------------
+          function div(parts,f)
+!-------------------------------------------
+implicit none
+
+type(array) :: f
+class(particles) parts
+type(array),allocatable :: div
+double precision df(3)
+real(dp),pointer,dimension(:) :: hdiv
+real(dp),pointer,dimension(:,:) :: dwdx
+integer, pointer, dimension(:) :: pair_i, pair_j
+integer i,j,k,ntotal,nthreads,niac,dim,d
+type(p2r) f_i(3),f_j(3)
+
+ntotal = parts%ntotal + parts%nvirt
+nthreads = parts%nthreads
+niac = parts%niac; dim = parts%dim
+dwdx =>parts%dwdx
+
+allocate(div);allocate(div%r(ntotal))
+div%ndim1 = ntotal;div = 0.e0
+
+do k = 1,niac
+   i = pair_i(k)
+   j = pair_j(k)
+   f_i = f%cmpt(i); f_j = f%cmpt(j)
+   do d=1,dim
+       df(d) = f_j(d)%p - f_i(d)%p
+   enddo
+   hdiv = df(1)*dwdx(1,k)
+   do d = 2,dim
+     hdiv = hdiv + df(d)*dwdx(d,k)
+   enddo
+   div%r(i) = div%r(i) + parts%mass%r(j)*hdiv/parts%rho%r(j)
+   div%r(j) = div%r(j) + parts%mass%r(i)*hdiv/parts%rho%r(i)
+enddo
+
+end function
+          
 !-----------------------------------------------------------------------
       subroutine velocity_divergence(parts)
 !-----------------------------------------------------------------------
