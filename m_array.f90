@@ -50,7 +50,7 @@ interface operator(/)
 end interface
 
 interface operator(**)
-   module procedure :: array_index_real
+   module procedure :: array_pow_real
 end interface
 
 !=======
@@ -438,7 +438,7 @@ enddo
 end function
 
 !--------------------------------------------
-    function array_index_real(a,b) result(c)
+    function array_pow_real(a,b) result(c)
 !--------------------------------------------
 implicit none
 type(array), intent(in) :: a

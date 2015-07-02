@@ -2593,8 +2593,8 @@ end function
       if(parts%imaterial=='water')then
 
          water => parts%material
-         parts%p%r(1:ntotal) = water%b*((parts%rho%r(1:ntotal)/(water%rho0  &
-                            *parts%vof%r(1:ntotal))) &   !!! False density
+         parts%p = water%b*((parts%rho/(water%rho0  &
+                            *parts%vof)) &   !!! False density
                             **water%gamma-1)  
 
 ! Tension instability
@@ -2608,7 +2608,7 @@ end function
 !                              endif
 
          !parts%c(1:ntotal) = water%c         
-         parts%c%r(1:ntotal) = water%c*(parts%rho%r(1:ntotal)/(water%rho0*parts%vof%r(1:ntotal)))**3.0         
+         parts%c = water%c*(parts%rho/(water%rho0*parts%vof))**3.0         
 
       elseif(parts%imaterial=='soil')then
 
@@ -2617,7 +2617,7 @@ end function
 !         parts%p(1:ntotal) = soil%k*(parts%rho(1:ntotal)/soil%rho0-1)
 !!         parts%p(1:ntotal) = parts%p(1:ntotal)
 !!     &                      -soil%k*parts%vcc(1:ntotal)*0.000005   !*dt
-         parts%c%r(1:ntotal) = soil%c
+         parts%c = soil%c
 
       endif
 
