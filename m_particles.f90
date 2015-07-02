@@ -2593,9 +2593,8 @@ end function
       if(parts%imaterial=='water')then
 
          water => parts%material
-         parts%p = water%b*((parts%rho/(water%rho0  &
-                            *parts%vof)) &   !!! False density
-                            **water%gamma-1)  
+         parts%p = water%b*((parts%rho/(water%rho0*parts%vof))**water%gamma-1.d0) !!! False density  
+!         parts%p = ((parts%rho/parts%vof)**water%gamma-1.d0) !!! False density  
 
 ! Tension instability
 !                              if(water_tension_instability==1)then

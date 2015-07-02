@@ -33,6 +33,8 @@ end interface
 
 interface operator(-)
    module procedure :: array_sub_array
+   module procedure :: array_sub_real
+   module procedure :: array_sub_double_real
    module procedure :: array_minus
 end interface
 
@@ -51,6 +53,7 @@ end interface
 
 interface operator(**)
    module procedure :: array_pow_real
+   module procedure :: array_pow_double_real
 end interface
 
 !=======
@@ -245,6 +248,54 @@ c%ndim1 = ndim1
 !$omp parallel do
 do i = 1, ndim1
    c%r(i) = a%r(i) - b%r(i)
+enddo
+!$omp end parallel do
+
+end function
+
+!--------------------------------------------
+    function array_sub_real(a,b) result(c)
+!--------------------------------------------
+implicit none
+type(array), intent(in) :: a
+real, intent(in) :: b
+type(array), allocatable:: c
+integer ndim1,i
+
+!if(a%ndim1/=b%ndim1)stop 'Cannot substract arrays!'
+
+ndim1 = a%ndim1
+allocate(c)
+allocate(c%r(ndim1))
+c%ndim1 = ndim1
+
+!$omp parallel do
+do i = 1, ndim1
+   c%r(i) = a%r(i) - b
+enddo
+!$omp end parallel do
+
+end function
+
+!--------------------------------------------
+    function array_sub_double_real(a,b) result(c)
+!--------------------------------------------
+implicit none
+type(array), intent(in) :: a
+real(dp), intent(in) :: b
+type(array), allocatable:: c
+integer ndim1,i
+
+!if(a%ndim1/=b%ndim1)stop 'Cannot substract arrays!'
+
+ndim1 = a%ndim1
+allocate(c)
+allocate(c%r(ndim1))
+c%ndim1 = ndim1
+
+!$omp parallel do
+do i = 1, ndim1
+   c%r(i) = a%r(i) - b
 enddo
 !$omp end parallel do
 
@@ -458,5 +509,27 @@ enddo
 !$omp end parallel do
 
 end function
-    
+
+!--------------------------------------------
+    function array_pow_double_real(a,b) result(c)
+!--------------------------------------------
+implicit none
+type(array), intent(in) :: a
+real(dp), intent(in) :: b
+type(array), allocatable:: c
+integer ndim1,i
+
+ndim1 = a%ndim1
+allocate(c)
+allocate(c%r(ndim1))
+c%ndim1 = ndim1
+
+!$omp parallel do
+do i = 1, ndim1
+   c%r(i) = a%r(i)**b
+enddo
+!$omp end parallel do
+
+end function
+
 end module
