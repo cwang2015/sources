@@ -279,6 +279,7 @@ integer :: skf = 4
        procedure :: init_grid
        procedure :: grid_geom
        procedure :: link_list
+       procedure :: link_list2
        procedure :: find_pairs
        procedure :: kernel
        procedure :: initial_density
@@ -1304,6 +1305,383 @@ do it = 1, nthreads
 !      enddo   
 
       end subroutine
+
+!--------------------------------------------
+      subroutine link_list2(parts,part2)
+!--------------------------------------------
+      use ifport
+      implicit none
+      
+      class(particles) parts,part2
+      integer i, j, d, scale_k, ntotal, niac    
+      integer gcell(3),xcell,ycell,zcell,minxcell(3),maxxcell(3)
+      integer dnxgcell(3),dpxgcell(3)
+      real(dp) hsml,dr,r,dx(3),tdwdx(3)
+
+      INTEGER nthreads,n_per_threads, niac_per_threads, it
+      integer,allocatable,dimension(:) :: n_start, n_end
+      integer last
+      real(dp) t1,t2,t3
+      
+      ntotal  = parts%ntotal + parts%nvirt
+      scale_k = parts%get_scale_k()
+      hsml = parts%hsml(1)
+
+      do i = 1,ntotal
+         parts%countiac(i) = 0
+      enddo
+
+      call parts%init_grid
+      parts%grid = 0; parts%xgcell = 0; parts%celldata = 0
+      
+!     Position particles on grid and create linked list:
+      
+      do i=1,ntotal
+        call parts%grid_geom(i,parts%x(:,i),gcell)
+        do d=1,parts%dim
+          parts%xgcell(d,i) = gcell(d)
+        enddo
+        parts%celldata(i) = parts%grid(gcell(1),gcell(2),gcell(3))
+        parts%grid(gcell(1),gcell(2),gcell(3)) = i
+      enddo
+     
+      !call part2%init_grid
+      part2%ngridx = parts%ngridx; part2%ghsmlx = parts%ghsmlx
+      part2%grid = 0; part2%xgcell = 0; part2%celldata = 0
+
+      
+!     Position particles on grid and create linked list:
+      
+      do i=1,part2%ntotal+part2%nvirt
+        call part2%grid_geom(i,part2%x(:,i),gcell)
+        do d=1,part2%dim
+          part2%xgcell(d,i) = gcell(d)
+        enddo
+        part2%celldata(i) = part2%grid(gcell(1),gcell(2),gcell(3))
+        part2%grid(gcell(1),gcell(2),gcell(3)) = i
+      enddo
+
+      nthreads = parts%nthreads
+      allocate(n_start(nthreads),n_end(nthreads))
+
+      n_per_threads = ntotal/nthreads
+      niac_per_threads = parts%max_interaction/nthreads
+      do it = 1, nthreads
+         n_start(it)=(it-1)*n_per_threads+1
+         n_end(it) = it*n_per_threads
+         parts%niac_start(it)=(it-1)*niac_per_threads
+         parts%niac_end(it)=parts%niac_start(it)
+      enddo   
+      n_end(nthreads) = n_end(nthreads) + mod(ntotal,nthreads)
+
+      parts%pair_i = 0; parts%pair_j=0
+
+!      t1 = rtc()
+
+!!$omp parallel 
+!!$omp do private(niac,i,d,minxcell,maxxcell,dnxgcell,dpxgcell,xcell,ycell,zcell,j,dx,dr,r,tdwdx)
+!do it = 1, nthreads
+!       niac = parts%niac_start(it)
+!       do i = n_start(it),n_end(it)
+
+      niac = 0
+      do i=1,ntotal   !ntotal-1
+
+!     Determine range of grid to go through:
+         
+        do d=1,3
+          minxcell(d) = 1
+          maxxcell(d) = 1
+        enddo
+        do d=1,parts%dim
+          dnxgcell(d) = parts%xgcell(d,i) - parts%ghsmlx(d)
+          dpxgcell(d) = parts%xgcell(d,i) + parts%ghsmlx(d)
+          minxcell(d) = max(dnxgcell(d),1)
+          maxxcell(d) = min(dpxgcell(d),parts%ngridx(d))
+        enddo
+
+!     Search grid:
+      
+        do zcell=minxcell(3),maxxcell(3)
+          do ycell=minxcell(2),maxxcell(2)
+            do xcell=minxcell(1),maxxcell(1)
+              j = part2%grid(xcell,ycell,zcell)
+! 1            if (j.gt.i) then
+ 1            if (j/=0) then
+                !dx(1) = parts%x(1,i) - part2%x(1,j)
+                !dr    = dx(1)*dx(1)
+                dr = 0.d0
+                do d=1,parts%dim
+                  dx(d) = parts%x(d,i) - part2%x(d,j)
+                  dr    = dr + dx(d)*dx(d)
+                enddo
+                if (sqrt(dr).lt.scale_k*hsml) then
+                  if (niac.lt.parts%max_interaction) then
+                  !if (niac.lt.niac_per_threads) then
+
+!     Neighboring pair list, and totalinteraction number and
+!     the interaction number for each particle 
+
+                    niac = niac + 1
+                    parts%pair_i(niac) = i
+                    parts%pair_j(niac) = j
+                    r = sqrt(dr)
+                    !parts%countiac(i) = parts%countiac(i) + 1
+                    !parts%countiac(j) = parts%countiac(j) + 1
+                           
+!--- Kernel and derivations of kernel     
+
+                    call parts%kernel(r,dx,hsml,parts%w(niac),tdwdx)  !!!!!!!!
+                    do d = 1, parts%dim
+                       parts%dwdx(d,niac)=tdwdx(d)
+                    enddo                  
+                  else
+                    print *, ' >>> Error <<< : too many interactions', &
+                    it,niac,niac_per_threads
+                    stop
+                  endif
+                endif
+                j = part2%celldata(j)
+                goto 1
+              endif
+            enddo !xcell
+          enddo !ycell
+        enddo !zcell
+      enddo !i
+
+      parts%niac = niac
+
+      parts%niac_start(it) = parts%niac_start(it)+1
+      parts%niac_end(it) = niac
+!      enddo !it      
+!!$omp end do
+!!$omp end parallel
+return
+
+!      t2 = rtc()
+!      write(*,*) t2-t1
+      parts%niac = 0
+      do it = 1, nthreads
+         parts%niac = parts%niac + parts%niac_end(it)-parts%niac_start(it)+1
+      enddo
+
+      last = parts%max_interaction
+      do while(parts%pair_i(last)==0)
+         last = last - 1
+      enddo  
+      i = 1 
+      do while(i<last)
+         if(parts%pair_i(i)/=0)then
+            i = i + 1
+            cycle
+         endif        
+         parts%pair_i(i) = parts%pair_i(last)
+         parts%pair_j(i) = parts%pair_j(last)
+         parts%w(i)      = parts%w(last)
+         parts%dwdx(1,i) = parts%dwdx(1,last)
+         parts%dwdx(2,i) = parts%dwdx(2,last)
+         last = last - 1
+         do while(parts%pair_i(last)==0)
+            last = last - 1
+         enddo
+         i = i + 1
+      enddo
+
+! To check
+
+      if(last/=parts%niac) stop 'adfasdf'
+      do i = 1, last
+         if(parts%pair_i(i)==0) stop 'adf'
+      enddo   
+end subroutine
+
+!--------------------------------------------
+      subroutine link_list2_omp(parts,part2)
+!--------------------------------------------
+      use ifport
+      implicit none
+      
+      class(particles) parts,part2
+      integer i, j, d, scale_k, ntotal, niac    
+      integer gcell(3),xcell,ycell,zcell,minxcell(3),maxxcell(3)
+      integer dnxgcell(3),dpxgcell(3)
+      real(dp) hsml,dr,r,dx(3),tdwdx(3)
+
+      INTEGER nthreads,n_per_threads, niac_per_threads, it
+      integer,allocatable,dimension(:) :: n_start, n_end
+      integer last
+      real(dp) t1,t2,t3
+      
+      ntotal  = parts%ntotal + parts%nvirt
+      scale_k = parts%get_scale_k()
+      hsml = parts%hsml(1)
+
+      do i = 1,ntotal
+         parts%countiac(i) = 0
+      enddo
+
+      call parts%init_grid
+      parts%grid = 0; parts%xgcell = 0; parts%celldata = 0
+      
+!     Position particles on grid and create linked list:
+      
+      do i=1,ntotal
+        call parts%grid_geom(i,parts%x(:,i),gcell)
+        do d=1,parts%dim
+          parts%xgcell(d,i) = gcell(d)
+        enddo
+        parts%celldata(i) = parts%grid(gcell(1),gcell(2),gcell(3))
+        parts%grid(gcell(1),gcell(2),gcell(3)) = i
+      enddo
+     
+      !call part2%init_grid
+      part2%ngridx = parts%ngridx; part2%ghsmlx = parts%ghsmlx
+      part2%grid = 0; part2%xgcell = 0; part2%celldata = 0
+
+      
+!     Position particles on grid and create linked list:
+      
+      do i=1,part2%ntotal+part2%nvirt
+        call part2%grid_geom(i,part2%x(:,i),gcell)
+        do d=1,part2%dim
+          part2%xgcell(d,i) = gcell(d)
+        enddo
+        part2%celldata(i) = part2%grid(gcell(1),gcell(2),gcell(3))
+        part2%grid(gcell(1),gcell(2),gcell(3)) = i
+      enddo
+
+      nthreads = parts%nthreads
+      allocate(n_start(nthreads),n_end(nthreads))
+
+      n_per_threads = ntotal/nthreads
+      niac_per_threads = parts%max_interaction/nthreads
+      do it = 1, nthreads
+         n_start(it)=(it-1)*n_per_threads+1
+         n_end(it) = it*n_per_threads
+         parts%niac_start(it)=(it-1)*niac_per_threads
+         parts%niac_end(it)=parts%niac_start(it)
+      enddo   
+      n_end(nthreads) = n_end(nthreads) + mod(ntotal,nthreads)
+
+      parts%pair_i = 0; parts%pair_j=0
+
+!      t1 = rtc()
+
+!$omp parallel 
+!$omp do private(niac,i,d,minxcell,maxxcell,dnxgcell,dpxgcell,xcell,ycell,zcell,j,dx,dr,r,tdwdx)
+do it = 1, nthreads
+       niac = parts%niac_start(it)
+       do i = n_start(it),n_end(it)
+
+!      niac = 0
+!      do i=1,ntotal   !ntotal-1
+
+!     Determine range of grid to go through:
+         
+        do d=1,3
+          minxcell(d) = 1
+          maxxcell(d) = 1
+        enddo
+        do d=1,parts%dim
+          dnxgcell(d) = parts%xgcell(d,i) - parts%ghsmlx(d)
+          dpxgcell(d) = parts%xgcell(d,i) + parts%ghsmlx(d)
+          minxcell(d) = max(dnxgcell(d),1)
+          maxxcell(d) = min(dpxgcell(d),parts%ngridx(d))
+        enddo
+
+!     Search grid:
+      
+        do zcell=minxcell(3),maxxcell(3)
+          do ycell=minxcell(2),maxxcell(2)
+            do xcell=minxcell(1),maxxcell(1)
+              j = part2%grid(xcell,ycell,zcell)
+! 1            if (j.gt.i) then
+ 1            if (j/=0) then
+                !dx(1) = parts%x(1,i) - part2%x(1,j)
+                !dr    = dx(1)*dx(1)
+                dr = 0.d0
+                do d=1,parts%dim
+                  dx(d) = parts%x(d,i) - part2%x(d,j)
+                  dr    = dr + dx(d)*dx(d)
+                enddo
+                if (sqrt(dr).lt.scale_k*hsml) then
+                  if (niac.lt.parts%max_interaction) then
+                  !if (niac.lt.niac_per_threads) then
+
+!     Neighboring pair list, and totalinteraction number and
+!     the interaction number for each particle 
+
+                    niac = niac + 1
+                    parts%pair_i(niac) = i
+                    parts%pair_j(niac) = j
+                    r = sqrt(dr)
+                    !parts%countiac(i) = parts%countiac(i) + 1
+                    !parts%countiac(j) = parts%countiac(j) + 1
+                           
+!--- Kernel and derivations of kernel     
+
+                    call parts%kernel(r,dx,hsml,parts%w(niac),tdwdx)  !!!!!!!!
+                    do d = 1, parts%dim
+                       parts%dwdx(d,niac)=tdwdx(d)
+                    enddo                  
+                  else
+                    print *, ' >>> Error <<< : too many interactions', &
+                    it,niac,niac_per_threads
+                    stop
+                  endif
+                endif
+                j = part2%celldata(j)
+                goto 1
+              endif
+            enddo !xcell
+          enddo !ycell
+        enddo !zcell
+      enddo !i
+
+!      parts%niac = niac
+
+      parts%niac_start(it) = parts%niac_start(it)+1
+      parts%niac_end(it) = niac
+      enddo !it      
+!$omp end do
+!$omp end parallel
+
+!      t2 = rtc()
+!      write(*,*) t2-t1
+      parts%niac = 0
+      do it = 1, nthreads
+         parts%niac = parts%niac + parts%niac_end(it)-parts%niac_start(it)+1
+      enddo
+
+      last = parts%max_interaction
+      do while(parts%pair_i(last)==0)
+         last = last - 1
+      enddo  
+      i = 1 
+      do while(i<last)
+         if(parts%pair_i(i)/=0)then
+            i = i + 1
+            cycle
+         endif        
+         parts%pair_i(i) = parts%pair_i(last)
+         parts%pair_j(i) = parts%pair_j(last)
+         parts%w(i)      = parts%w(last)
+         parts%dwdx(1,i) = parts%dwdx(1,last)
+         parts%dwdx(2,i) = parts%dwdx(2,last)
+         last = last - 1
+         do while(parts%pair_i(last)==0)
+            last = last - 1
+         enddo
+         i = i + 1
+      enddo
+
+! To check
+
+      if(last/=parts%niac) stop 'adfasdf'
+      do i = 1, last
+         if(parts%pair_i(i)==0) stop 'adf'
+      enddo   
+end subroutine
 
 !--------------------------------------------
      subroutine find_pairs(parts)

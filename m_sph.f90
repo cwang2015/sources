@@ -547,8 +547,11 @@ soil%dwdx   => parts%dwdx
 soil%pair_i => parts%pair_i
 soil%pair_j => parts%pair_j
 allocate(soil%countiac(maxn));    soil%countiac=0
-soil%grid   => parts%grid; soil%xgcell => parts%xgcell
-soil%celldata => parts%celldata
+!soil%grid   => parts%grid; soil%xgcell => parts%xgcell
+!soil%celldata => parts%celldata
+allocate(soil%grid(soil%maxngx,soil%maxngy,soil%maxngz)); soil%grid = 0
+allocate(soil%xgcell(dim,maxn)); soil%xgcell = 0
+allocate(soil%celldata(maxn)); soil%celldata = 0
 
 ! Fields variables
 call allocate_particles_fields(soil)
@@ -1586,7 +1589,8 @@ endif
 !     and optimzing smoothing length
   
       !if (numeric%nnps.eq.1) then 
-         call direct_find_2(parts,soil)
+!         call direct_find_2(parts,soil)
+          call link_list2_omp(parts,soil)
         !call direct_find(parts)
       !else if (numeric%nnps.eq.2) then
 !        call link_list(itimestep, ntotal+nvirt,hsml(1),x,niac,pair_i,
