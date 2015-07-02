@@ -295,6 +295,7 @@ integer :: skf = 4
        procedure :: delta_sph_omp
        procedure :: av_vel
        procedure :: repulsive_force
+       procedure :: repulsive_force_omp
        procedure :: df
        procedure :: df_omp
        procedure :: df_omp2
@@ -1884,8 +1885,72 @@ do k=1,parts%niac
 enddo   
        
 return
+      end subroutine
+
+!--------------------------------------------------------------------------
+      subroutine repulsive_force_omp(parts)
+!--------------------------------------------------------------------------
+implicit none
+
+class(particles) parts
+double precision dx(3), rr, f, rr0, dd, p1, p2     
+real(dp),allocatable,dimension(:) :: local_x,local_y
+integer i, j, k, d, ii,ntotal
+           
+rr0 = parts%dspp; dd = parts%numeric%dd
+p1 = parts%numeric%p1; p2 = parts%numeric%p2
+ntotal = parts%ntotal+parts%nvirt
+allocate(local_x(ntotal))
+allocate(local_y(ntotal))
+
+do i = 1,ntotal
+    local_x(i) = 0.d0
+    local_y(i) = 0.d0
+enddo
+      
+!$omp parallel
+!$omp do private(i,j,rr,d,dx,f,ii) reduction(+:local_x,local_y)
+do k=1,parts%niac
+   i = parts%pair_i(k)
+   j = parts%pair_j(k)
+   if(parts%itype(i)*parts%itype(j)>0)cycle  
+!   if(parts%itype(i).gt.0.and.parts%itype(j).lt.0)then  
+      rr = 0.      
+      do d=1,parts%dim
+         dx(d) =  parts%x(d,i) -  parts%x(d,j)
+         rr = rr + dx(d)*dx(d)
+      enddo  
+      rr = sqrt(rr)
+      !if(rr.lt.rr0)then
+      if(rr.gt.rr0)cycle
+         f = ((rr0/rr)**p1-(rr0/rr)**p2)/rr**2
+         
+         ii = i
+         if(parts%itype(i)<0)ii=j 
+
+         !do d = 1, parts%dim
+         !   parts%dvx(d, ii) = parts%dvx(d, ii) + dd*dx(d)*f
+         !enddo
+
+!         parts%dvx%x%r(ii) = parts%dvx%x%r(ii) + dd * dx(1)*f
+!         parts%dvx%y%r(ii) = parts%dvx%y%r(ii) + dd * dx(2)*f
+          local_x(ii) = local_x(ii) + dd * dx(1)*f
+          local_y(ii) = local_y(ii) + dd * dx(2)*f
+      !endif
+   !endif        
+enddo   
+!$omp end do
+!$omp do
+do i = 1,ntotal
+    parts%dvx%x%r(i) = parts%dvx%x%r(i) + local_x(i)
+    parts%dvx%y%r(i) = parts%dvx%y%r(i) + local_y(i)
+enddo
+!$omp end do
+!$omp end parallel
+return
 end subroutine
 
+      
 ! Calculate partial derivatives of a field
 !--------------------------------------------
           function df(parts,f,x) result(res)
@@ -2879,6 +2944,101 @@ end subroutine
       return
       end subroutine
 
+! Subroutine to calculate the artificial viscosity (Monaghan, 1992) 
+!----------------------------------------------------------------------      
+      subroutine art_visc_omp(parts)
+!----------------------------------------------------------------------
+      implicit none
+
+      class(particles) parts
+
+      type(numerical), pointer :: numeric
+      real(dp) dx, dvx(3), alpha, beta, etq, piv, muv, vr, rr, h, mc, mrho, mhsml
+      real(dp), allocatable, dimension(:) :: local_x,local_y
+      type(p2r) vx_i(3), vx_j(3)
+      integer i,j,k,d,dim,ntotal,niac
+
+      ntotal   =  parts%ntotal + parts%nvirt
+      niac     =  parts%niac; dim = parts%dim
+            
+      allocate(local_x(ntotal))
+      allocate(local_y(ntotal))
+      
+      do i=1,ntotal
+          local_x(i) = 0
+          local_y(i) = 0
+      enddo
+      
+      numeric  => parts%numeric      
+      alpha = numeric%alpha; beta = numeric%beta; etq = numeric%etq
+         
+!     Calculate SPH sum for artificial viscosity
+!$omp parallel 
+!$omp do private(i,j,mhsml,vr,rr,vx_i,vx_j,d,dvx,dx,muv,mc,mrho,piv,h) reduction(+:local_x,local_y)
+      do k=1,niac
+        i = parts%pair_i(k)
+        j = parts%pair_j(k)
+        mhsml= (parts%hsml(i)+parts%hsml(j))/2.
+        vr = 0.e0
+        rr = 0.e0
+        vx_i = parts%vx%cmpt(i); vx_j = parts%vx%cmpt(j)
+        do d=1,dim
+          !dvx(d) = parts%vx(d,i) - parts%vx(d,j)
+          dvx(d) = vx_i(d)%p - vx_j(d)%p
+          dx     = parts%x(d,i)  - parts%x(d,j)
+          vr     = vr + dvx(d)*dx
+          rr     = rr + dx*dx
+        enddo
+
+!     Artificial viscous force only if v_ij * r_ij < 0
+
+        if (vr.lt.0.e0) then
+
+!     Calculate muv_ij = hsml v_ij * r_ij / ( r_ij^2 + hsml^2 etq^2 )
+            
+          muv = mhsml*vr/(rr + mhsml*mhsml*etq*etq)
+          
+!     Calculate PIv_ij = (-alpha muv_ij c_ij + beta muv_ij^2) / rho_ij
+
+          mc   = 0.5e0*(parts%c%r(i) + parts%c%r(j))
+          mrho = 0.5e0*(parts%rho%r(i) + parts%rho%r(j))
+          piv  = (beta*muv - alpha*mc)*muv/mrho              
+
+!     Calculate SPH sum for artificial viscous force
+
+          !do d=1,dim
+          !  h = -piv*parts%dwdx(d,k)
+          !  parts%dvx(d,i) = parts%dvx(d,i) + parts%mass(j)*h
+          !  parts%dvx(d,j) = parts%dvx(d,j) - parts%mass(i)*h
+          !enddo
+
+            h = -piv*parts%dwdx(1,k)
+!            parts%dvx%x%r(i) = parts%dvx%x%r(i) + parts%mass%r(j)*h
+!            parts%dvx%x%r(j) = parts%dvx%x%r(j) - parts%mass%r(i)*h
+             local_x(i) = local_x(i) + parts%mass%r(j)*h
+             local_x(j) = local_x(j) - parts%mass%r(i)*h
+            if(dim.ge.2)then
+            h = -piv*parts%dwdx(2,k)
+!            parts%dvx%y%r(i) = parts%dvx%y%r(i) + parts%mass%r(j)*h
+!            parts%dvx%y%r(j) = parts%dvx%y%r(j) - parts%mass%r(i)*h
+             local_y(i) = local_y(i) + parts%mass%r(j)*h
+             local_y(j) = local_y(j) - parts%mass%r(i)*h
+            endif
+            
+
+        endif
+      enddo
+!$omp end do
+!$omp do
+do i = 1, ntotal
+    parts%dvx%x%r(i) = parts%dvx%x%r(i) +local_x(i)
+     if (dim.ge.2) parts%dvx%y%r(i) = parts%dvx%y%r(i) +local_y(i)
+enddo
+!$omp end do
+!$omp end parallel
+         
+      return
+      end subroutine
 !-------------------------------------------------------------------
       subroutine delta_sph(parts,f,df)
 !-------------------------------------------------------------------
@@ -3029,6 +3189,67 @@ end subroutine
       return
       end subroutine
 
+!----------------------------------------------------------------------      
+      subroutine av_vel_omp(parts)
+!----------------------------------------------------------------------   
+      implicit none
+
+      class(particles),target :: parts
+      real(dp) vcc, dvx(3), epsilon, mrho
+      type(p2r) vx_i(3), vx_j(3), av_i(3), av_j(3)
+      real(dp),allocatable,dimension(:,:) :: local
+      integer i,j,k,d,ntotal,niac    
+
+      ntotal = parts%ntotal
+      niac   = parts%niac
+      epsilon = parts%numeric%epsilon
+      
+      allocate(local(parts%dim,parts%ntotal+parts%nvirt))
+      
+      do i = 1, ntotal
+          do d= 1, parts%dim
+              local(d,i)=0.d0
+          enddo
+      enddo
+      
+      parts%av%x = 0.d0; parts%av%y = 0.d0
+!$omp parallel
+!$omp do private(i,j,mrho,vx_i,vx_j,av_i,av_j,d,dvx) reduction(+:local)
+      do k=1,niac       
+         i = parts%pair_i(k)
+         j = parts%pair_j(k)       
+         mrho = (parts%rho%r(i)+parts%rho%r(j))/2.0
+        vx_i = parts%vx%cmpt(i); vx_j = parts%vx%cmpt(j)
+!        av_i = parts%av%cmpt(i); av_j = parts%av%cmpt(j)
+         do d=1,parts%dim
+            !dvx(d) = parts%vx(d,i) - parts%vx(d,j)            
+            dvx(d) = vx_i(d)%p - vx_j(d)%p        
+            local(d,i) = local(d,i) - parts%mass%r(j)*dvx(d)/mrho*parts%w(k)
+            local(d,j) = local(d,j) + parts%mass%r(i)*dvx(d)/mrho*parts%w(k)
+!            av_i(d)%p = av_i(d)%p - parts%mass%r(j)*dvx(d)/mrho*parts%w(k)
+!            av_j(d)%p = av_j(d)%p + parts%mass%r(i)*dvx(d)/mrho*parts%w(k)       
+         enddo                    
+      enddo  
+!$omp end do
+!$omp do 
+do i = 1, ntotal
+       parts%av%x%r(i) = parts%av%x%r(i) + local(1,i)
+       parts%av%y%r(i) = parts%av%y%r(i) + local(2,i)
+enddo
+!$omp end do
+!$omp end parallel
+!      do i = 1, ntotal
+!         do d = 1, parts%dim
+!            av_i(d)%p = epsilon * av_i(d)%p
+!         enddo 
+!      enddo
+
+      parts%av%x = epsilon * parts%av%x; parts%av%y = epsilon * parts%av%y
+
+      return
+      end subroutine
+
+      
 !----------------------------------------------------------------------
       subroutine shear_strain_rate(parts)
 !----------------------------------------------------------------------
@@ -3227,6 +3448,7 @@ end subroutine
    
       k = 0
       soil%fail = 0
+!$omp parallel do private(I1,J2,skale) reduction(+:k)
       do i = 1, ntotal
          !tmax  = sqrt(((sxx(i)-syy(i))/2)**2+sxy(i)**2)
          !if(tmax<1.e-6)cycle
@@ -3263,6 +3485,7 @@ end subroutine
         endif
 
       enddo
+!$omp end parallel do
       soil%nfail = k
 
       return
@@ -3288,6 +3511,8 @@ end subroutine
    
       k = 0
       soil%fail = 0
+      
+!$omp parallel do private(I1,J2) reduction(+:k)
       do i = 1, ntotal
          !tmax  = sqrt(((sxx(i)-syy(i))/2)**2+sxy(i)**2)
          !if(tmax<1.e-6)cycle
@@ -3324,6 +3549,7 @@ end subroutine
         endif
 
       enddo
+!$omp end parallel do
       soil%nfail = k
 
       return
@@ -3358,7 +3584,7 @@ end subroutine
       k   = property%k; e = property%E; niu = property%niu
       alpha = tan(phi)/sqrt(9.+12.*tan(phi)**2.)
       G = e/(2.0*(1+niu))
-      
+!$omp parallel do private(exx,exy,eyy,sde,J2,dlambda)
       do i = 1, ntotal
                             !if(parts%fail(i)==1)then
 
@@ -3390,7 +3616,7 @@ end subroutine
 
                             !endif ! Fail
       enddo
-      
+!$omp end parallel do
       return
       end subroutine
 
@@ -3423,7 +3649,7 @@ end subroutine
       k   = property%k; e = property%E; niu = property%niu
       alpha = tan(phi)/sqrt(9.+12.*tan(phi)**2.)
       G = e/(2.0*(1+niu))
-      
+!$omp parallel do private(exx,exy,eyy,J2,dlambda)
       do i = 1, ntotal
                             !if(parts%fail(i)==1)then
 
@@ -3454,6 +3680,7 @@ end subroutine
 
                             !endif ! Fail
       enddo
+!$omp end parallel do
       
       return
       end subroutine
@@ -3487,7 +3714,7 @@ end subroutine
       k   = property%k; e = property%E; niu = property%niu
       alpha = tan(phi)/sqrt(9.+12.*tan(phi)**2.)
       G = e/(2.0*(1+niu))
-      
+!$omp parallel do private(exx,exy,eyy,sde,J2,dlambda)
       do i = 1, ntotal
                             if(parts%fail(i)==1)then
 
@@ -3519,6 +3746,7 @@ end subroutine
 
                             endif ! Fail
       enddo
+!$omp end parallel do
       
       return
       end subroutine

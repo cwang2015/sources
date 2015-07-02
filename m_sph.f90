@@ -1557,7 +1557,7 @@ if(trim(pl%imaterial)=='water'.and.water_artificial_volume)  &
 !      if (ex_force)then
 !          if(self_gravity) call gravity_force(pl)
 !          call repulsive_force(pl)
-          call pl%repulsive_force
+          call pl%repulsive_force_omp
 !      endif
 
 pl%dvx%y = pl%dvx%y + gravity
@@ -1568,7 +1568,7 @@ pl%dvx%y = pl%dvx%y + gravity
 
 !     Calculating average velocity of each partile for avoiding penetration
 
-if (average_velocity) call av_vel(pl) 
+if (average_velocity) call av_vel_omp(pl) 
 
 !---  Convert velocity, force, and energy to f and dfdt  
       
