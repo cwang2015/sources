@@ -3729,6 +3729,73 @@ end subroutine
       return
       end subroutine       
 
+!-----------------------------------------------------
+      subroutine pore_water_pressure_omp(water,soil)
+!-----------------------------------------------------
+!      use param
+!      use m_particles
+      implicit none
+      real(dp), allocatable, dimension(:) :: local_x,local_y
+      type(particles) water, soil
+      double precision mprr
+      
+      integer i, j, k, d, ntotal
+      
+      allocate(local_x(soil%ntotal+soil%nvirt))
+      allocate(local_y(soil%ntotal+soil%nvirt))
+
+      do j = 1,soil%ntotal+soil%nvirt
+         local_x(j) = soil%dvx%x%r(j)
+         local_y(j) = soil%dvx%y%r(j)
+      enddo
+
+!$omp parallel
+!$omp do private(i,j,mprr) reduction(+:local_x,local_y)
+
+do k = 1, water%niac
+         i = water%pair_i(k)   ! water
+         j = water%pair_j(k)   ! soil
+         mprr = water%mass%r(i)*water%p%r(i)/(water%rho%r(i)*soil%rho%r(j))
+!         mprr = water%mass(i)*(water%p(i)+soil%p(j))/       &      Bui2014
+!                (water%rho(i)*soil%rho(j))
+!         do d = 1, water%dim
+!            soil%dvx(d,j) = soil%dvx(d,j) + mprr*water%dwdx(d,k)  &  !+
+!                            *soil%vof%r(j)  
+!         enddo
+
+!            soil%dvx%x%r(j) = soil%dvx%x%r(j) + mprr*water%dwdx(1,k)  &  !+
+!                            *soil%vof%r(j)  
+!            soil%dvx%y%r(j) = soil%dvx%y%r(j) + mprr*water%dwdx(2,k)  &  !+
+!                            *soil%vof%r(j)  
+
+             local_x(j) = local_x(j) + mprr*water%dwdx(1,k)  &  !+
+                           *soil%vof%r(j)  
+             local_y(j) = local_y(j) + mprr*water%dwdx(2,k)  &  !+
+                           *soil%vof%r(j)  
+
+! saturated soil
+         !if(water%volume_fraction)then
+         !do d = 1, dim
+            !water%dvx(d,i) = water%dvx(d,i) -                     & ! Must be -
+            !soil%mass(j)*water%p(i)*soil%vof(j)*water%dwdx(d,k)/  &
+            !(water%rho(i)*soil%rho(j))
+         !enddo
+         !endif
+      enddo
+
+!$omp end do
+!$omp barrier
+
+!$omp do 
+do j = 1,soil%ntotal+soil%nvirt
+      soil%dvx%x%r(j) =local_x(j)
+      soil%dvx%y%r(j) =local_y(j)
+enddo   
+!$omp end do
+!$omp end parallel
+      return
+      end subroutine 
+      
 !-------------------------------------------------------------
       subroutine volume_fraction_water(water, soil)
 !-------------------------------------------------------------
@@ -3757,6 +3824,48 @@ end subroutine
       return
       end subroutine 
 
+!-------------------------------------------------------------
+      subroutine volume_fraction_water_omp(water, soil)
+!-------------------------------------------------------------
+!      use param
+!      use m_particles
+      implicit none
+
+      type(particles) water, soil
+      integer i,j,k,d, ntotal
+      real(dp), allocatable, dimension(:) :: local
+      type(material), pointer :: sio2
+
+      sio2 => soil%material
+      ntotal = water%ntotal+water%nvirt
+      
+      allocate(local(water%ntotal+water%nvirt))
+      
+      do i = 1,water%ntotal+water%nvirt
+      local(i) = 0.d0
+      enddo
+      
+      water%vof2 = 0.d0
+!$omp parallel
+!$omp do private(i,j) reduction(+:local)
+      do k = 1, water%niac
+         i = water%pair_i(k)
+         j = water%pair_j(k)
+!         water%vof2%r(i) = water%vof2%r(i)+soil%mass%r(j)*water%w(k)
+         local(i) = local(i)+soil%mass%r(j)*water%w(k)
+      enddo
+!$omp end do
+!$omp do
+      do i = 1, water%ntotal+water%nvirt
+!         water%vof2%r(k) = 1.d0 - water%vof2%r(k)/sio2%rho0
+          water%vof2%r(i) = 1.d0 - (water%vof2%r(i)+local(i))/sio2%rho0
+      enddo
+!$omp end do
+!$omp end parallel
+      return
+      end subroutine 
+
+      
 !-------------------------------------------------------------
       subroutine volume_fraction_water2(water, soil)
 !-------------------------------------------------------------
@@ -3790,6 +3899,54 @@ end subroutine
       return
       end subroutine 
 
+!-------------------------------------------------------------
+      subroutine volume_fraction_water2_omp(water, soil)
+!-------------------------------------------------------------
+!      use param
+!      use m_particles
+      implicit none
+
+      type(particles) water, soil
+      integer i,j,k,d, ntotal
+      type(material), pointer :: sio2
+      real(dp), allocatable, dimension(:) :: local
+      double precision dvx(3),tmp
+      type(p2r) vx_i(3), vx_j(3)
+
+      sio2 => soil%material
+      ntotal = water%ntotal+water%nvirt
+      allocate(local(water%ntotal+water%nvirt))
+      
+      do i = 1,water%ntotal+water%nvirt
+      local(i) = 0.d0
+      enddo
+      
+!      water%dvof = 0.d0
+!$omp parallel
+!$omp do private(i,j,vx_i,vx_j,d,dvx,tmp) reduction(+:local)
+      do k = 1, water%niac
+         i = water%pair_i(k)
+         j = water%pair_j(k)
+         vx_i = water%vx%cmpt(i); vx_j = soil%vx%cmpt(j)
+         do d = 1, water%dim
+            !dvx(d) = water%vx(d,i)-soil%vx(d,j)
+            dvx(d) = vx_i(d)%p - vx_j(d)%p
+         enddo 
+         tmp = dvx(1)*water%dwdx(1,k)+dvx(2)*water%dwdx(2,k)
+!         water%dvof%r(i) = water%dvof%r(i)-soil%mass%r(j)*tmp/sio2%rho0
+         local(i) = local(i)-soil%mass%r(j)*tmp/sio2%rho0
+      enddo
+!$omp end do 
+!$omp do 
+do i = 1,water%ntotal+water%nvirt
+    water%dvof%r(i) = water%dvof%r(i) + local(i)
+enddo
+!$omp end do
+!$omp end parallel
+
+      return
+      end subroutine 
+
 !--------------------------------------------------------------------
       subroutine volume_fraction_soil(parts)
 !--------------------------------------------------------------------
@@ -3810,7 +3967,29 @@ end subroutine
 
       return
       end subroutine
+      
+!--------------------------------------------------------------------
+      subroutine volume_fraction_soil_omp(parts)
+!--------------------------------------------------------------------
+!      use param
+!      use m_particles
+      implicit none
 
+      type(particles) parts
+      integer i,j,k, ntotal
+      type(material), pointer :: sio2
+
+      sio2 => parts%material
+      ntotal = parts%ntotal + parts%nvirt
+      
+!$omp parallel do
+      do i = 1, ntotal
+         parts%vof%r(i) = parts%rho%r(i)/sio2%rho0
+      enddo
+!$omp end parallel do 
+
+      return
+      end subroutine
 !--------------------------------------------------------------------------
       subroutine drag_force(water,soil)
 !--------------------------------------------------------------------------

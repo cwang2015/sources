@@ -1605,12 +1605,12 @@ endif
       endif    
 
       call darcy_law_omp(parts,soil)          
-      call pore_water_pressure(parts,soil) 
+      call pore_water_pressure_omp(parts,soil) 
 
       if(volume_fraction)then
-         call volume_fraction_soil(soil)
-         call volume_fraction_water2(parts,soil)
-         call volume_fraction_water(parts,soil)  ! phi_f = 1- phi_s
+         call volume_fraction_soil_omp(soil)
+         call volume_fraction_water2_omp(parts,soil)
+         call volume_fraction_water_omp(parts,soil)  ! phi_f = 1- phi_s
          if(volume_fraction_renorm)then
             if(mod(itimestep,40).eq.0) then
                ntotal = parts%ntotal+parts%nvirt
