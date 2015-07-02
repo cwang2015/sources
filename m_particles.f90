@@ -102,7 +102,7 @@ real(dp) mingridx(3),maxgridx(3),dgeomx(3)
 
 !maxn: Maximum number of particles
 !max_interation : Maximum number of interaction pairs
-integer :: maxn = 20000, max_interaction = 10 * 20000
+integer :: maxn = 20000, max_interaction = 20 * 20000
   
 !SPH algorithm
 
@@ -3582,6 +3582,112 @@ end subroutine
 
       return
       end subroutine 
+
+!---------------------------------------------------------------
+      subroutine darcy_law_omp(water, soil)
+!---------------------------------------------------------------
+!      use param, only: volume_fraction
+!      use m_particles
+      implicit none
+
+      type(particles) water, soil
+      real(dp), allocatable, dimension(:,:) :: local_water,local_soil
+      double precision dx(3), ks, ns, gw, cf, sp, rrw
+      type(p2r) vx_i(3), vx_j(3), dvx_i(3), dvx_j(3)
+      type(material), pointer :: h2o,sio2  
+      type(numerical), pointer :: numeric
+      double precision gravity   
+      integer i, j, k, d, dim, nthreads
+
+      nthreads = water%nthreads
+
+      h2o => water%material
+      sio2=>  soil%material
+      numeric => water%numeric
+      gravity = numeric%gravity
+      dim = water%dim
+
+      gw = h2o%rho0*(-gravity); ns = sio2%porosity
+      ks = sio2%permeability
+      cf = gw*ns/ks
+      !cf = 6.e6
+
+      allocate(local_water(dim,water%ntotal+water%nvirt))
+      allocate(local_soil(dim,soil%ntotal+soil%nvirt))
+      do i = 1, water%ntotal+water%nvirt
+          do d = 1,dim
+            local_water(d,i) = 0.d0
+          enddo
+      enddo
+      
+      do j = 1, soil%ntotal+soil%nvirt
+          do d = 1,dim
+            local_soil(d,j) = 0.d0
+          enddo
+      enddo
+      
+!$omp parallel
+!$omp do private(i,j,rrw,cf,vx_i,vx_j,d,sp) reduction(+:local_water) reduction(+:local_soil)
+
+      do  k=1,water%niac
+          i = water%pair_i(k)
+          j = water%pair_j(k)  
+          rrw = water%w(k)/(water%rho%r(i)*soil%rho%r(j))
+
+! For staturated soil
+!        if(volume_fraction) cf = water%vof(i)*water%rho(i)*(-gravity)/ks
+!        if(water%volume_fraction) cf = water%vof(i)*soil%vof(j)*water%rho(i)*(-gravity)/ks
+        cf = water%vof%r(i)*soil%vof%r(j)*water%rho%r(i)*(-gravity)/ks
+
+          vx_i = water%vx%cmpt(i); vx_j = soil%vx%cmpt(j)
+!          dvx_i = water%dvx%cmpt(i); dvx_j = soil%dvx%cmpt(j)
+          do d=1,dim
+             !sp = cf*(water%vx(d,i)-soil%vx(d,j))*rrw
+             !water%dvx(d,i) = water%dvx(d,i) - soil%mass(j)*sp
+             !soil%dvx(d,j)  = soil%dvx(d,j) + water%mass(i)*sp   
+             sp = cf*(vx_i(d)%p-vx_j(d)%p)*rrw
+!             dvx_i(d)%p = dvx_i(d)%p - soil%mass%r(j)*sp
+!             dvx_j(d)%p = dvx_j(d)%p + water%mass%r(i)*sp 
+              local_water(d,i) = local_water(d,i) - soil%mass%r(j)*sp
+              local_soil(d,j) = local_soil(d,j) + water%mass%r(i)*sp
+          enddo
+
+          !sp = cf*(water%vx%x%r(i)-soil%vx%x%r(j))*rrw
+          !water%dvx%x%r(i) = water%dvx%x%r(i) - soil%mass(j)*sp
+          !soil%dvx%x%r(j)  =  soil%dvx%x%r(j) + water%mass(i)*sp   
+          !sp = cf*(water%vx%y%r(i)-soil%vx%y%r(j))*rrw
+          !water%dvx%y%r(i) = water%dvx%y%r(i) - soil%mass(j)*sp
+          !soil%dvx%y%r(j)  =  soil%dvx%y%r(j) + water%mass(i)*sp   
+
+      enddo
+!$omp end do
+!$omp barrier
+
+!$omp do
+do i = 1,water%ntotal+water%nvirt
+!   dvx_i = water%dvx%cmpt(i)
+!      do d=1,dim
+!      dvx_i(d)%p = local_water(d,i)+dvx_i(d)%p
+!      enddo
+   water%dvx%x%r(i) = water%dvx%x%r(i) + local_water(1,i)
+   water%dvx%y%r(i) = water%dvx%y%r(i) + local_water(2,i)
+enddo
+!$omp end do
+!$omp do
+do j = 1,soil%ntotal+soil%nvirt
+!   dvx_j = soil%dvx%cmpt(j)
+!      do d=1,dim
+!      dvx_j(d)%p = local_soil(d,j)+dvx_j(d)%p
+!      enddo
+   soil%dvx%x%r(j) = soil%dvx%x%r(j) + local_soil(1,j)
+   soil%dvx%y%r(j) = soil%dvx%y%r(j) + local_soil(2,j)      
+enddo
+!$omp end do
+!$omp end parallel
+      
+      return
+end subroutine 
+
 
 !-----------------------------------------------------
       subroutine pore_water_pressure(water,soil)

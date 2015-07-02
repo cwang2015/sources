@@ -1604,7 +1604,7 @@ endif
          call parts%interaction_statistics
       endif    
 
-      call darcy_law(parts,soil)          
+      call darcy_law_omp(parts,soil)          
       call pore_water_pressure(parts,soil) 
 
       if(volume_fraction)then
