@@ -1436,7 +1436,7 @@ endif
 !if(mod(itimestep,30)==0) call sum_density(pl)
 !else             
     !call con_density(pl)         
-    pl%drho = -pl.rho*pl.div22(pl.vx)
+    pl%drho = -pl.rho*pl.div2(pl.vx)
 !endif
       
 if(artificial_density)then
