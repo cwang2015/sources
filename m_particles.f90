@@ -102,7 +102,7 @@ real(dp) mingridx(3),maxgridx(3),dgeomx(3)
 
 !maxn: Maximum number of particles
 !max_interation : Maximum number of interaction pairs
-integer :: maxn = 120000, max_interaction = 20 * 120000
+integer :: maxn = 150000, max_interaction = 20 * 150000
   
 !SPH algorithm
 
@@ -1894,23 +1894,29 @@ implicit none
 
 class(particles) parts
 double precision dx(3), rr, f, rr0, dd, p1, p2     
-real(dp),allocatable,dimension(:) :: local_x,local_y
-integer i, j, k, d, ii,ntotal
+real(dp),allocatable,dimension(:,:) :: local_x,local_y
+integer i, j, k, d, ii,ntotal,nthreads,it
            
 rr0 = parts%dspp; dd = parts%numeric%dd
 p1 = parts%numeric%p1; p2 = parts%numeric%p2
 ntotal = parts%ntotal+parts%nvirt
-allocate(local_x(ntotal))
-allocate(local_y(ntotal))
+nthreads = parts%nthreads
+
+allocate(local_x(nthreads,ntotal))
+allocate(local_y(nthreads,ntotal))
 
 do i = 1,ntotal
-    local_x(i) = 0.d0
-    local_y(i) = 0.d0
+    do it = 1, nthreads
+     local_x(it,i) = 0.d0
+     local_y(it,i) = 0.d0
+    enddo
 enddo
-      
+call parts%get_niac_start_end
+
 !$omp parallel
-!$omp do private(i,j,rr,d,dx,f,ii) reduction(+:local_x,local_y)
-do k=1,parts%niac
+!$omp do private(i,j,rr,d,dx,f,ii,k) 
+do it = 1,nthreads
+ do k=parts%niac_start(it),parts%niac_end(it)
    i = parts%pair_i(k)
    j = parts%pair_j(k)
    if(parts%itype(i)*parts%itype(j)>0)cycle  
@@ -1934,16 +1940,19 @@ do k=1,parts%niac
 
 !         parts%dvx%x%r(ii) = parts%dvx%x%r(ii) + dd * dx(1)*f
 !         parts%dvx%y%r(ii) = parts%dvx%y%r(ii) + dd * dx(2)*f
-          local_x(ii) = local_x(ii) + dd * dx(1)*f
-          local_y(ii) = local_y(ii) + dd * dx(2)*f
+          local_x(it,ii) = local_x(it,ii) + dd * dx(1)*f
+          local_y(it,ii) = local_y(it,ii) + dd * dx(2)*f
       !endif
    !endif        
-enddo   
+ enddo  
+enddo
 !$omp end do
 !$omp do
 do i = 1,ntotal
-    parts%dvx%x%r(i) = parts%dvx%x%r(i) + local_x(i)
-    parts%dvx%y%r(i) = parts%dvx%y%r(i) + local_y(i)
+    do it = 1,nthreads
+    parts%dvx%x%r(i) = parts%dvx%x%r(i) + local_x(it,i)
+    parts%dvx%y%r(i) = parts%dvx%y%r(i) + local_y(it,i)
+    enddo
 enddo
 !$omp end do
 !$omp end parallel
@@ -3196,25 +3205,28 @@ enddo
       class(particles),target :: parts
       real(dp) vcc, dvx(3), epsilon, mrho
       type(p2r) vx_i(3), vx_j(3), av_i(3), av_j(3)
-      real(dp),allocatable,dimension(:,:) :: local
-      integer i,j,k,d,ntotal,niac    
+      real(dp),allocatable,dimension(:,:,:) :: local
+      integer i,j,k,d,ntotal,niac,it,nthreads  
 
       ntotal = parts%ntotal
       niac   = parts%niac
       epsilon = parts%numeric%epsilon
-      
-      allocate(local(parts%dim,parts%ntotal+parts%nvirt))
+      nthreads = parts%nthreads
+      allocate(local(nthreads,parts%dim,parts%ntotal+parts%nvirt))
       
       do i = 1, ntotal
           do d= 1, parts%dim
-              local(d,i)=0.d0
+              do it = 1,nthreads
+                local(it,d,i)=0.d0
+              enddo
           enddo
       enddo
-      
+      call parts%get_niac_start_end
       parts%av%x = 0.d0; parts%av%y = 0.d0
 !$omp parallel
-!$omp do private(i,j,mrho,vx_i,vx_j,av_i,av_j,d,dvx) reduction(+:local)
-      do k=1,niac       
+!$omp do private(k,i,j,mrho,vx_i,vx_j,av_i,av_j,d,dvx) 
+do it = 1,nthreads    
+   do k=parts%niac_start(it),parts%niac_end(it)
          i = parts%pair_i(k)
          j = parts%pair_j(k)       
          mrho = (parts%rho%r(i)+parts%rho%r(j))/2.0
@@ -3223,17 +3235,20 @@ enddo
          do d=1,parts%dim
             !dvx(d) = parts%vx(d,i) - parts%vx(d,j)            
             dvx(d) = vx_i(d)%p - vx_j(d)%p        
-            local(d,i) = local(d,i) - parts%mass%r(j)*dvx(d)/mrho*parts%w(k)
-            local(d,j) = local(d,j) + parts%mass%r(i)*dvx(d)/mrho*parts%w(k)
+            local(it,d,i) = local(it,d,i) - parts%mass%r(j)*dvx(d)/mrho*parts%w(k)
+            local(it,d,j) = local(it,d,j) + parts%mass%r(i)*dvx(d)/mrho*parts%w(k)
 !            av_i(d)%p = av_i(d)%p - parts%mass%r(j)*dvx(d)/mrho*parts%w(k)
 !            av_j(d)%p = av_j(d)%p + parts%mass%r(i)*dvx(d)/mrho*parts%w(k)       
          enddo                    
-      enddo  
+   enddo  
+enddo
 !$omp end do
 !$omp do 
 do i = 1, ntotal
-       parts%av%x%r(i) = parts%av%x%r(i) + local(1,i)
-       parts%av%y%r(i) = parts%av%y%r(i) + local(2,i)
+    do it = 1,nthreads
+       parts%av%x%r(i) = parts%av%x%r(i) + local(it,1,i)
+       parts%av%y%r(i) = parts%av%y%r(i) + local(it,2,i)
+    enddo   
 enddo
 !$omp end do
 !$omp end parallel
@@ -3817,13 +3832,13 @@ enddo
       implicit none
 
       type(particles) water, soil
-      real(dp), allocatable, dimension(:,:) :: local_water,local_soil
+      real(dp), allocatable, dimension(:,:,:) :: local_water,local_soil
       double precision dx(3), ks, ns, gw, cf, sp, rrw
       type(p2r) vx_i(3), vx_j(3), dvx_i(3), dvx_j(3)
       type(material), pointer :: h2o,sio2  
       type(numerical), pointer :: numeric
       double precision gravity   
-      integer i, j, k, d, dim, nthreads
+      integer i, j, k, d, dim, nthreads,it
 
       nthreads = water%nthreads
 
@@ -3838,24 +3853,28 @@ enddo
       cf = gw*ns/ks
       !cf = 6.e6
 
-      allocate(local_water(dim,water%ntotal+water%nvirt))
-      allocate(local_soil(dim,soil%ntotal+soil%nvirt))
+      allocate(local_water(nthreads,dim,water%ntotal+water%nvirt))
+      allocate(local_soil(nthreads,dim,soil%ntotal+soil%nvirt))
       do i = 1, water%ntotal+water%nvirt
           do d = 1,dim
-            local_water(d,i) = 0.d0
+              do it = 1,nthreads
+                local_water(it,d,i) = 0.d0
+              enddo  
           enddo
       enddo
       
       do j = 1, soil%ntotal+soil%nvirt
           do d = 1,dim
-            local_soil(d,j) = 0.d0
+              do it = 1,nthreads
+                local_soil(it,d,j) = 0.d0
+              enddo  
           enddo
       enddo
-      
+call water%get_niac_start_end
 !$omp parallel
-!$omp do private(i,j,rrw,cf,vx_i,vx_j,d,sp) reduction(+:local_water) reduction(+:local_soil)
-
-      do  k=1,water%niac
+!$omp do private(i,j,rrw,cf,vx_i,vx_j,d,sp,k) 
+do it = 1,nthreads
+      do  k=water%niac_start(it),water%niac_end(it)
           i = water%pair_i(k)
           j = water%pair_j(k)  
           rrw = water%w(k)/(water%rho%r(i)*soil%rho%r(j))
@@ -3874,8 +3893,8 @@ enddo
              sp = cf*(vx_i(d)%p-vx_j(d)%p)*rrw
 !             dvx_i(d)%p = dvx_i(d)%p - soil%mass%r(j)*sp
 !             dvx_j(d)%p = dvx_j(d)%p + water%mass%r(i)*sp 
-              local_water(d,i) = local_water(d,i) - soil%mass%r(j)*sp
-              local_soil(d,j) = local_soil(d,j) + water%mass%r(i)*sp
+              local_water(it,d,i) = local_water(it,d,i) - soil%mass%r(j)*sp
+              local_soil(it,d,j) = local_soil(it,d,j) + water%mass%r(i)*sp
           enddo
 
           !sp = cf*(water%vx%x%r(i)-soil%vx%x%r(j))*rrw
@@ -3886,6 +3905,7 @@ enddo
           !soil%dvx%y%r(j)  =  soil%dvx%y%r(j) + water%mass(i)*sp   
 
       enddo
+enddo     
 !$omp end do
 !$omp barrier
 
@@ -3895,8 +3915,10 @@ do i = 1,water%ntotal+water%nvirt
 !      do d=1,dim
 !      dvx_i(d)%p = local_water(d,i)+dvx_i(d)%p
 !      enddo
-   water%dvx%x%r(i) = water%dvx%x%r(i) + local_water(1,i)
-   water%dvx%y%r(i) = water%dvx%y%r(i) + local_water(2,i)
+  do it =1,nthreads
+    water%dvx%x%r(i) = water%dvx%x%r(i) + local_water(it,1,i)
+    water%dvx%y%r(i) = water%dvx%y%r(i) + local_water(it,2,i)
+  enddo
 enddo
 !$omp end do
 !$omp do
@@ -3905,8 +3927,10 @@ do j = 1,soil%ntotal+soil%nvirt
 !      do d=1,dim
 !      dvx_j(d)%p = local_soil(d,j)+dvx_j(d)%p
 !      enddo
-   soil%dvx%x%r(j) = soil%dvx%x%r(j) + local_soil(1,j)
-   soil%dvx%y%r(j) = soil%dvx%y%r(j) + local_soil(2,j)      
+  do it = 1, nthreads
+    soil%dvx%x%r(j) = soil%dvx%x%r(j) + local_soil(it,1,j)
+    soil%dvx%y%r(j) = soil%dvx%y%r(j) + local_soil(it,2,j)      
+  enddo 
 enddo
 !$omp end do
 !$omp end parallel
@@ -3961,24 +3985,27 @@ end subroutine
 !      use param
 !      use m_particles
       implicit none
-      real(dp), allocatable, dimension(:) :: local_x,local_y
+      real(dp), allocatable, dimension(:,:) :: local_x,local_y
+      integer nthreads,it
       type(particles) water, soil
       double precision mprr
       
       integer i, j, k, d, ntotal
-      
-      allocate(local_x(soil%ntotal+soil%nvirt))
-      allocate(local_y(soil%ntotal+soil%nvirt))
+      nthreads = water%nthreads
+      allocate(local_x(nthreads,soil%ntotal+soil%nvirt))
+      allocate(local_y(nthreads,soil%ntotal+soil%nvirt))
 
       do j = 1,soil%ntotal+soil%nvirt
-         local_x(j) = soil%dvx%x%r(j)
-         local_y(j) = soil%dvx%y%r(j)
+        do it =1,nthreads
+         local_x(it,j) = 0.d0
+         local_y(it,j) = 0.d0
+        enddo 
       enddo
-
+      call water%get_niac_start_end()
 !$omp parallel
-!$omp do private(i,j,mprr) reduction(+:local_x,local_y)
-
-do k = 1, water%niac
+!$omp do private(i,j,mprr,k) 
+do it =1,water%nthreads
+do k = water%niac_start(it),water%niac_end(it)
          i = water%pair_i(k)   ! water
          j = water%pair_j(k)   ! soil
          mprr = water%mass%r(i)*water%p%r(i)/(water%rho%r(i)*soil%rho%r(j))
@@ -3994,9 +4021,9 @@ do k = 1, water%niac
 !            soil%dvx%y%r(j) = soil%dvx%y%r(j) + mprr*water%dwdx(2,k)  &  !+
 !                            *soil%vof%r(j)  
 
-             local_x(j) = local_x(j) + mprr*water%dwdx(1,k)  &  !+
+             local_x(it,j) = local_x(it,j) + mprr*water%dwdx(1,k)  &  !+
                            *soil%vof%r(j)  
-             local_y(j) = local_y(j) + mprr*water%dwdx(2,k)  &  !+
+             local_y(it,j) = local_y(it,j) + mprr*water%dwdx(2,k)  &  !+
                            *soil%vof%r(j)  
 
 ! saturated soil
@@ -4008,14 +4035,16 @@ do k = 1, water%niac
          !enddo
          !endif
       enddo
-
+enddo
 !$omp end do
 !$omp barrier
 
 !$omp do 
 do j = 1,soil%ntotal+soil%nvirt
-      soil%dvx%x%r(j) =local_x(j)
-      soil%dvx%y%r(j) =local_y(j)
+    do it = 1,water%nthreads
+      soil%dvx%x%r(j) =local_x(it,j)+soil%dvx%x%r(j)
+      soil%dvx%y%r(j) =local_y(it,j)+soil%dvx%y%r(j)
+    enddo  
 enddo   
 !$omp end do
 !$omp end parallel
