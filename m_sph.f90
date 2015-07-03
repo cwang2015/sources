@@ -1535,7 +1535,7 @@ if(trim(pl%imaterial)=='soil')call Jaumann_rate(pl)
 
 !---  Artificial viscosity:
 
-if (visc_artificial) call pl%art_visc
+if (visc_artificial) call pl%art_visc_omp
 
 if(trim(pl%imaterial)=='soil'.and.soil_artificial_stress)then
         !call art_stress(pl)

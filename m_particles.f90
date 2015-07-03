@@ -102,7 +102,7 @@ real(dp) mingridx(3),maxgridx(3),dgeomx(3)
 
 !maxn: Maximum number of particles
 !max_interation : Maximum number of interaction pairs
-integer :: maxn = 400000, max_interaction = 20 * 400000
+integer :: maxn = 350000, max_interaction = 20 * 350000
   
 !SPH algorithm
 
@@ -291,6 +291,7 @@ integer :: skf = 4
        procedure :: con_density
        procedure :: newtonian_fluid
        procedure :: art_visc
+       procedure :: art_visc_omp
        procedure :: delta_sph
        procedure :: delta_sph_omp
        procedure :: av_vel
@@ -1902,13 +1903,13 @@ p1 = parts%numeric%p1; p2 = parts%numeric%p2
 ntotal = parts%ntotal+parts%nvirt
 nthreads = parts%nthreads
 
-allocate(local_x(nthreads,ntotal))
-allocate(local_y(nthreads,ntotal))
+allocate(local_x(ntotal,nthreads))
+allocate(local_y(ntotal,nthreads))
 
-do i = 1,ntotal
-    do it = 1, nthreads
-     local_x(it,i) = 0.d0
-     local_y(it,i) = 0.d0
+do it = 1, nthreads
+    do i = 1,ntotal
+     local_x(i,it) = 0.d0
+     local_y(i,it) = 0.d0
     enddo
 enddo
 call parts%get_niac_start_end
@@ -1940,8 +1941,8 @@ do it = 1,nthreads
 
 !         parts%dvx%x%r(ii) = parts%dvx%x%r(ii) + dd * dx(1)*f
 !         parts%dvx%y%r(ii) = parts%dvx%y%r(ii) + dd * dx(2)*f
-          local_x(it,ii) = local_x(it,ii) + dd * dx(1)*f
-          local_y(it,ii) = local_y(it,ii) + dd * dx(2)*f
+          local_x(ii,it) = local_x(ii,it) + dd * dx(1)*f
+          local_y(ii,it) = local_y(ii,it) + dd * dx(2)*f
       !endif
    !endif        
  enddo  
@@ -1950,8 +1951,8 @@ enddo
 !$omp do private(it)
 do i = 1,ntotal
     do it = 1,nthreads
-    parts%dvx%x%r(i) = parts%dvx%x%r(i) + local_x(it,i)
-    parts%dvx%y%r(i) = parts%dvx%y%r(i) + local_y(it,i)
+    parts%dvx%x%r(i) = parts%dvx%x%r(i) + local_x(i,it)
+    parts%dvx%y%r(i) = parts%dvx%y%r(i) + local_y(i,it)
     enddo
 enddo
 !$omp end do
@@ -2017,15 +2018,15 @@ nthreads = parts%nthreads
 df_omp%ndim1 = ntotal
 allocate(df_omp%r(ntotal))
 if(nthreads>1)then
-   allocate(df_local(nthreads,ntotal))
+   allocate(df_local(ntotal,nthreads))
    call parts%get_niac_start_end
 endif   
 
 if(x=='x')dwdx=>parts%dwdx(1,:)
 if(x=='y')dwdx=>parts%dwdx(2,:)
-   do i = 1, ntotal
-       do it =1,nthreads
-         df_local(it,i) = 0.d0
+   do it =1,nthreads
+       do i = 1, ntotal
+         df_local(i,it) = 0.d0
        enddo 
    enddo
 
@@ -2040,8 +2041,8 @@ do it = 1, parts%nthreads
    i = parts%pair_i(k)
    j = parts%pair_j(k)
    fwx = (f%r(i)+f%r(j))*dwdx(k)
-   df_local(it,i) = df_local(it,i) + parts%mass%r(j)/parts%rho%r(j)*fwx
-   df_local(it,j) = df_local(it,j) - parts%mass%r(i)/parts%rho%r(i)*fwx
+   df_local(i,it) = df_local(i,it) + parts%mass%r(j)/parts%rho%r(j)*fwx
+   df_local(j,it) = df_local(j,it) - parts%mass%r(i)/parts%rho%r(i)*fwx
    enddo !k
 enddo !it
 !$omp end do
@@ -2051,7 +2052,7 @@ enddo !it
 do i = 1, ntotal
    df_omp%r(i) = 0.d0
   do it = 1, nthreads
-      df_omp%r(i) = df_local(it,i)+df_omp%r(i)
+      df_omp%r(i) = df_local(i,it)+df_omp%r(i)
   enddo
 enddo   
 !$omp end do
@@ -2319,15 +2320,16 @@ nthreads = parts%nthreads
 df4_omp%ndim1 = ntotal
 allocate(df4_omp%r(ntotal))
 if(nthreads>1)then
-   allocate(df4_local(nthreads,ntotal))
+   allocate(df4_local(ntotal,nthreads))
    call parts%get_niac_start_end
 endif   
 
 if(x=='x')dwdx=>parts%dwdx(1,:)
 if(x=='y')dwdx=>parts%dwdx(2,:)
-   do i = 1, ntotal
-       do it = 1, nthreads
-         df4_local(it,i) = 0.d0
+
+   do it = 1, nthreads
+       do i = 1, ntotal
+         df4_local(i,it) = 0.d0
        enddo  
    enddo
 
@@ -2343,8 +2345,8 @@ do it = 1, parts%nthreads
    i = parts%pair_i(k)
    j = parts%pair_j(k)
    fwx = (f%r(j)-f%r(i))*dwdx(k)
-   df4_local(it,i) = df4_local(it,i) + parts%mass%r(j)/parts%rho%r(j)*fwx
-   df4_local(it,j) = df4_local(it,j) + parts%mass%r(i)/parts%rho%r(i)*fwx
+   df4_local(i,it) = df4_local(i,it) + parts%mass%r(j)/parts%rho%r(j)*fwx
+   df4_local(j,it) = df4_local(j,it) + parts%mass%r(i)/parts%rho%r(i)*fwx
    enddo !k
 enddo !it
 !$omp end do
@@ -2354,7 +2356,7 @@ enddo !it
 do i = 1, ntotal
    df4_omp%r(i) = 0.d0
    do it = 1, nthreads
-      df4_omp%r(i) = df4_local(it,i)+df4_omp%r(i)
+      df4_omp%r(i) = df4_local(i,it)+df4_omp%r(i)
    enddo
 enddo   
 !$omp end do
@@ -2428,13 +2430,13 @@ allocate(div_omp);allocate(div_omp%r(ntotal))
 div_omp%ndim1 = ntotal;div_omp = 0.d0
 
 if(nthreads>1)then
-   allocate(local(nthreads,ntotal))
+   allocate(local(ntotal,nthreads))
    call parts%get_niac_start_end
 endif   
 
-do i = 1, ntotal
-   do it = 1, nthreads
-      local(it,i) = 0.d0
+do it = 1, nthreads
+   do i = 1, ntotal
+      local(i,it) = 0.d0
    enddo   
 enddo
 
@@ -2452,8 +2454,8 @@ do it = 1, parts%nthreads
    do d = 2,dim
      hdiv = hdiv + df(d)*dwdx(d,k)
    enddo
-   local(it,i) = local(it,i) + parts%mass%r(j)*hdiv/parts%rho%r(j)
-   local(it,j) = local(it,j) + parts%mass%r(i)*hdiv/parts%rho%r(i)
+   local(i,it) = local(i,it) + parts%mass%r(j)*hdiv/parts%rho%r(j)
+   local(j,it) = local(j,it) + parts%mass%r(i)*hdiv/parts%rho%r(i)
    enddo
 enddo
 !$omp end do
@@ -2463,7 +2465,7 @@ enddo
 do i = 1, ntotal
     div_omp%r(i) = 0.d0
     do it = 1,nthreads
-      div_omp%r(i) = local(it,i) + div_omp%r(i)
+      div_omp%r(i) = local(i,it) + div_omp%r(i)
     enddo  
 enddo   
 !$omp end do
@@ -2543,14 +2545,14 @@ dwdx =>parts%dwdx
 allocate(res);allocate(res%r(ntotal))
 res%ndim1 = ntotal; res = 0.d0
 
-allocate(local(nthreads,ntotal))
+allocate(local(ntotal,nthreads))
 call parts%get_niac_start_end
 
 !$omp parallel
 !$omp do private(it)
-do i = 1, ntotal
-   do it = 1, nthreads
-       local(it,i) = 0.d0
+do it = 1, nthreads
+   do i = 1, ntotal
+       local(i,it) = 0.d0
    enddo    
 enddo
 !$omp end do
@@ -2566,8 +2568,8 @@ do k = parts%niac_start(it),parts%niac_end(it)
       df(d) = f_j(d)%p - f_i(d)%p
       temp = temp + df(d)*dwdx(d,k)
    enddo
-   local(it,i) = local(it,i) + parts%mass%r(j)*temp
-   local(it,j) = local(it,j) + parts%mass%r(i)*temp
+   local(i,it) = local(i,it) + parts%mass%r(j)*temp
+   local(j,it) = local(j,it) + parts%mass%r(i)*temp
 enddo !k
 enddo
 !$omp end do
@@ -2576,7 +2578,7 @@ do i = 1, ntotal
     res%r(i) = 0
     do it = 1, nthreads
 !       res%r(i) =  local(i)/parts%rho%r(i)
-        res%r(i) = local(it,i)/parts%rho%r(i) + res%r(i)
+        res%r(i) = local(i,it)/parts%rho%r(i) + res%r(i)
     enddo
 !    res%r(i) = res%r(i)/parts%rho%r(i)
 enddo
@@ -2609,14 +2611,14 @@ dwdx =>parts%dwdx
 allocate(res);allocate(res%r(ntotal))
 res%ndim1 = ntotal; res = 0.d0
 
-allocate(local(nthreads,ntotal))
+allocate(local(ntotal,nthreads))
 call parts%get_niac_start_end
 
 !$omp parallel
 !$omp do private(it)
-do i = 1, ntotal
-    do it = 1,nthreads
-       local(it,i) = 0.d0
+do it = 1,nthreads
+    do i = 1, ntotal
+       local(i,it) = 0.d0
     enddo
 enddo
 !$omp end do
@@ -2631,15 +2633,15 @@ do k = parts%niac_start(it),parts%niac_end(it)
       df(d) = f_j(d)%p - f_i(d)%p
       temp = temp + df(d)*dwdx(d,k)
    enddo
-   local(it,i) = local(it,i) + parts%mass%r(j)*temp
-   local(it,j) = local(it,j) + parts%mass%r(i)*temp
+   local(i,it) = local(i,it) + parts%mass%r(j)*temp
+   local(j,it) = local(j,it) + parts%mass%r(i)*temp
 enddo !k
 enddo !it
 !$omp end do
 !$omp do private(it)
 do i = 1, ntotal
     do it =1 ,nthreads
-       res%r(i) = res%r(i)+local(it,i)/parts%rho%r(i)
+       res%r(i) = res%r(i)+local(i,it)/parts%rho%r(i)
     enddo   
 enddo
 !$omp end do
@@ -2991,15 +2993,16 @@ end subroutine
       niac     =  parts%niac; dim = parts%dim
       nthreads =  parts%nthreads
             
-      allocate(local_x(nthreads,ntotal))
-      allocate(local_y(nthreads,ntotal))
-      
-      do i=1,ntotal
-          do it = 1, nthreads
-            local_x(it,i) = 0
-            local_y(it,i) = 0
-          enddo 
-      enddo
+      allocate(local_x(ntotal,nthreads))
+      allocate(local_y(ntotal,nthreads))
+    
+      do it = 1, nthreads
+          do i = 1, ntotal
+            local_x(i,it) = 0
+            local_y(i,it) = 0
+          enddo
+      enddo 
+
       
       numeric  => parts%numeric      
       alpha = numeric%alpha; beta = numeric%beta; etq = numeric%etq
@@ -3048,14 +3051,14 @@ do it = 1, nthreads
             h = -piv*parts%dwdx(1,k)
 !            parts%dvx%x%r(i) = parts%dvx%x%r(i) + parts%mass%r(j)*h
 !            parts%dvx%x%r(j) = parts%dvx%x%r(j) - parts%mass%r(i)*h
-             local_x(it,i) = local_x(it,i) + parts%mass%r(j)*h
-             local_x(it,j) = local_x(it,j) - parts%mass%r(i)*h
+             local_x(i,it) = local_x(i,it) + parts%mass%r(j)*h
+             local_x(j,it) = local_x(j,it) - parts%mass%r(i)*h
             if(dim.ge.2)then
             h = -piv*parts%dwdx(2,k)
 !            parts%dvx%y%r(i) = parts%dvx%y%r(i) + parts%mass%r(j)*h
 !            parts%dvx%y%r(j) = parts%dvx%y%r(j) - parts%mass%r(i)*h
-             local_y(it,i) = local_y(it,i) + parts%mass%r(j)*h
-             local_y(it,j) = local_y(it,j) - parts%mass%r(i)*h
+             local_y(i,it) = local_y(i,it) + parts%mass%r(j)*h
+             local_y(j,it) = local_y(j,it) - parts%mass%r(i)*h
             endif
             
 
@@ -3066,8 +3069,8 @@ do it = 1, nthreads
 !$omp do private(it)
 do i = 1, ntotal
     do it = 1 ,nthreads
-      parts%dvx%x%r(i) = parts%dvx%x%r(i) +local_x(it,i)
-      if (dim.ge.2) parts%dvx%y%r(i) = parts%dvx%y%r(i) +local_y(it,i)
+      parts%dvx%x%r(i) = parts%dvx%x%r(i) +local_x(i,it)
+      if (dim.ge.2) parts%dvx%y%r(i) = parts%dvx%y%r(i) +local_y(i,it)
     enddo  
 enddo
 !$omp end do
@@ -3140,12 +3143,12 @@ enddo
 !      df%ndim1 = ntotal
 
       if(nthreads>1)then
-         allocate(local(nthreads,ntotal))
+         allocate(local(ntotal,nthreads))
          call parts%get_niac_start_end
       endif   
-      do i =1,ntotal
-         do it = 1,nthreads
-           local(it,i) = 0.d0
+      do it = 1,nthreads
+         do i =1,ntotal
+           local(i,it) = 0.d0
          enddo
       enddo
 
@@ -3169,8 +3172,8 @@ enddo
          enddo
 !          df(i) = df(i) + delta*parts%hsml(i)*parts%c(i)*parts%mass(j)*h/parts%rho(j)
 !          df(j) = df(j) - delta*parts%hsml(j)*parts%c(j)*parts%mass(i)*h/parts%rho(i)
-         local(it,i) = local(it,i) + delta*parts%hsml(i)*parts%c%r(i)*parts%mass%r(j)*h/parts%rho%r(j)
-         local(it,j) = local(it,j) - delta*parts%hsml(j)*parts%c%r(j)*parts%mass%r(i)*h/parts%rho%r(i)
+         local(i,it) = local(i,it) + delta*parts%hsml(i)*parts%c%r(i)*parts%mass%r(j)*h/parts%rho%r(j)
+         local(j,it) = local(j,it) - delta*parts%hsml(j)*parts%c%r(j)*parts%mass%r(i)*h/parts%rho%r(i)
       enddo
      enddo
      !$omp enddo
@@ -3178,7 +3181,7 @@ enddo
      !$omp do private(it)
      do i = 1,ntotal
         do it = 1,parts%nthreads
-             df%r(i) =  df%r(i) + local(it,i)
+             df%r(i) =  df%r(i) + local(i,it)
         enddo
      enddo
      !$omp end do
@@ -3242,12 +3245,11 @@ enddo
       niac   = parts%niac
       epsilon = parts%numeric%epsilon
       nthreads = parts%nthreads
-      allocate(local(nthreads,parts%dim,parts%ntotal+parts%nvirt))
-      
-      do i = 1, ntotal
+      allocate(local(parts%ntotal+parts%nvirt,parts%dim,nthreads))
+      do it = 1,nthreads
           do d= 1, parts%dim
-              do it = 1,nthreads
-                local(it,d,i)=0.d0
+              do i = 1, ntotal
+                local(i,d,it)=0.d0
               enddo
           enddo
       enddo
@@ -3265,8 +3267,8 @@ do it = 1,nthreads
          do d=1,parts%dim
             !dvx(d) = parts%vx(d,i) - parts%vx(d,j)            
             dvx(d) = vx_i(d)%p - vx_j(d)%p        
-            local(it,d,i) = local(it,d,i) - parts%mass%r(j)*dvx(d)/mrho*parts%w(k)
-            local(it,d,j) = local(it,d,j) + parts%mass%r(i)*dvx(d)/mrho*parts%w(k)
+            local(i,d,it) = local(i,d,it) - parts%mass%r(j)*dvx(d)/mrho*parts%w(k)
+            local(j,d,it) = local(j,d,it) + parts%mass%r(i)*dvx(d)/mrho*parts%w(k)
 !            av_i(d)%p = av_i(d)%p - parts%mass%r(j)*dvx(d)/mrho*parts%w(k)
 !            av_j(d)%p = av_j(d)%p + parts%mass%r(i)*dvx(d)/mrho*parts%w(k)       
          enddo                    
@@ -3276,8 +3278,8 @@ enddo
 !$omp do private(it)
 do i = 1, ntotal
     do it = 1,nthreads
-       parts%av%x%r(i) = parts%av%x%r(i) + local(it,1,i)
-       parts%av%y%r(i) = parts%av%y%r(i) + local(it,2,i)
+       parts%av%x%r(i) = parts%av%x%r(i) + local(i,1,it)
+       parts%av%y%r(i) = parts%av%y%r(i) + local(i,2,it)
     enddo   
 enddo
 !$omp end do
@@ -3883,20 +3885,21 @@ enddo
       cf = gw*ns/ks
       !cf = 6.e6
 
-      allocate(local_water(nthreads,dim,water%ntotal+water%nvirt))
-      allocate(local_soil(nthreads,dim,soil%ntotal+soil%nvirt))
-      do i = 1, water%ntotal+water%nvirt
+      allocate(local_water(water%ntotal+water%nvirt,dim,nthreads))
+      allocate(local_soil(soil%ntotal+soil%nvirt,dim,nthreads))
+    
+      do it = 1,nthreads
           do d = 1,dim
-              do it = 1,nthreads
-                local_water(it,d,i) = 0.d0
+            do i = 1, water%ntotal+water%nvirt
+                local_water(i,d,it) = 0.d0
               enddo  
           enddo
       enddo
       
-      do j = 1, soil%ntotal+soil%nvirt
+      do it = 1,nthreads
           do d = 1,dim
-              do it = 1,nthreads
-                local_soil(it,d,j) = 0.d0
+            do j = 1, soil%ntotal+soil%nvirt
+                local_soil(j,d,it) = 0.d0
               enddo  
           enddo
       enddo
@@ -3923,8 +3926,8 @@ do it = 1,nthreads
              sp = cf*(vx_i(d)%p-vx_j(d)%p)*rrw
 !             dvx_i(d)%p = dvx_i(d)%p - soil%mass%r(j)*sp
 !             dvx_j(d)%p = dvx_j(d)%p + water%mass%r(i)*sp 
-              local_water(it,d,i) = local_water(it,d,i) - soil%mass%r(j)*sp
-              local_soil(it,d,j) = local_soil(it,d,j) + water%mass%r(i)*sp
+              local_water(i,d,it) = local_water(i,d,it) - soil%mass%r(j)*sp
+              local_soil(j,d,it) = local_soil(j,d,it) + water%mass%r(i)*sp
           enddo
 
           !sp = cf*(water%vx%x%r(i)-soil%vx%x%r(j))*rrw
@@ -3946,8 +3949,8 @@ do i = 1,water%ntotal+water%nvirt
 !      dvx_i(d)%p = local_water(d,i)+dvx_i(d)%p
 !      enddo
   do it =1,nthreads
-    water%dvx%x%r(i) = water%dvx%x%r(i) + local_water(it,1,i)
-    water%dvx%y%r(i) = water%dvx%y%r(i) + local_water(it,2,i)
+    water%dvx%x%r(i) = water%dvx%x%r(i) + local_water(i,1,it)
+    water%dvx%y%r(i) = water%dvx%y%r(i) + local_water(i,2,it)
   enddo
 enddo
 !$omp end do
@@ -3958,8 +3961,8 @@ do j = 1,soil%ntotal+soil%nvirt
 !      dvx_j(d)%p = local_soil(d,j)+dvx_j(d)%p
 !      enddo
   do it = 1, nthreads
-    soil%dvx%x%r(j) = soil%dvx%x%r(j) + local_soil(it,1,j)
-    soil%dvx%y%r(j) = soil%dvx%y%r(j) + local_soil(it,2,j)      
+    soil%dvx%x%r(j) = soil%dvx%x%r(j) + local_soil(j,1,it)
+    soil%dvx%y%r(j) = soil%dvx%y%r(j) + local_soil(j,2,it)      
   enddo 
 enddo
 !$omp end do
@@ -4022,13 +4025,14 @@ end subroutine
       
       integer i, j, k, d, ntotal
       nthreads = water%nthreads
-      allocate(local_x(nthreads,soil%ntotal+soil%nvirt))
-      allocate(local_y(nthreads,soil%ntotal+soil%nvirt))
+      allocate(local_x(soil%ntotal+soil%nvirt,nthreads))
+      allocate(local_y(soil%ntotal+soil%nvirt,nthreads))
 
+      
       do j = 1,soil%ntotal+soil%nvirt
         do it =1,nthreads
-         local_x(it,j) = 0.d0
-         local_y(it,j) = 0.d0
+         local_x(j,it) = 0.d0
+         local_y(j,it) = 0.d0
         enddo 
       enddo
       call water%get_niac_start_end()
@@ -4051,9 +4055,9 @@ do k = water%niac_start(it),water%niac_end(it)
 !            soil%dvx%y%r(j) = soil%dvx%y%r(j) + mprr*water%dwdx(2,k)  &  !+
 !                            *soil%vof%r(j)  
 
-             local_x(it,j) = local_x(it,j) + mprr*water%dwdx(1,k)  &  !+
+             local_x(j,it) = local_x(j,it) + mprr*water%dwdx(1,k)  &  !+
                            *soil%vof%r(j)  
-             local_y(it,j) = local_y(it,j) + mprr*water%dwdx(2,k)  &  !+
+             local_y(j,it) = local_y(j,it) + mprr*water%dwdx(2,k)  &  !+
                            *soil%vof%r(j)  
 
 ! saturated soil
@@ -4072,8 +4076,8 @@ enddo
 !$omp do private(it)
 do j = 1,soil%ntotal+soil%nvirt
     do it = 1,water%nthreads
-      soil%dvx%x%r(j) =local_x(it,j)+soil%dvx%x%r(j)
-      soil%dvx%y%r(j) =local_y(it,j)+soil%dvx%y%r(j)
+      soil%dvx%x%r(j) =local_x(j,it)+soil%dvx%x%r(j)
+      soil%dvx%y%r(j) =local_y(j,it)+soil%dvx%y%r(j)
     enddo  
 enddo   
 !$omp end do
@@ -4124,11 +4128,11 @@ enddo
       sio2 => soil%material
       ntotal = water%ntotal+water%nvirt
       nthreads =water%nthreads
-      allocate(local(nthreads,water%ntotal+water%nvirt))
+      allocate(local(water%ntotal+water%nvirt,nthreads))
       
-      do i = 1,water%ntotal+water%nvirt
-          do it = 1,nthreads
-            local(it,i) = 0.d0
+      do it = 1,nthreads
+          do i = 1,water%ntotal+water%nvirt
+            local(i,it) = 0.d0
           enddo  
       enddo
       call water%get_niac_start_end
@@ -4140,7 +4144,7 @@ do it = 1, nthreads
          i = water%pair_i(k)
          j = water%pair_j(k)
 !         water%vof2%r(i) = water%vof2%r(i)+soil%mass%r(j)*water%w(k)
-         local(it,i) = local(it,i)+soil%mass%r(j)*water%w(k)
+         local(i,it) = local(i,it)+soil%mass%r(j)*water%w(k)
      enddo
 enddo
 !$omp end do
@@ -4148,7 +4152,7 @@ enddo
       do i = 1, water%ntotal+water%nvirt
 !         water%vof2%r(k) = 1.d0 - water%vof2%r(k)/sio2%rho0
          do it= 1, nthreads 
-            water%vof2%r(i) = 1.d0 - (water%vof2%r(i)+local(it,i))/sio2%rho0
+            water%vof2%r(i) = 1.d0 - (water%vof2%r(i)+local(i,it))/sio2%rho0
          enddo 
       enddo
 !$omp end do
@@ -4207,11 +4211,11 @@ enddo
       sio2 => soil%material
       ntotal = water%ntotal+water%nvirt
       nthreads = water%nthreads
-      allocate(local(nthreads,water%ntotal+water%nvirt))
-      
-      do i = 1,water%ntotal+water%nvirt
-          do it =1,nthreads
-              local(it,i) = 0.d0
+      allocate(local(water%ntotal+water%nvirt,nthreads))
+         
+      do it =1,nthreads
+          do i = 1,water%ntotal+water%nvirt
+              local(i,it) = 0.d0
           enddo  
       enddo
       call water%get_niac_start_end
@@ -4229,14 +4233,14 @@ do it = 1, nthreads
          enddo 
          tmp = dvx(1)*water%dwdx(1,k)+dvx(2)*water%dwdx(2,k)
 !         water%dvof%r(i) = water%dvof%r(i)-soil%mass%r(j)*tmp/sio2%rho0
-         local(it,i) = local(it,i)-soil%mass%r(j)*tmp/sio2%rho0
+         local(i,it) = local(i,it)-soil%mass%r(j)*tmp/sio2%rho0
       enddo
 enddo
 !$omp end do 
 !$omp do private(it)
 do i = 1,water%ntotal+water%nvirt
     do it = 1,nthreads
-       water%dvof%r(i) = water%dvof%r(i) + local(it,i)
+       water%dvof%r(i) = water%dvof%r(i) + local(i,it)
     enddo   
 enddo
 !$omp end do
