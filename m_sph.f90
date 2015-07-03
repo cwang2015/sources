@@ -1925,8 +1925,8 @@ end subroutine
       write(f_xv,*) 'VARIABLES="X","Y","Pressure","VoF",'     
       write(f_xv,*) '"vx","vy","rho","zone","VoF2","mass" '
       write(f_xv,*) 'ZONE I=', ntotal, ' F=BLOCK'
-      write(f_xv,*) x(1,1:ntotal) !, soil%x(1,1:ntotal2)
-      write(f_xv,*) x(2,1:ntotal) !, soil%x(2,1:ntotal2)
+      write(f_xv,*) (x(1,i),i=1,ntotal) !, soil%x(1,1:ntotal2)
+      write(f_xv,*) (x(2,i),i=1,ntotal) !, soil%x(2,1:ntotal2)
 !      write(f_xv,*) vx(1,1:ntotal)
 !      write(f_xv,*) vx(2,1:ntotal)
 !      write(f_xv,*) parts%dvx(1,1:ntotal)

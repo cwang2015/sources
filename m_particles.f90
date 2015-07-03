@@ -102,7 +102,7 @@ real(dp) mingridx(3),maxgridx(3),dgeomx(3)
 
 !maxn: Maximum number of particles
 !max_interation : Maximum number of interaction pairs
-integer :: maxn = 150000, max_interaction = 20 * 150000
+integer :: maxn = 400000, max_interaction = 20 * 400000
   
 !SPH algorithm
 
@@ -2640,8 +2640,7 @@ end function
       if(parts%imaterial=='water')then
 
          water => parts%material
-         parts%rho%r(1:ntotal) = water%rho0*(parts%p%r(1:ntotal)/water%b+1) &
-                            **(1/water%gamma)
+         parts%rho = water%rho0*(parts%p/water%b+1.d0)**(1/water%gamma)
 
       elseif(parts%imaterial=='soil')then
 
