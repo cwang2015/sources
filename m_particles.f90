@@ -1947,7 +1947,7 @@ do it = 1,nthreads
  enddo  
 enddo
 !$omp end do
-!$omp do
+!$omp do private(it)
 do i = 1,ntotal
     do it = 1,nthreads
     parts%dvx%x%r(i) = parts%dvx%x%r(i) + local_x(it,i)
@@ -2459,7 +2459,7 @@ enddo
 !$omp end do
 !$omp barrier
 
-!$omp do
+!$omp do private(it)
 do i = 1, ntotal
     div_omp%r(i) = 0.d0
     do it = 1,nthreads
@@ -2547,7 +2547,7 @@ allocate(local(nthreads,ntotal))
 call parts%get_niac_start_end
 
 !$omp parallel
-!$omp do
+!$omp do private(it)
 do i = 1, ntotal
    do it = 1, nthreads
        local(it,i) = 0.d0
@@ -2571,7 +2571,7 @@ do k = parts%niac_start(it),parts%niac_end(it)
 enddo !k
 enddo
 !$omp end do
-!$omp do
+!$omp do private(it)
 do i = 1, ntotal
     res%r(i) = 0
     do it = 1, nthreads
@@ -2613,7 +2613,7 @@ allocate(local(nthreads,ntotal))
 call parts%get_niac_start_end
 
 !$omp parallel
-!$omp do
+!$omp do private(it)
 do i = 1, ntotal
     do it = 1,nthreads
        local(it,i) = 0.d0
@@ -2639,7 +2639,7 @@ enddo !it
 !$omp do private(it)
 do i = 1, ntotal
     do it =1 ,nthreads
-       res%r(i) =  local(it,i)/parts%rho%r(i)
+       res%r(i) = res%r(i)+local(it,i)/parts%rho%r(i)
     enddo   
 enddo
 !$omp end do
@@ -3008,7 +3008,7 @@ end subroutine
 !$omp parallel 
 !$omp do private(i,j,mhsml,vr,rr,vx_i,vx_j,d,dvx,dx,muv,mc,mrho,piv,h) 
 do it = 1, nthreads 
-  do k=1,niac
+  do k=parts%niac_start(it),parts%niac_end(it)
         i = parts%pair_i(k)
         j = parts%pair_j(k)
         mhsml= (parts%hsml(i)+parts%hsml(j))/2.
@@ -3063,7 +3063,7 @@ do it = 1, nthreads
   enddo
   enddo
 !$omp end do
-!$omp do
+!$omp do private(it)
 do i = 1, ntotal
     do it = 1 ,nthreads
       parts%dvx%x%r(i) = parts%dvx%x%r(i) +local_x(it,i)
@@ -3273,7 +3273,7 @@ do it = 1,nthreads
    enddo  
 enddo
 !$omp end do
-!$omp do 
+!$omp do private(it)
 do i = 1, ntotal
     do it = 1,nthreads
        parts%av%x%r(i) = parts%av%x%r(i) + local(it,1,i)
@@ -3939,7 +3939,7 @@ enddo
 !$omp end do
 !$omp barrier
 
-!$omp do
+!$omp do private(it)
 do i = 1,water%ntotal+water%nvirt
 !   dvx_i = water%dvx%cmpt(i)
 !      do d=1,dim
@@ -3951,7 +3951,7 @@ do i = 1,water%ntotal+water%nvirt
   enddo
 enddo
 !$omp end do
-!$omp do
+!$omp do private(it)
 do j = 1,soil%ntotal+soil%nvirt
 !   dvx_j = soil%dvx%cmpt(j)
 !      do d=1,dim
@@ -4069,7 +4069,7 @@ enddo
 !$omp end do
 !$omp barrier
 
-!$omp do 
+!$omp do private(it)
 do j = 1,soil%ntotal+soil%nvirt
     do it = 1,water%nthreads
       soil%dvx%x%r(j) =local_x(it,j)+soil%dvx%x%r(j)
@@ -4131,12 +4131,12 @@ enddo
             local(it,i) = 0.d0
           enddo  
       enddo
-      
+      call water%get_niac_start_end
       water%vof2 = 0.d0
 !$omp parallel
 !$omp do private(i,j)
 do it = 1, nthreads 
-     do k = 1, water%niac
+     do k = water%niac_start(it),water%niac_end(it)
          i = water%pair_i(k)
          j = water%pair_j(k)
 !         water%vof2%r(i) = water%vof2%r(i)+soil%mass%r(j)*water%w(k)
@@ -4144,7 +4144,7 @@ do it = 1, nthreads
      enddo
 enddo
 !$omp end do
-!$omp do
+!$omp do private(it)
       do i = 1, water%ntotal+water%nvirt
 !         water%vof2%r(k) = 1.d0 - water%vof2%r(k)/sio2%rho0
          do it= 1, nthreads 
@@ -4214,12 +4214,12 @@ enddo
               local(it,i) = 0.d0
           enddo  
       enddo
-      
+      call water%get_niac_start_end
 !      water%dvof = 0.d0
 !$omp parallel
 !$omp do private(i,j,vx_i,vx_j,d,dvx,tmp)
 do it = 1, nthreads
-      do k = 1, water%niac
+      do k = water%niac_start(it),water%niac_end(it)
          i = water%pair_i(k)
          j = water%pair_j(k)
          vx_i = water%vx%cmpt(i); vx_j = soil%vx%cmpt(j)
@@ -4233,7 +4233,7 @@ do it = 1, nthreads
       enddo
 enddo
 !$omp end do 
-!$omp do 
+!$omp do private(it)
 do i = 1,water%ntotal+water%nvirt
     do it = 1,nthreads
        water%dvof%r(i) = water%dvof%r(i) + local(it,i)
