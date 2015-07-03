@@ -102,7 +102,7 @@ real(dp) mingridx(3),maxgridx(3),dgeomx(3)
 
 !maxn: Maximum number of particles
 !max_interation : Maximum number of interaction pairs
-integer :: maxn = 20000, max_interaction = 20 * 20000
+integer :: maxn = 120000, max_interaction = 20 * 120000
   
 !SPH algorithm
 
@@ -2659,7 +2659,6 @@ end function
 
          water => parts%material
          parts%p = water%b*((parts%rho/(water%rho0*parts%vof))**water%gamma-1.d0) !!! False density  
-!         parts%p = ((parts%rho/parts%vof)**water%gamma-1.d0) !!! False density  
 
 ! Tension instability
 !                              if(water_tension_instability==1)then
