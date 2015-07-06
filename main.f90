@@ -54,7 +54,7 @@ do while (.true.)
       !maxtimestep = 400000      
 
    if(integrate_scheme==1)then
-      !if(single_phase.and.parts%imaterial=='water') call time_integration_for_water
+      if(single_phase.and.parts%imaterial=='water') call time_integration_for_water
       !if(single_phase.and.parts%imaterial=='soil')  call time_integration_for_soil
       if(.not.single_phase) call time_integration
    elseif(integrate_scheme==2)then

@@ -1783,8 +1783,7 @@ endif
 
 
 water => parts%material
-parts%p%r(1:ntotal) = water%b*((parts%rho%r(1:ntotal)/(water%rho0)) &   !!! False density
-                  **water%gamma-1)
+parts%p = water%b*((parts%rho/(water%rho0))**water%gamma-1.d0)
 
 !parts%c%r(1:ntotal) = water%c*(parts%rho%r(1:ntotal)/(water%rho0))**3.0    
 
