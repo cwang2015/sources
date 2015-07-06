@@ -36,6 +36,8 @@ call parts%take_real(tank,2)
 call parts%take_virtual(tank,1)
 call parts%take_virtual(tank,3)
 
+call parts%setup_ndim1
+
 !      write(*,*) parts%ntotal, parts%nvirt
       
 ! Basic settings for particles (vol,hsml,itype)

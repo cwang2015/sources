@@ -929,25 +929,7 @@ type(p2r) vxi(3), dvxi(3), v_mini(3)
          if (.not.summation_density ) then 
             pl%rho%r(i) = pl%rho_min%r(i) + dt*pl%drho%r(i)
          endif
-
-         if(trim(pl%imaterial)=='water'.and.volume_fraction)then
-            pl%vof%r(i) = pl%vof_min%r(i)+dt*pl%dvof%r(i) 
-         endif
-                 
-         if(trim(pl%imaterial)=='soil')then 
-                  if(stress_integration==1)then 
-         pl%str%x%r(i) = pl%str%x%r(i) + dt*pl%dstr%x%r(i)
-         pl%str%xy%r(i) = pl%str%xy%r(i) + dt*pl%dstr%xy%r(i)
-         pl%str%y%r(i) = pl%str%y%r(i) + dt*pl%dstr%y%r(i)
-         pl%p%r(i)   = pl%p%r(i)   + dt*pl%dp%r(i)       !!! simultaneous pressure
-                  elseif(stress_integration==2)then
-         pl%str%x%r(i) = pl%str_min%x%r(i) + dt*pl%dstr%x%r(i)
-         pl%str%xy%r(i) = pl%str_min%xy%r(i) + dt*pl%dstr%xy%r(i)
-         pl%str%y%r(i) = pl%str_min%y%r(i) + dt*pl%dstr%y%r(i)
-         pl%p%r(i)   = pl%p_min%r(i) + dt*pl%dp%r(i)     !!! simultaneous pressure
-                  endif
-         endif
-
+   
          if(pl%itype(i)<0)cycle
          vxi = pl%vx%cmpt(i); dvxi = pl%dvx%cmpt(i) ; v_mini = pl%v_min%cmpt(i)
          avi = pl%av%cmpt(i)
@@ -966,7 +948,7 @@ type(p2r) vxi(3), dvxi(3), v_mini(3)
             !            + pl%av(2, i)
             !pl%x(2, i) = pl%x(2, i) + dt * pl%vx(2, i)                              
       enddo
-
+      
       return
       end subroutine
 
@@ -999,7 +981,6 @@ type(p2r) vxi(3), dvxi(3), v_mini(3)
 
       end subroutine
 
-!DEC$IF(.FALSE.)
 !----------------------------------------------------------------------      
       subroutine time_integration_for_water
 !----------------------------------------------------------------------
@@ -1009,107 +990,179 @@ implicit none
 
 integer :: i, j, k, d, ntotal, it
 type(particles), pointer :: pl
+type(p2r) vxi(3), dvxi(3), v_mini(3)
               
+call parts%setup_ndim1
+pl => parts
 do it = 1, maxtimestep    
    itimestep = itimestep+1
    parts%itimestep = itimestep
 
+
+        if (mod(itimestep,print_step).eq.0) then
+         write(*,*)'______________________________________________'
+         write(*,*)'  current number of time step =',              &
+                   itimestep,'     current time=', real(time+dt)
+         write(*,*)'______________________________________________'
+        endif  
+   
 !     If not first time step, then update thermal energy, density and 
 !     velocity half a time step  
 
    if(itimestep .ne. 1)then
-      pl => parts
-      do i = 1, pl%ntotal +pl%nvirt    ! originally only pl%ntotal       
-            
-         if (.not.summation_density) then    
-            pl%rho_min%r(i) = pl%rho%r(i)
-            pl%rho%r(i) = pl%rho%r(i) +(dt/2.)* pl%drho(i)
-         endif
-          
-         if(pl%itype(i)<0)cycle
-
-         !do d = 1, pl%dim
-         !   pl%v_min(d, i) = pl%vx(d, i)
-         !   pl%vx(d, i) = pl%vx(d, i) + (dt/2.)*pl%dvx(d, i)
-         !enddo
-            pl%v_min(1, i) = pl%vx(1, i)
-            pl%vx(1, i) = pl%vx(1, i) + (dt/2.)*pl%dvx%x%r(i)
-            pl%v_min(2, i) = pl%vx(2, i)
-            pl%vx(2, i) = pl%vx(2, i) + (dt/2.)*pl%dvx%y%r(i)
-      enddo
-           
+pl => parts
+      call first_half
+!      do i = 1, pl%ntotal +pl%nvirt    ! originally only pl%ntotal       
+                       
    endif
-
+pl => parts
    call single_step_for_water
+!    call single_step
 
    if(itimestep .eq. 1) then
-      pl => parts
-      do i=1,pl%ntotal +pl%nvirt     ! origionally pl%ntotal
-         
-         if(.not.summation_density )then
-            pl%rho%r(i) = pl%rho%r(i) + (dt/2.)* pl%drho(i)
-         endif
+pl => parts
+      call first_step
 
-         if(pl%itype(i)<0)cycle
-
-!         do d = 1, pl%dim        
-!            pl%vx(d, i) = pl%vx(d, i) + (dt/2.) * pl%dvx(d, i)   & 
-!                        + pl%av(d, i)
-!            pl%x(d, i) = pl%x(d, i) + dt * pl%vx(d, i)
-!         enddo           
-            pl%vx(1, i) = pl%vx(1, i) + (dt/2.) * pl%dvx%x%r(i)   & 
-                        + pl%av(1, i)
-            pl%x(1, i) = pl%x(1, i) + dt * pl%vx(1, i)
-            pl%vx(2, i) = pl%vx(2, i) + (dt/2.) * pl%dvx%y%r(i)   & 
-                        + pl%av(2, i)
-            pl%x(2, i) = pl%x(2, i) + dt * pl%vx(2, i)
-      enddo 
-           
    else
-
-       pl => parts
-       do i=1,pl%ntotal +pl%nvirt  ! origionally pl%ntotal            
-            
-         if(.not.summation_density )then 
-            pl%rho%r(i) = pl%rho_min%r(i) + dt*pl%drho(i)
-         endif
-
-         if(pl%itype(i)<0)cycle
-
-!         do d = 1, pl%dim                   
-!            pl%vx(d, i) = pl%v_min(d, i) + dt * pl%dvx(d, i)    & 
-!                        + pl%av(d, i)
-!            pl%x(d, i) = pl%x(d, i) + dt * pl%vx(d, i)                  
-!         enddo
-            pl%vx(1, i) = pl%v_min(1, i) + dt * pl%dvx%x%r(i)    & 
-                        + pl%av(1, i)
-            pl%x(1, i) = pl%x(1, i) + dt * pl%vx(1, i)                  
-            pl%vx(2, i) = pl%v_min(2, i) + dt * pl%dvx%y%r(i)    & 
-                        + pl%av(2, i)
-            pl%x(2, i) = pl%x(2, i) + dt * pl%vx(2, i)                              
-      enddo
+pl => parts
+       call second_half 
+       
+       
 
    endif 
 
    time = time + dt
 
-   if(mod(itimestep,print_step).eq.0)then
-      write(*,*)'______________________________________________'
-      write(*,*)'  current number of time step =',                &
-                itimestep,'     current time=', real(time+dt)
-      write(*,*)'______________________________________________'
-   endif  
+!  if(mod(itimestep,print_step).eq.0)then
+!      write(*,*)'______________________________________________'
+!      write(*,*)'  current number of time step =',                &
+!                itimestep,'     current time=', real(time+dt)
+!      write(*,*)'______________________________________________'
+!   endif  
 
-   if(itimestep>=save_step_from.and.mod(itimestep,save_step).eq.0)then
-      call output
-   endif 
+!   if(itimestep>=save_step_from.and.mod(itimestep,save_step).eq.0)then
+!      call output
+!   endif 
 
 enddo
 
 return
-end subroutine      
 
-!DEC$ENDIF
+! -------------------
+      contains
+! -------------------
+
+      subroutine first_half
+! ---------------------------------------------------------------------
+implicit none
+integer i,d
+type(p2r) vxi(3), dvxi(3), v_mini(3)
+
+!      do i = 1, pl%ntotal +pl%nvirt    ! originally only pl%ntotal       
+            
+         if (.not.summation_density) then    
+            parts%rho_min = parts%rho
+            parts%rho = parts%rho +(dt/2.)* parts%drho
+         endif
+
+!         if(trim(pl%imaterial)=='water'.and.volume_fraction)then
+!            pl%vof_min = pl%vof
+!            pl%vof = pl%vof+(dt/2.)*pl%dvof 
+!         endif
+          
+      do i = 1, parts%ntotal +parts%nvirt    ! originally only pl%ntotal       
+         if(parts%itype(i)<0)cycle
+        
+         vxi = parts%vx%cmpt(i); dvxi = parts%dvx%cmpt(i); v_mini = parts%v_min%cmpt(i)
+         do d = 1, parts%dim
+         !   pl%v_min(d, i) = pl%vx(d, i)
+         !   pl%vx(d, i) = pl%vx(d, i) + (dt/2.)*pl%dvx(d, i)
+            v_mini(d)%p = vxi(d)%p
+            vxi(d)%p = vxi(d)%p + (dt/2.)*dvxi(d)%p         
+         enddo
+
+            !pl%v_min(1, i) = pl%vx%x%r(i)
+            !pl%vx%x%r(i) = pl%vx%x%r(1, i) + (dt/2.)*pl%dvx%x%r(i)
+            !pl%v_min(2, i) = pl%vx%y%r(i)
+            !pl%vx%y%r(i) = pl%vx%y%r(i) + (dt/2.)*pl%dvx%y%r(i)
+      enddo
+
+      return
+      end subroutine   
+   
+
+      subroutine first_step
+! -------------------------------------------------------------------
+      implicit none
+      type(p2r) vxi(3), dvxi(3), v_mini(3), avi(3)
+
+!      do i=1,pl%ntotal +pl%nvirt     ! origionally pl%ntotal
+         
+         if (.not.summation_density ) then
+            parts%rho = parts%rho + (dt/2.)* parts%drho
+         endif
+
+      do i=1,parts%ntotal +parts%nvirt     ! origionally pl%ntotal
+         if(parts%itype(i)<0)cycle
+         vxi = parts%vx%cmpt(i); dvxi = parts%dvx%cmpt(i); avi = parts%av%cmpt(i)
+         do d = 1, parts%dim        
+            !pl%vx(d, i) = pl%vx(d, i) + (dt/2.) * pl%dvx(d, i)   &
+            !            + pl%av(d, i)
+            !pl%x(d, i) = pl%x(d, i) + dt * pl%vx(d, i)
+            vxi(d)%p = vxi(d)%p + (dt/2.) * dvxi(d)%p + avi(d)%p
+            parts%x(d, i) = parts%x(d, i) + dt * vxi(d)%p            
+         enddo           
+            !pl%vx(1, i) = pl%vx(1, i) + (dt/2.) * pl%dvx%x%r(i)   &
+            !            + pl%av(1, i)
+            !pl%x(1, i) = pl%x(1, i) + dt * pl%vx(1, i)
+            !pl%vx(2, i) = pl%vx(2, i) + (dt/2.) * pl%dvx%y%r(i)   &
+            !            + pl%av(2, i)
+            !pl%x(2, i) = pl%x(2, i) + dt * pl%vx(2, i)
+      enddo 
+      
+      return
+      end subroutine
+
+      subroutine second_half
+! ------------------------------------------------------------------
+      implicit none
+      type(p2r) vxi(3), dvxi(3), v_mini(3),avi(3)
+      !$omp parallel do private(d,vxi,dvxi,v_mini,avi)
+      do i=1,parts%ntotal +parts%nvirt  ! origionally pl%ntotal            
+            
+         if (.not.summation_density ) then 
+            parts%rho%r(i) = parts%rho_min%r(i) + dt*parts%drho%r(i)
+         endif
+
+ !        if(trim(pl%imaterial)=='water'.and.volume_fraction)then
+ !           pl%vof%r(i) = pl%vof_min%r(i)+dt*pl%dvof%r(i) 
+ !        endif
+                 
+
+
+         if(parts%itype(i)<0)cycle
+         vxi = parts%vx%cmpt(i); dvxi = parts%dvx%cmpt(i) ; v_mini = parts%v_min%cmpt(i)
+         avi = parts%av%cmpt(i)
+         do d = 1, parts%dim                   
+            !pl%vx(d, i) = pl%v_min(d, i) + dt * pl%dvx(d, i)   &
+            !            + pl%av(d, i)
+            !pl%x(d, i) = pl%x(d, i) + dt * pl%vx(d, i)
+            vxi(d)%p = v_mini(d)%p + dt * dvxi(d)%p   &
+                        + avi(d)%p
+            parts%x(d, i) = parts%x(d, i) + dt * vxi(d)%p
+         enddo
+            !pl%vx(1, i) = pl%v_min(1, i) + dt * pl%dvx%x%r(i)   &
+            !            + pl%av(1, i)
+            !pl%x(1, i) = pl%x(1, i) + dt * pl%vx(1, i)                  
+            !pl%vx(2, i) = pl%v_min(2, i) + dt * pl%dvx%y%r(i)   &
+            !            + pl%av(2, i)
+            !pl%x(2, i) = pl%x(2, i) + dt * pl%vx(2, i)                              
+      enddo
+      !$omp end parallel do
+      return
+      end subroutine
+      end subroutine
+      
 !DEC$IF(.FALSE.)
 !----------------------------------------------------------------------      
       subroutine time_integration_for_water_by_verlet
@@ -1645,94 +1698,155 @@ end subroutine
 !-------------------------------------------------
       subroutine single_step_for_water
 !-------------------------------------------------
-!use param
+
+!   Subroutine to determine the right hand side of a differential 
+!   equation in a single step for performing time integration 
+!----------------------------------------------------------------------
+!use param 
 !use declarations_sph
 !use m_sph_fo
 implicit none
+
+integer  nphase
 type(particles), pointer :: pl
-type(material),pointer :: property
-
-pl => parts
-property => pl%material
-
-pl%dvx%x%r = 0.d0; pl%dvx%y%r = 0.d0; pl%drho = 0.d0
-
+logical :: dbg = .false.
+integer i, ntotal
+type(material),pointer :: water
+water => parts%material
+pl => parts        
+if(dbg) write(*,*) 'In single_step...'
+call pl%setup_ndim1
+pl%dvx%x = 0.d0; pl%dvx%y = 0.d0; pl%drho = 0.d0
+!pl%dvof = 1.d0
+ 
 !---  Interaction parameters, calculating neighboring particles
 !     and optimzing smoothing length
-
-call pl%find_pairs
+  
+if (pl%numeric%nnps.eq.1) then 
+   call direct_find(pl)
+else if (pl%numeric%nnps.eq.2) then
+   call link_list(pl)     
+!        call link_list(itimestep, ntotal+nvirt,hsml(1),x,niac,pair_i,
+!     &       pair_j,w,dwdx,ns)
+!        call link_list(itimestep, parts%ntotal+parts%nvirt,
+!     &       parts%hsml(1),parts%x,parts%niac,parts%pair_i,
+!     &       parts%pair_j,parts%w,parts%dwdx,parts%countiac)
+else if (pl%numeric%nnps.eq.3) then 
+!        call tree_search(itimestep, ntotal+nvirt,hsml,x,niac,pair_i,
+!     &       pair_j,w,dwdx,ns)
+endif         
 
 if(mod(itimestep,print_step).eq.0.and.int_stat) then
    call pl%interaction_statistics
 endif   
 
+!--- Added by Wang
+!if(nor_density) call norm_density(pl)
+
 !---  Density approximation or change rate
      
-!if(summation_density) call sum_density(pl)
-call sum_density(pl)
-pl%drho = -pl%rho*(pl%df2(pl%vx%x,'x')+pl%df2(pl%vx%y,'y'))
+!if(summation_density)then      
+!if(mod(itimestep,30)==0) call sum_density(pl)
+!else             
+!    call con_density(pl)         
+    pl%drho = -pl.rho*pl.div2(pl.vx)
+!endif
       
 if(artificial_density)then
-   !call renormalize_density_gradient(pl)
-   !call art_density(pl)
-   call delta_sph(pl,pl%rho%r,pl%drho%r)
+   !if(trim(pl%imaterial)=='water')then
+      !!call renormalize_density_gradient(pl)
+      !call art_density(pl)
+      call delta_sph_omp(pl,pl%rho,pl%drho)
+   !endif
 endif
-       
+
+!---  Dynamic viscosity:
+     
+
+
+water => parts%material
+parts%p%r(1:ntotal) = water%b*((parts%rho%r(1:ntotal)/(water%rho0)) &   !!! False density
+                  **water%gamma-1)
+
+!parts%c%r(1:ntotal) = water%c*(parts%rho%r(1:ntotal)/(water%rho0))**3.0    
+
+
+
 !---  Internal forces:
 
-!Calculate pressure
-
-where(pl%rho%r>0.0) pl%p%r = property%b*((pl%rho%r/property%rho0)**property%gamma-1)
-
+!call shear_strain_rate(pl)
+pl%tab%x%ndim1 = pl%ntotal+pl%nvirt
+pl%tab%xy%ndim1 = pl%tab%x%ndim1; pl%tab%y%ndim1 = pl%tab%x%ndim1
+!write(*,*) pl%tab%x%ndim1,pl%vx%x%ndim1
 !Calculate SPH sum for shear tensor Tab = va,b + vb,a - 2/3 delta_ab vc,c
 
-pl%tab%x = 2./3.*(2.0*pl%df(pl%vx%x,'x')-pl%df(pl%vx%y,'y'))
-pl%tab%xy = pl%df(pl%vx%x,'y')+pl%df(pl%vx%y,'x')
-pl%tab%y = 2./3.*(2.0*pl%df(pl%vx%y,'y')-pl%df(pl%vx%x,'x'))
+pl%tab%x = 2.d0/3.d0*(2.d0*pl%df4(pl%vx%x,'x')-pl%df4(pl%vx%y,'y'))
+pl%tab%xy = pl%df4(pl%vx%x,'y')+pl%df4(pl%vx%y,'x')
+pl%tab%y = 2.d0/3.d0*(2.d0*pl%df4(pl%vx%y,'y')-pl%df4(pl%vx%x,'x'))
 
-!Newtonian fluid
+!call velocity_divergence(pl)
 
-pl%str%x = property%viscosity*pl%tab%x
-pl%str%y = property%viscosity*pl%tab%y
-pl%str%xy = property%viscosity*pl%tab%xy
+!call pressure(pl)
 
-!Calculate internal force
+!   call newtonian_fluid(pl)
 
-pl%dvx%x = - pl%df(pl%p,'x') + pl%df(pl%str%x,'x') + pl%df(pl%str%xy,'y')
-pl%dvx%y = - pl%df(pl%p,'y') + pl%df(pl%str%xy,'x') + pl%df(pl%str%y,'y')
+      parts%str%x = water%viscosity*parts%tab%x
+      parts%str%y = water%viscosity*parts%tab%y
+      parts%str%xy = water%viscosity*parts%tab%xy
 
-pl%dvx%x = pl%dvx%x/pl%rho
-pl%dvx%y = pl%dvx%y/pl%rho
-       
-!if(water_tension_instability==2) call tension_instability(pl) 
+!Calculate internal force for water phase !! -phi_f Grad(p)
+
+   pl%dvx%x = -pl%df(pl%p,'x') + pl%df(pl%str%x,'x') + pl%df(pl%str%xy,'y')
+   pl%dvx%y = -pl%df(pl%p,'y') + pl%df(pl%str%xy,'x') + pl%df(pl%str%y,'y')   
+   pl%dvx%x = pl%dvx%x/pl%rho
+   pl%dvx%y = pl%dvx%y/pl%rho
+   !write(*,*) pl%dvx%x%r(1:50),pl%dvx%y%r(1:50)
+
 
 !---  Artificial viscosity:
 
-if (visc_artificial) call pl%art_visc
+if (visc_artificial) call pl%art_visc_omp
+       
+!if(trim(pl%imaterial)=='water'.and.water_artificial_volume)  &
+        !call art_volume_fraction_water2(pl)
+ !       call pl%delta_sph_omp(pl%vof,pl%dvof)
+
+!--- Damping
+!       if(trim(pl%imaterial)=='soil') call damping_stress(pl)
     
 !---  External forces:
 
+      !if (ex_force) call ext_force(pl)
+!      if (ex_force)then
+!          if(self_gravity) call gravity_force(pl)
+!          call repulsive_force(pl)
+call pl%repulsive_force_omp                ! can be tried
+!      endif
+
 pl%dvx%y = pl%dvx%y + gravity
 
-!call repulsive_force(pl)
-
-! Calculating the neighboring particles and undating HSML
+!     Calculating the neighboring particles and undating HSML
       
 !if (sle.ne.0) call h_upgrade(pl)
-     
-! Calculating average velocity of each partile for avoiding penetration
+
+!     Calculating average velocity of each partile for avoiding penetration
 
 if (average_velocity) call av_vel(pl) 
 
+!---  Convert velocity, force, and energy to f and dfdt  
+      
 if(mod(itimestep,print_step).eq.0) then     
 !  call pl%particle_monitor
    call pl%minimum_time_step  
 endif
 
+      if(itimestep>=save_step_from.and.   &
+         mod(itimestep,save_step).eq.0)then
+         call output
+      endif 
+
 return
 end subroutine
-
-
 !----------------------------------------------------------------------      
                subroutine single_step_for_soil
 !----------------------------------------------------------------------
