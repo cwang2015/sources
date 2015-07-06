@@ -930,6 +930,24 @@ type(p2r) vxi(3), dvxi(3), v_mini(3)
             pl%rho%r(i) = pl%rho_min%r(i) + dt*pl%drho%r(i)
          endif
    
+         if(trim(pl%imaterial)=='water'.and.volume_fraction)then
+            pl%vof%r(i) = pl%vof_min%r(i)+dt*pl%dvof%r(i) 
+         endif
+                 
+         if(trim(pl%imaterial)=='soil')then 
+                  if(stress_integration==1)then 
+         pl%str%x%r(i) = pl%str%x%r(i) + dt*pl%dstr%x%r(i)
+         pl%str%xy%r(i) = pl%str%xy%r(i) + dt*pl%dstr%xy%r(i)
+         pl%str%y%r(i) = pl%str%y%r(i) + dt*pl%dstr%y%r(i)
+         pl%p%r(i)   = pl%p%r(i)   + dt*pl%dp%r(i)       !!! simultaneous pressure
+                  elseif(stress_integration==2)then
+         pl%str%x%r(i) = pl%str_min%x%r(i) + dt*pl%dstr%x%r(i)
+         pl%str%xy%r(i) = pl%str_min%xy%r(i) + dt*pl%dstr%xy%r(i)
+         pl%str%y%r(i) = pl%str_min%y%r(i) + dt*pl%dstr%y%r(i)
+         pl%p%r(i)   = pl%p_min%r(i) + dt*pl%dp%r(i)     !!! simultaneous pressure
+                  endif
+         endif
+         
          if(pl%itype(i)<0)cycle
          vxi = pl%vx%cmpt(i); dvxi = pl%dvx%cmpt(i) ; v_mini = pl%v_min%cmpt(i)
          avi = pl%av%cmpt(i)
