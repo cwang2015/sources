@@ -5,6 +5,7 @@ use constants
 !use param
 use declarations
 use declarations_sph
+use omp_lib
 implicit none     
 !
 integer d, m, i, yesorno
@@ -20,6 +21,10 @@ call getarg(1,cas_file)
 write(*,*) 'cas_file:', cas_file
 !cas_file = '..\data\cas_mix_Savage'
 call read_cas
+
+   CALL OMP_SET_NUM_THREADS(nthreads)
+
+   write(*,*) "Max number of threads: ", omp_get_max_threads()
 
 call open_files      
 

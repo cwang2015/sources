@@ -102,7 +102,7 @@ real(dp) mingridx(3),maxgridx(3),dgeomx(3)
 
 !maxn: Maximum number of particles
 !max_interation : Maximum number of interaction pairs
-integer :: maxn = 350000, max_interaction = 20 * 350000
+integer :: maxn = 2000, max_interaction = 10 * 2000
   
 !SPH algorithm
 
@@ -2006,7 +2006,7 @@ nthreads = parts%nthreads
 
 fun%ndim1 = ntotal
 allocate(fun%r(ntotal))
-if(nthreads>1)then
+if(nthreads>=1)then
    allocate(local(ntotal,nthreads))
    call parts%get_niac_start_end
 endif   
@@ -2066,7 +2066,7 @@ nthreads = parts%nthreads
 !write(*,*) 'sadf', nthreads
 
 allocate(val%r(ntotal*nthreads))
-!if(nthreads>1)then
+!if(nthreads>=1)then
 !   allocate(df_local(ntotal,nthreads))
    call parts%get_niac_start_end
 !endif   
@@ -2203,7 +2203,7 @@ nthreads = parts%nthreads
 df3_omp%ndim1 = ntotal
 allocate(df3_omp%r(ntotal))
 
-if(nthreads>1)then
+if(nthreads>=1)then
    allocate(local(ntotal,nthreads))
    call parts%get_niac_start_end
 endif 
@@ -2300,7 +2300,7 @@ nthreads = parts%nthreads
 
 fun%ndim1 = ntotal
 allocate(fun%r(ntotal))
-if(nthreads>1)then
+if(nthreads>=1)then
    allocate(local(ntotal,nthreads))
    call parts%get_niac_start_end
 endif   
@@ -2402,7 +2402,7 @@ dwdx =>parts%dwdx
 allocate(fun);allocate(fun%r(ntotal))
 fun%ndim1 = ntotal
 
-if(nthreads>1)then
+if(nthreads>=1)then
    allocate(local(ntotal,nthreads))
    call parts%get_niac_start_end
 endif   
@@ -3027,7 +3027,7 @@ end subroutine
       niac     =  parts%niac; dim = parts%dim; nthreads = parts%nthreads            
       delta    = parts%numeric%delta
 
-      if(nthreads>1)then
+      if(nthreads>=1)then
          allocate(local(ntotal,nthreads))
          call parts%get_niac_start_end
       endif   

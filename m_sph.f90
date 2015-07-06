@@ -131,6 +131,8 @@ type(particles), target :: parts, soil
 double precision :: dt, time = 0.d0
 integer :: maxtimestep = 0 , itimestep = 0
 
+!OpenMP Number of threads
+integer :: nthreads = 1
 contains
 
 !     *********************
@@ -458,6 +460,11 @@ contains
                   if(ncoma>=ndim) call trim_pvalu(trim(pvalu),',',ndim)
 !                  read(pvalu,*) max_time_step
 !                  write(*,*) 'Maximum time step = ', max_time_step
+
+      case('OPENMP NUMBER OF THREADS')
+
+                  read(pvalu,*) nthreads
+                  write(*,*) 'Openmp number of threads = ', nthreads
 
       case DEFAULT
 
