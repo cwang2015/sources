@@ -77,8 +77,8 @@ integer :: dim = 2
 !y_mingeom : Lower limit of allowed y-regime 
 !z_maxgeom : Upper limit of allowed z-regime 
 !z_mingeom : Lower limit of allowed z-regime 
-real(dp) :: x_maxgeom = 0.5e0, x_mingeom = -0.05e0,  &
-            y_maxgeom = 0.25e0, y_mingeom = -0.05e0,  &
+real(dp) :: x_maxgeom = 3.35e0, x_mingeom = -0.05e0,  &
+            y_maxgeom = 1.90e0, y_mingeom = -0.05e0,  &
             z_maxgeom = 10.e0, z_mingeom = -10.e0
 
 !Parameter used for sorting grid cells in the link list algorithm
