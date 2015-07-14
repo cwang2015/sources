@@ -1181,7 +1181,7 @@ type(p2r) vxi(3), dvxi(3), v_mini(3)
       end subroutine
       end subroutine
       
-!DEC$IF(.FALSE.)
+
 !----------------------------------------------------------------------      
       subroutine time_integration_for_water_by_verlet
 !----------------------------------------------------------------------
@@ -1191,19 +1191,28 @@ implicit none
 
 integer :: i, j, k, d, ntotal, it 
 type(particles), pointer :: pl
-              
-real(dp), allocatable, dimension(:,:) :: lastvx   
-real(dp), allocatable, dimension(:,:) :: temp1    
-real(dp), allocatable, dimension(:)   :: lastrho  
-real(dp), allocatable, dimension(:)   :: temp2    
+type(array) :: lastvx_x,lastvx_y,temp1_x,temp1_y,lastrho,temp2
 
-allocate(lastvx(2,parts%maxn))
-allocate(temp1(2,parts%maxn))
-allocate(lastrho(parts%maxn))
-allocate(temp2(parts%maxn))
+lastvx_x%ndim1 = parts%ntotal+parts%nvirt
+lastvx_y%ndim1 = parts%ntotal+parts%nvirt
+temp1_x%ndim1 = parts%ntotal+parts%nvirt
+temp1_y%ndim1 = parts%ntotal+parts%nvirt
+lastrho%ndim1 = parts%ntotal+parts%nvirt
+temp2%ndim1 = parts%ntotal+parts%nvirt
+allocate(lastvx_x%r(parts%ntotal+parts%nvirt))
+allocate(lastvx_y%r(parts%ntotal+parts%nvirt))
+allocate(temp1_x%r(parts%ntotal+parts%nvirt))
+allocate(temp1_y%r(parts%ntotal+parts%nvirt))
+allocate(lastrho%r(parts%ntotal+parts%nvirt))
+allocate(temp2%r(parts%ntotal+parts%nvirt))
     pl => parts
-    lastvx = pl%vx
-    lastrho = pl%rho%r
+    call parts%setup_ndim1
+    lastvx_x = pl%vx%x
+    lastvx_y = pl%vx%y
+    temp1_x = pl%vx%x
+    temp1_y = pl%vx%y
+    
+    lastrho = pl%rho
 
 do it = 1, maxtimestep 
     itimestep = itimestep+1
@@ -1216,10 +1225,14 @@ if(mod(itimestep,50) .ne. 0) then
        !   lastvx(d,i) = lastvx(d,i) + 2.*dt*pl%dvx(d,i)
        
        !enddo
-          pl%x(1,i) = pl%x(1,i) + dt * pl%vx(1,i) +(dt**2./2.)*pl%dvx%x%r(i)
-          lastvx(1,i) = lastvx(1,i) + 2.*dt*pl%dvx%x%r(i)
-          pl%x(2,i) = pl%x(2,i) + dt * pl%vx(2,i) +(dt**2./2.)*pl%dvx%y%r(i)
-          lastvx(2,i) = lastvx(2,i) + 2.*dt*pl%dvx%y%r(i)       
+!          pl%x(1,i) = pl%x(1,i) + dt * pl%vx(1,i) +(dt**2./2.)*pl%dvx%x%r(i)
+!          lastvx(1,i) = lastvx(1,i) + 2.*dt*pl%dvx%x%r(i)
+!          pl%x(2,i) = pl%x(2,i) + dt * pl%vx(2,i) +(dt**2./2.)*pl%dvx%y%r(i)
+!          lastvx(2,i) = lastvx(2,i) + 2.*dt*pl%dvx%y%r(i)       
+           pl%x(1,i) = pl%x(1,i) + dt * pl%vx%x%r(i) + (dt**2./2.)*pl%dvx%x%r(i)
+           lastvx_x%r(i) = lastvx_x%r(i) + 2.*dt*pl%dvx%x%r(i)
+           pl%x(2,i) = pl%x(2,i) + dt * pl%vx%y%r(i) + (dt**2./2.)*pl%dvx%y%r(i)
+           lastvx_y%r(i) = lastvx_y%r(i) + 2.*dt*pl%dvx%y%r(i)
     enddo
 else
     do i = 1, pl%ntotal
@@ -1227,31 +1240,35 @@ else
        !   pl%x(d,i) = pl%x(d,i) + dt * pl%vx(d,i) +(dt**2./2.)*pl%dvx(d,i)
        !   lastvx(d,i) = pl%vx(d,i) + dt*pl%dvx(d,i)
        !enddo
-          pl%x(1,i) = pl%x(1,i) + dt * pl%vx(1,i) +(dt**2./2.)*pl%dvx%x%r(i)
-          lastvx(1,i) = pl%vx(1,i) + dt*pl%dvx%x%r(i)
-          pl%x(2,i) = pl%x(2,i) + dt * pl%vx(2,i) +(dt**2./2.)*pl%dvx%y%r(i)
-          lastvx(2,i) = pl%vx(2,i) + dt*pl%dvx%y%r(i)       
+!          pl%x(1,i) = pl%x(1,i) + dt * pl%vx(1,i) +(dt**2./2.)*pl%dvx%x%r(i)
+!          lastvx(1,i) = pl%vx(1,i) + dt*pl%dvx%x%r(i)
+!          pl%x(2,i) = pl%x(2,i) + dt * pl%vx(2,i) +(dt**2./2.)*pl%dvx%y%r(i)
+!          lastvx(2,i) = pl%vx(2,i) + dt*pl%dvx%y%r(i)       
+           pl%x(1,i) = pl%x(1,i) + dt * pl%vx%x%r(i) + (dt**2./2.)*pl%dvx%x%r(i)
+           lastvx_x%r(i) = pl%vx%x%r(i) + dt*pl%dvx%x%r(i)
+           pl%x(2,i) = pl%x(2,i) + dt * pl%vx%y%r(i) + (dt**2./2.)*pl%dvx%y%r(i)
+           lastvx_y%r(i) = pl%vx%y%r(i) + dt*pl%dvx%y%r(i)
     enddo
 endif
-temp1 = pl%vx
-pl%vx = lastvx
-lastvx = temp1
+temp1_x = pl%vx%x;temp1_y = pl%vx%y
+pl%vx%x = lastvx_x;pl%vx%y = lastvx_y
+lastvx_x = temp1_x;lastvx_y = temp1_y
 
 if(itimestep .eq. 1) then
     do i = 1, pl%ntotal+pl%nvirt
-          lastrho(i) = pl%rho%r(i) + dt * 2. * pl%drho(i)
+          lastrho%r(i) = pl%rho%r(i) + dt * 2. * pl%drho%r(i)
     enddo
 elseif(mod(itimestep,50) .ne. 0) then
     do i = 1, pl%ntotal+pl%nvirt
-          lastrho(i) = lastrho(i) + dt * 2. * pl%drho(i)
+          lastrho%r(i) = lastrho%r(i) + dt * 2. * pl%drho%r(i)
     enddo
 else
    do i = 1, pl%ntotal+pl%nvirt
-          lastrho(i) = pl%rho%r(i) + dt* pl%drho(i)
+          lastrho%r(i) = pl%rho%r(i) + dt* pl%drho%r(i)
    enddo
 endif
-temp2 = pl%rho%r
-pl%rho%r = lastrho
+temp2 = pl%rho
+pl%rho = lastrho
 lastrho = temp2
 
    time = time + dt
@@ -1269,16 +1286,11 @@ lastrho = temp2
 
 enddo
 
-deallocate(lastvx)
-deallocate(lastrho)
-deallocate(temp1)
-deallocate(temp2)
 
 
 return
 end subroutine      
-         
-!DEC$ENDIF
+
 
 !DEC$IF(.FALSE.)
 !----------------------------------------------------------------------
@@ -1767,6 +1779,7 @@ endif
 !if(mod(itimestep,30)==0) call sum_density(pl)
 !else             
 !    call con_density(pl)         
+    
     pl%drho = -pl.rho*pl.div2(pl.vx)
 !endif
       
