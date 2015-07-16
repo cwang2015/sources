@@ -67,6 +67,7 @@ call soil%setup_ndim1
 parts%vol = tank%dx*tank%dy
 parts%hsml = tank%dx*1.2
 parts%dspp = tank%dx
+parts%dt   = dt
 
 ! itype is positive for real particles, negative for virtual particles.
  
@@ -98,7 +99,6 @@ do i = 1, parts%ntotal + parts%nvirt
 enddo
 if(single_phase) parts%vof%r = 1.0
 if(.not.volume_fraction)  parts%vof%r = 1.0
-!parts%vof%ndim1 = ntotal
 
 ! Density and Mass
 !write(*,*) ntotal,parts%vof%ndim1,parts%p%ndim1
@@ -116,6 +116,7 @@ parts%mass = parts%vol * parts%rho
 soil%vol = tank%dx*tank%dy
 soil%hsml = tank%dx*1.2
 soil%dspp = tank%dx
+soil%dt = dt
 
 ! itype is positive for real particles, negative for virtual particles.
  
@@ -149,12 +150,9 @@ soil%c = sand%c
 
 soil%vof%r = 0.55
 if(.not.volume_fraction)soil%vof%r = 1.0
-!soil%vof%ndim1 = bntotal
 
 ! Density and Mass
-write(*,*) "rrrrrr", soil%rho%ndim1, soil%vof%ndim1,bntotal
 soil%rho  = sand%rho0*soil%vof
-write(*,*) "tttttt"
 soil%mass = soil%vol*soil%rho
 
 return

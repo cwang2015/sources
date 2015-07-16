@@ -1,6 +1,6 @@
 subroutine input
 
-use param
+!use param
 use declarations_sph
 implicit none     
       
@@ -14,17 +14,18 @@ double precision element_size, soil_submerged_depth
 
 ! Set nozzle and tank geometry parameters
 
-call tank%set(xl=0.5d0,yl=0.3d0,m=40,n=24)
+call tank%set(xl=0.61d0,yl=0.11d0,m=488,n=88)
 npoint = tank%m*tank%n
 allocate(tank%x(npoint),tank%y(npoint),tank%zone(npoint))
 call tank%cell_center
+tank%x = tank%x - 0.01d0; tank%y = tank%y - 0.01d0
 !      write(*,*) 'x=', tank%x
 !      write(*,*) 'y=', tank%y
 
 ! Zoning
 tank%zone = 2
 do i = 1, tank%m*tank%n
-   if(tank%x(i)<0.05.or.tank%x(i)>0.45.or.tank%y(i)<0.05) tank%zone(i) = 1
+   if(tank%x(i)<0.0.or.tank%x(i)>0.6.or.tank%y(i)<0.0) tank%zone(i) = 1
    if(tank%zone(i)==1.and.tank%x(i)>0.2)tank%zone(i)=3
    if(tank%zone(i)==2.and.tank%x(i)>0.2)tank%zone(i)=4
 enddo
@@ -35,12 +36,16 @@ call parts%take_virtual(tank,1)
 call parts%take_virtual(tank,3)
 
 !      write(*,*) parts%ntotal, parts%nvirt
-      
+
+call parts%setup_ndim1
+
 ! Basic settings for particles (vol,hsml,itype)
 ! vol means the volume of a cell. We calculate the mass of each particle according to mass = rho*vol
 
 parts%vol = tank%dx*tank%dy
-parts%hsml = tank%dx
+parts%hsml = tank%dx*1.2
+parts%dspp = tank%dx
+parts%dt = dt
 
 ! itype is positive for real particles, negative for virtual particles.
  
@@ -49,27 +54,27 @@ call parts%setup_itype
 ! Set initial conditions of particles
 ! ...Velocity
 
-parts%vx = 0.d0
+parts%vx%x = 0.d0; parts%vx%y = 0.d0
 
 ! ...Stress. You must define the free surface first.
 soil_surface = 0.3
 property => parts%material
 do i = 1,parts%ntotal+parts%nvirt
-   parts%p(i) = property%rho0*gravity*(parts%x(2,i)-soil_surface)
-   if(parts%zone(i)==3)parts%p(i)=0.0
+   parts%p%r(i) = property%rho0*gravity*(parts%x(2,i)-soil_surface)
+   if(parts%zone(i)==3)parts%p%r(i)=0.0
 enddo
 do i = 1, parts%ntotal+parts%nvirt   
-   parts%sxy(i) = 0.d0
-   parts%sxx(i) =  0.1905*parts%p(i)
-   parts%syy(i) = -0.381*parts%p(i)
-   parts%p(i)   =  0.619*parts%p(i)
+   parts%str%xy%r(i) = 0.d0
+   parts%str%x%r(i) =  0.1905*parts%p%r(i)
+   parts%str%y%r(i) = -0.381*parts%p%r(i)
+   parts%p%r(i)   =  0.619*parts%p%r(i)
 enddo
 
 parts%c = property%c
 
 ! Density and Mass
 
-parts%rho(1:parts%ntotal+parts%nvirt)  = property%rho0
+parts%rho  = property%rho0
 parts%mass = parts%vol * parts%rho     
 
 return

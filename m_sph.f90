@@ -522,7 +522,7 @@ if(trim(parts%imaterial)=='water')then
     allocate(parts%str);allocate(parts%str%x,parts%str%xy,parts%str%y)
     parts%str%x%r => tab%x%r; parts%str%y%r => tab%y%r; parts%str%xy%r => tab%xy%r
 elseif(trim(parts%imaterial)=='soil')then
-   parts%wxy%r => tab%xy%r
+   parts%wxy => tab%xy
 endif   
 
 ! Material assignment
@@ -741,6 +741,15 @@ end subroutine
 !---  Definition of variables out of the function vector:    
 
         call single_step
+        do i = 1, parts%ntotal + parts%nvirt
+           if(parts%zone(i)==4)then
+              parts%dvx%x%r(i)=0.d0; parts%dvx%y%r(i)=0.d0
+              parts%av%x%r(i)=0.d0; parts%av%y%r(i)=0.d0
+              parts%dvof%r(i)=0.d0
+              parts%drho%r(i)=0.d0
+           endif   
+        enddo
+
 
         if (itimestep .eq. 1) then
            pl => parts
@@ -849,7 +858,7 @@ type(p2r) vxi(3), dvxi(3), v_mini(3)
          pl%p = pl%p + (dt/2.)*pl%dp      !!!simultaneous pressure
                   endif
          endif
-          
+      !write(*,*) pl%ntotal + pl%nvirt    
       do i = 1, pl%ntotal +pl%nvirt    ! originally only pl%ntotal       
          if(pl%itype(i)<0)cycle
          vxi = pl%vx%cmpt(i); dvxi = pl%dvx%cmpt(i); v_mini = pl%v_min%cmpt(i)
@@ -947,7 +956,7 @@ type(p2r) vxi(3), dvxi(3), v_mini(3)
          pl%p%r(i)   = pl%p_min%r(i) + dt*pl%dp%r(i)     !!! simultaneous pressure
                   endif
          endif
-         
+        
          if(pl%itype(i)<0)cycle
          vxi = pl%vx%cmpt(i); dvxi = pl%dvx%cmpt(i) ; v_mini = pl%v_min%cmpt(i)
          avi = pl%av%cmpt(i)
@@ -958,6 +967,7 @@ type(p2r) vxi(3), dvxi(3), v_mini(3)
             vxi(d)%p = v_mini(d)%p + dt * dvxi(d)%p   &
                         + avi(d)%p
             pl%x(d, i) = pl%x(d, i) + dt * vxi(d)%p
+         !if(i>4160)write(*,*) i,vxi(2)%p
          enddo
             !pl%vx(1, i) = pl%v_min(1, i) + dt * pl%dvx%x%r(i)   &
             !            + pl%av(1, i)
@@ -1280,7 +1290,6 @@ end subroutine
          
 !DEC$ENDIF
 
-!DEC$IF(.FALSE.)
 !----------------------------------------------------------------------
              subroutine time_integration_for_soil
 !----------------------------------------------------------------------
@@ -1290,7 +1299,7 @@ implicit none
 
 integer :: i, j, k, d, ntotal, it
 type(particles), pointer :: pl
-type(p2r) vxi(3), dvxi(3), v_mini(3)
+type(p2r) vxi(3), dvxi(3), v_mini(3), avi(3)
               
 do it = 1, maxtimestep     
    itimestep = itimestep+1
@@ -1303,11 +1312,11 @@ do it = 1, maxtimestep
 
       pl => parts
 !      call first_half
-      do i = 1, pl%ntotal +pl%nvirt    ! originally only pl%ntotal       
+!      do i = 1, pl%ntotal +pl%nvirt    ! originally only pl%ntotal       
             
          if (.not.summation_density) then    
-            pl%rho_min%r(i) = pl%rho%r(i)
-            pl%rho%r(i) = pl%rho%r(i) +(dt/2.)* pl%drho%r(i)
+            pl%rho_min = pl%rho
+            pl%rho = pl%rho +(dt/2.)* pl%drho
          endif
  
          if(stress_integration==1)then
@@ -1315,21 +1324,25 @@ do it = 1, maxtimestep
             !pl%sxy(i) = pl%sxy(i) + dt*pl%dsxy(i)
             !pl%syy(i) = pl%syy(i) + dt*pl%dsyy(i)
          elseif(stress_integration==2)then
-            pl%str_min%x%r(i) = pl%str%x%r(i)
-            pl%str_min%xy%r(i) = pl%str%xy%r(i)
-            pl%str_min%y%r(i) = pl%str%y%r(i)
-            pl%p_min%r(i)   = pl%p%r(i)
-            pl%str%x%r(i) = pl%str%x%r(i) + (dt/2.)*pl%dstr%x%r(i)
-            pl%str%xy%r(i) = pl%str%xy%r(i) + (dt/2.)*pl%dstr%xy%r(i)
-            pl%str%y%r(i) = pl%str%y%r(i) + (dt/2.)*pl%dstr%y%r(i)
-            pl%p%r(i) = pl%p%r(i) + (dt/2.)*pl%dp%r(i)      !!!simultaneous pressure
+            pl%str_min%x = pl%str%x
+            pl%str_min%xy = pl%str%xy
+            pl%str_min%y = pl%str%y
+            pl%p_min   = pl%p
+            pl%str%x = pl%str%x + (dt/2.)*pl%dstr%x
+            pl%str%xy = pl%str%xy + (dt/2.)*pl%dstr%xy
+            pl%str%y = pl%str%y + (dt/2.)*pl%dstr%y
+            pl%p = pl%p + (dt/2.)*pl%dp      !!!simultaneous pressure
          endif
           
+      do i = 1, pl%ntotal +pl%nvirt    ! originally only pl%ntotal       
          if(pl%itype(i)<0)cycle
-         !do d = 1, pl%dim
+         vxi = pl%vx%cmpt(i); dvxi = pl%dvx%cmpt(i); v_mini = pl%v_min%cmpt(i)
+         do d = 1, pl%dim
          !   pl%v_min(d, i) = pl%vx(d, i)
          !   pl%vx(d, i) = pl%vx(d, i) + (dt/2.)*pl%dvx(d, i)
-         !enddo
+            v_mini(d)%p = vxi(d)%p
+            vxi(d)%p = vxi(d)%p + (dt/2.)*dvxi(d)%p                  
+         enddo
             !pl%v_min(1, i) = pl%vx(1, i)
             !pl%vx(1, i) = pl%vx(1, i) + (dt/2.)*pl%dvx%x%r(i)
             !pl%v_min(2, i) = pl%vx(2, i)
@@ -1345,31 +1358,30 @@ do it = 1, maxtimestep
    if(itimestep .eq. 1)then
       pl => parts
 !           call first_step
-      do i=1,pl%ntotal +pl%nvirt     ! origionally pl%ntotal
+!      do i=1,pl%ntotal +pl%nvirt     ! origionally pl%ntotal
          
          if(.not.summation_density )then
-            pl%rho%r(i) = pl%rho%r(i) + (dt/2.)* pl%drho%r(i)
+            pl%rho = pl%rho + (dt/2.)* pl%drho
          endif
 
          if(stress_integration==1)then
-            pl%str%x%r(i) = pl%str%x%r(i) + dt*pl%dstr%x%r(i)
-            pl%str%xy%r(i) = pl%str%xy%r(i) + dt*pl%dstr%xy%r(i)
-            pl%str%y%r(i) = pl%str%y%r(i) + dt*pl%dstr%y%r(i)
-            pl%p%r(i)   = pl%p%r(i)   + dt*pl%dp%r(i)       !!! simultaneous pressure
+            pl%str%x = pl%str%x + dt*pl%dstr%x
+            pl%str%xy = pl%str%xy + dt*pl%dstr%xy
+            pl%str%y = pl%str%y + dt*pl%dstr%y
+            pl%p   = pl%p   + dt*pl%dp       !!! simultaneous pressure
          elseif(stress_integration==2)then
-            pl%str%x%r(i) = pl%str%x%r(i) + (dt/2.)*pl%dstr%x%r(i)
-            pl%str%xy%r(i) = pl%str%xy%r(i) + (dt/2.)*pl%dstr%xy%r(i)
-            pl%str%y%r(i) = pl%str%y%r(i) + (dt/2.)*pl%dstr%y%r(i)
-            pl%p%r(i)   = pl%p%r(i) + (dt/2.)*pl%dp%r(i)    !!! simultaneous pressure
+            pl%str%x = pl%str%x + (dt/2.)*pl%dstr%x
+            pl%str%xy = pl%str%xy + (dt/2.)*pl%dstr%xy
+            pl%str%y = pl%str%y + (dt/2.)*pl%dstr%y
+            pl%p   = pl%p + (dt/2.)*pl%dp    !!! simultaneous pressure
          endif
         
+      do i=1,pl%ntotal +pl%nvirt     ! origionally pl%ntotal
          if(pl%itype(i)<0)cycle
-
-         vxi = pl%vx%cmpt(i); dvxi = pl%dvx%cmpt(i)
+         vxi = pl%vx%cmpt(i); dvxi = pl%dvx%cmpt(i); avi = pl%av%cmpt(i) 
          do d = 1, pl%dim        
-            vxi%p(d) = vxi%p(d) + (dt/2.) * dvxi%p(d)   &
-                        + pl%av(d, i)
-            pl%x(d, i) = pl%x(d, i) + dt * vxi%p(d)
+            vxi(d)%p = vxi(d)%p + (dt/2.) * dvxi(d)%p + avi(d)%p
+            pl%x(d, i) = pl%x(d, i) + dt * vxi(d)%p
          enddo           
             !pl%vx(1, i) = pl%vx(1, i) + (dt/2.) * pl%dvx%x%r(i)   &
             !            + pl%av(1, i)
@@ -1391,30 +1403,32 @@ do it = 1, maxtimestep
    
       pl => parts
 !           call second_half          
-      do i=1,pl%ntotal +pl%nvirt  ! origionally pl%ntotal            
+!      do i=1,pl%ntotal +pl%nvirt  ! origionally pl%ntotal            
             
          if(.not.summation_density )then 
-            pl%rho%r(i) = pl%rho_min%r(i) + dt*pl%drho%r(i)
+            pl%rho = pl%rho_min + dt*pl%drho
          endif
                  
          if(stress_integration==1)then 
-            pl%str%x%r(i) = pl%str%x%r(i) + dt*pl%dstr%x%r(i)
-            pl%str%xy%r(i) = pl%str%xy%r(i) + dt*pl%dstr%xy%r(i)
-            pl%str%y%r(i) = pl%str%y%r(i) + dt*pl%dstr%y%r(i)
-            pl%p%r(i)   = pl%p%r(i)   + dt*pl%dp%r(i)       !!! simultaneous pressure
+            pl%str%x = pl%str%x + dt*pl%dstr%x
+            pl%str%xy = pl%str%xy + dt*pl%dstr%xy
+            pl%str%y = pl%str%y + dt*pl%dstr%y
+            pl%p  = pl%p + dt*pl%dp       !!! simultaneous pressure
          elseif(stress_integration==2)then
-            pl%str%x%r(i) = pl%str_min%x%r(i) + dt*pl%dstr%x%r(i)
-            pl%str%xy%r(i) = pl%str%xy_min(i) + dt*pl%dstr%xy%r(i)
-            pl%str%y%r(i) = pl%str%yy_min(i) + dt*pl%dstr%y%r(i)
-            pl%p%r(i)   = pl%p_min%r(i) + dt*pl%dp%r(i)     !!! simultaneous pressure
+            pl%str%x = pl%str_min%x + dt*pl%dstr%x
+            pl%str%xy = pl%str_min%xy + dt*pl%dstr%xy
+            pl%str%y = pl%str_min%y + dt*pl%dstr%y
+            pl%p   = pl%p_min + dt*pl%dp     !!! simultaneous pressure
          endif
 
+      do i=1,pl%ntotal +pl%nvirt  ! origionally pl%ntotal            
          if(pl%itype(i)<0)cycle
          vxi = pl%vx%cmpt(i); dvxi = pl%dvx%cmpt(i); v_mini = pl%vx%cmpt(i)
+         avi = pl%av%cmpt(i)
          do d = 1, pl%dim                   
-            vxi%p(d) = pl%v_mini%p(d) + dt * dvxi%p(d)   &
-                        + pl%av(d, i)
-            pl%x(d, i) = pl%x(d, i) + dt * vxi%p(d)                  
+            vxi(d)%p = v_mini(d)%p + dt * dvxi(d)%p   &
+                        + avi(d)%p
+            pl%x(d, i) = pl%x(d, i) + dt * vxi(d)%p                  
          enddo
             !pl%vx(1, i) = pl%v_min(1, i) + dt * pl%dvx%x%r(i)   &
             !            + pl%av(1, i)
@@ -1451,7 +1465,6 @@ enddo
 return
 end subroutine
 
-!DEC$ENDIF
 
 !----------------------------------------------------------------------      
                    subroutine single_step
@@ -1483,7 +1496,9 @@ if(trim(pl%imaterial)=='water')pl%dvof = 0.d0
 if(trim(pl%imaterial)=='soil')then
    pl%dstr%x = 0.d0; pl%dstr%xy = 0.d0; pl%dstr%y = 0.d0; pl%dp = 0.d0
 endif
- 
+
+if(trim(pl%imaterial)=='water') call inlet_boundary2
+
 !---  Interaction parameters, calculating neighboring particles
 !     and optimzing smoothing length
   
@@ -1666,17 +1681,16 @@ endif
 !---  Interaction parameters, calculating neighboring particles
 !     and optimzing smoothing length
   
-      !if (numeric%nnps.eq.1) then 
-!         call direct_find_2(parts,soil)
+      if (parts%numeric%nnps.eq.1) then 
+         call direct_find_2(parts,soil)
+      else if (parts%numeric%nnps.eq.2) then
           call link_list2_omp(parts,soil)
-        !call direct_find(parts)
-      !else if (numeric%nnps.eq.2) then
 !        call link_list(itimestep, ntotal+nvirt,hsml(1),x,niac,pair_i,
 !     &       pair_j,w,dwdx,ns)
       !else if (numeric%nnps.eq.3) then 
 !        call tree_search(itimestep, ntotal+nvirt,hsml,x,niac,pair_i,
 !     &       pair_j,w,dwdx,ns)
-      !endif         
+      endif         
 
       if(mod(itimestep,print_step).eq.0.and.int_stat) then
          call parts%interaction_statistics
@@ -1864,6 +1878,7 @@ endif
 
 return
 end subroutine
+
 !----------------------------------------------------------------------      
                subroutine single_step_for_soil
 !----------------------------------------------------------------------
@@ -1881,7 +1896,7 @@ type(material), pointer :: property
 pl => parts
 property => pl%material
 
-pl%dvx%x%r = 0.d0; pl%dvx%y%r = 0.d0; pl%drho = 0.d0
+pl%dvx%x = 0.d0; pl%dvx%y = 0.d0; pl%drho = 0.d0
 pl%dstr%x = 0.d0; pl%dstr%xy = 0.d0; pl%dstr%y = 0.d0
 pl%dp = 0.d0
  
@@ -1899,14 +1914,15 @@ endif
 if (summation_density) then      
     call sum_density(pl)
 else             
-    call con_density(pl)         
+    !call con_density(pl)
+    pl%drho = -pl%rho*pl%div2(pl%vx)    
 endif
       
 if(artificial_density)then
    !if(trim(pl%imaterial)=='water')then
       !!call renormalize_density_gradient(pl)
       !call art_density(pl)
-      call delta_sph(pl,pl%rho%r,pl%drho%r)
+      call delta_sph_omp(pl,pl%rho,pl%drho)
    !endif
 endif
 
@@ -1914,8 +1930,17 @@ endif
        
 !---  Internal forces:
 
-call shear_strain_rate(pl)   
-call velocity_divergence(pl)
+!call shear_strain_rate(pl)   
+!call velocity_divergence(pl)
+
+pl%tab%x%ndim1 = pl%ntotal+pl%nvirt
+pl%tab%xy%ndim1 = pl%tab%x%ndim1; pl%tab%y%ndim1 = pl%tab%x%ndim1
+!write(*,*) pl%tab%x%ndim1,pl%vx%x%ndim1
+pl%tab%x = 2.d0/3.d0*(2.d0*pl%df4(pl%vx%x,'x')-pl%df4(pl%vx%y,'y'))
+pl%tab%xy = pl%df4(pl%vx%x,'y')+pl%df4(pl%vx%y,'x')
+pl%tab%y = 2.d0/3.d0*(2.d0*pl%df4(pl%vx%y,'y')-pl%df4(pl%vx%x,'x'))
+
+pl%vcc = pl%div_omp(pl%vx)
 
 call pressure(pl)
 
@@ -1927,8 +1952,8 @@ endif
 
 !call int_force1(pl)
 
-pl%dvx%x = - pl%df(pl%p,'x') + pl%df(pl%str%x,'x') + pl%df(pl%str%xy,'y')
-pl%dvx%y = - pl%df(pl%p,'y') + pl%df(pl%str%xy,'x') + pl%df(pl%str%y,'y')
+pl%dvx%x = -pl%df3_omp(pl%p,'x') + pl%df3_omp(pl%str%x,'x') + pl%df3_omp(pl%str%xy,'y')
+pl%dvx%y = -pl%df3_omp(pl%p,'y') + pl%df3_omp(pl%str%xy,'x') + pl%df3_omp(pl%str%y,'y')
 
 pl%dvx%x = pl%dvx%x/pl%rho
 pl%dvx%y = pl%dvx%y/pl%rho       
@@ -1951,14 +1976,14 @@ call Jaumann_rate(pl)
 
 !---  Artificial viscosity:
 
-if (visc_artificial) call pl%art_visc
+if (visc_artificial) call pl%art_visc_omp
 
 !if(soil_artificial_stress) call art_stress(pl)
 if(soil_artificial_stress)then
-   call pl%delta_sph(pl%p%r,pl%dp%r)
-   call pl%delta_sph(pl%str%x%r,pl%dstr%x%r)
-   call pl%delta_sph(pl%str%xy%r,pl%dstr%xy%r)
-   call pl%delta_sph(pl%str%y%r,pl%dstr%y%r)
+   call pl%delta_sph_omp(pl%p,pl%dp)
+   call pl%delta_sph_omp(pl%str%x,pl%dstr%x)
+   call pl%delta_sph_omp(pl%str%xy,pl%dstr%xy)
+   call pl%delta_sph_omp(pl%str%y,pl%dstr%y)
 endif   
 
 !--- Damping
@@ -1972,7 +1997,7 @@ endif
 !          call repulsive_force(pl)
 !      endif
 
-pl%dvx%y%r = pl%dvx%y%r + gravity
+pl%dvx%y = pl%dvx%y + gravity
 
 ! Calculating the neighboring particles and undating HSML
       
@@ -1980,7 +2005,7 @@ pl%dvx%y%r = pl%dvx%y%r + gravity
      
 ! Calculating average velocity of each partile for avoiding penetration
 
-if (average_velocity) call av_vel(pl) 
+if (average_velocity) call av_vel_omp(pl) 
 
 !---  Convert velocity, force, and energy to f and dfdt  
       
@@ -1991,7 +2016,6 @@ endif
 
 return
 end subroutine
-
 
 
 
@@ -2113,7 +2137,7 @@ end subroutine
 
              endif
 
-      !return
+      if(single_phase) return
 
       write(f_state,*) 'VARIABLES="X","Y","Pressure", "VoF", "ep", '
       write(f_state,*) '"sxy", "sxx","syy","vx","vy", "rho","mass" '

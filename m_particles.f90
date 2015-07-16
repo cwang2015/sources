@@ -77,10 +77,14 @@ integer :: dim = 2
 !y_mingeom : Lower limit of allowed y-regime 
 !z_maxgeom : Upper limit of allowed z-regime 
 !z_mingeom : Lower limit of allowed z-regime 
-real(dp) :: x_maxgeom = 0.5e0, x_mingeom = -0.05e0,  &
-            y_maxgeom = 0.25e0, y_mingeom = -0.05e0,  &
+!real(dp) :: x_maxgeom = 0.75e0, x_mingeom = -0.25e0,  &
+!!            y_maxgeom = 0.15e0, y_mingeom = -0.05e0,  &
+!            y_maxgeom = 0.65e0, y_mingeom = -0.05e0,  &
+!            z_maxgeom = 10.e0, z_mingeom = -10.e0
+real(dp) :: x_maxgeom = 0.3e0, x_mingeom = -0.3e0,  &
+!            y_maxgeom = 0.15e0, y_mingeom = -0.05e0,  &
+            y_maxgeom = 0.35e0, y_mingeom = -0.05e0,  &
             z_maxgeom = 10.e0, z_mingeom = -10.e0
-
 !Parameter used for sorting grid cells in the link list algorithm
 !maxngx  : Maximum number of sorting grid cells in x-direction
 !maxngy  : Maximum number of sorting grid cells in y-direction
@@ -102,7 +106,7 @@ real(dp) mingridx(3),maxgridx(3),dgeomx(3)
 
 !maxn: Maximum number of particles
 !max_interation : Maximum number of interaction pairs
-integer :: maxn = 25000, max_interaction = 10 * 25000
+integer :: maxn = 30000, max_interaction = 20 * 30000
   
 !SPH algorithm
 
@@ -256,6 +260,7 @@ integer :: skf = 4
 !   type(particles), pointer :: water => null(), soil => null()
 
    integer itimestep
+   real(dp) dt
 
    integer :: nthreads = 1
    integer, pointer, dimension(:) :: niac_start, niac_end
@@ -3125,7 +3130,7 @@ end subroutine
       real(dp),allocatable,dimension(:,:,:) :: local
       integer i,j,k,d,ntotal,niac,it,nthreads  
 
-      ntotal = parts%ntotal
+      ntotal = parts%ntotal + parts%nvirt   !!! originally parts%ntotal
       niac   = parts%niac
       epsilon = parts%numeric%epsilon
       nthreads = parts%nthreads
@@ -3543,7 +3548,7 @@ enddo
 ! Accumulative deviatoric strain
  
       parts%epsilon_p%r(i) = parts%epsilon_p%r(i)    &
-                         + dlambda*sxy(i)/(2*sqrt(J2))*0.000005
+                         + dlambda*sxy(i)/(2*sqrt(J2))*parts%dt
 
                             !endif ! Fail
       enddo
@@ -3673,7 +3678,7 @@ enddo
 ! Accumulative deviatoric strain
  
       parts%epsilon_p%r(i) = parts%epsilon_p%r(i)       & 
-                         + dlambda*sxy(i)/(2*sqrt(J2))*0.000005
+                         + dlambda*sxy(i)/(2*sqrt(J2))*parts%dt
 
                             endif ! Fail
       enddo
