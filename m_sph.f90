@@ -465,6 +465,9 @@ contains
 
                   read(pvalu,*) nthreads
                   write(*,*) 'Openmp number of threads = ', nthreads
+      case('BACKGROUND GRID RANGE')
+                  read(pvalu,*) parts%x_mingeom,parts%x_maxgeom,  & 
+                                parts%y_mingeom,parts%y_maxgeom
 
       case DEFAULT
 
@@ -568,6 +571,9 @@ soil%wxy => tab%xy
 
 soil%material => SiO2
 soil%numeric => numeric
+
+soil%x_maxgeom = parts%x_maxgeom; soil%x_mingeom = parts%x_mingeom
+soil%y_maxgeom = parts%y_maxgeom; soil%y_mingeom = parts%y_mingeom
 
 call soil%get_num_threads
 
