@@ -1211,8 +1211,7 @@ allocate(temp2%r(parts%ntotal+parts%nvirt))
     lastvx_y = pl%vx%y
     temp1_x = pl%vx%x
     temp1_y = pl%vx%y
-    
-    lastrho = pl%rho
+if(itimestep .eq. 1) lastrho = pl%rho
 
 do it = 1, maxtimestep 
     itimestep = itimestep+1
@@ -1272,17 +1271,6 @@ pl%rho = lastrho
 lastrho = temp2
 
    time = time + dt
-
-   if(mod(itimestep,print_step).eq.0)then
-      write(*,*)'______________________________________________'
-      write(*,*)'  current number of time step =',                &
-                itimestep,'     current time=', real(time+dt)
-      write(*,*)'______________________________________________'
-   endif  
-
-   if(itimestep>=save_step_from.and.mod(itimestep,save_step).eq.0)then
-      call output
-   endif 
 
 enddo
 
@@ -1776,12 +1764,13 @@ endif
 !---  Density approximation or change rate
      
 !if(summation_density)then      
-!if(mod(itimestep,30)==0) call sum_density(pl)
-!else             
-!    call con_density(pl)         
+if(mod(itimestep,30)==0) then
+call sum_density(pl)
+else             
+!    call sum_density(pl)         
     
     pl%drho = -pl.rho*pl.div2(pl.vx)
-!endif
+endif
       
 if(artificial_density)then
    !if(trim(pl%imaterial)=='water')then
@@ -1835,7 +1824,7 @@ pl%tab%y = 2.d0/3.d0*(2.d0*pl%df4(pl%vx%y,'y')-pl%df4(pl%vx%x,'x'))
 
 !---  Artificial viscosity:
 
-if (visc_artificial) call pl%art_visc_omp
+!if (visc_artificial) call pl%art_visc_omp
        
 !if(trim(pl%imaterial)=='water'.and.water_artificial_volume)  &
         !call art_volume_fraction_water2(pl)
@@ -1861,7 +1850,7 @@ pl%dvx%y = pl%dvx%y + gravity
 
 !     Calculating average velocity of each partile for avoiding penetration
 
-if (average_velocity) call av_vel(pl) 
+!if (average_velocity) call av_vel(pl) 
 
 !---  Convert velocity, force, and energy to f and dfdt  
       

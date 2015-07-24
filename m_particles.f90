@@ -77,8 +77,8 @@ integer :: dim = 2
 !y_mingeom : Lower limit of allowed y-regime 
 !z_maxgeom : Upper limit of allowed z-regime 
 !z_mingeom : Lower limit of allowed z-regime 
-real(dp) :: x_maxgeom = 3.35e0, x_mingeom = -0.05e0,  &
-            y_maxgeom = 1.90e0, y_mingeom = -0.05e0,  &
+real(dp) :: x_maxgeom = 3.85e0, x_mingeom = -0.05e0,  &
+            y_maxgeom = 2.10e0, y_mingeom = -0.05e0,  &
             z_maxgeom = 10.e0, z_mingeom = -10.e0
 
 !Parameter used for sorting grid cells in the link list algorithm
@@ -102,7 +102,7 @@ real(dp) mingridx(3),maxgridx(3),dgeomx(3)
 
 !maxn: Maximum number of particles
 !max_interation : Maximum number of interaction pairs
-integer :: maxn = 25000, max_interaction = 10 * 25000
+integer :: maxn = 40000, max_interaction = 10 * 40000
   
 !SPH algorithm
 
@@ -644,7 +644,8 @@ k = 0
 do i = 1, bor%ntotal
    if(bor%itype(i)>0) cycle  ! virtual particles
    k = k + 1
-   this%x(:,ntotal+k)  = bor%x(:,i)
+   this%x(1,ntotal+k)  = bor%x(1,i)
+   this%x(2,ntotal+k)  = bor%x(2,i)
    this%hsml(ntotal+k) = bor%hsml(i)
    this%itype(ntotal+k)= bor%itype(i)
    this%vol%r(ntotal+k)  = bor%vol%r(i)
