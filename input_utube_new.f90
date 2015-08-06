@@ -13,7 +13,7 @@ double precision element_size, soil_submerged_depth
 
 ! Set nozzle and tank geometry parameters
 
-call tank%set(xl=0.6d0,yl=0.3d0,m=120,n=60)
+call tank%set(xl=0.6d0,yl=0.3d0,m=240,n=120)
 npoint = tank%m*tank%n
 allocate(tank%x(npoint),tank%y(npoint),tank%zone(npoint))
 call tank%cell_center
@@ -46,15 +46,16 @@ call parts%take_virtual(tank,1)
 call parts%take_virtual(tank,2)
 call parts%take_virtual(tank,6)
 call parts%take_virtual(tank,7)
-
+call parts%setup_ndim1
+if(.not.single_phase)then
 call soil%take_real(tank,5)
 call soil%take_virtual(tank,6)
 call soil%take_virtual(tank,7)
 call soil%take_virtual(tank,8)
 call soil%take_virtual(tank,9)
 
-call parts%setup_ndim1
 call soil%setup_ndim1
+endif
 
 ! Basic settings for particles (vol,hsml,itype)
 ! vol means the volume of a cell. We calculate the mass of each particle according to mass = rho*vol
@@ -98,7 +99,7 @@ do i = 1, parts%ntotal + parts%nvirt
    if(parts%zone(i)==9)parts%vof%r(i) = 0.5d0
 enddo
 if(single_phase) parts%vof = 1.0
-if(.not.volume_fraction)  parts%vof = 1.0
+if(.not.volume_fraction) parts%vof = 1.0
 
 ! Density and Mass
 
@@ -106,6 +107,7 @@ call initial_density(parts)
 parts%rho = parts%rho * parts%vof
 parts%mass = parts%vol * parts%rho     
 
+if(single_phase) return
 ! ----------------------------------- For Soil --------------------------------
 ! Basic settings for particles (vol,hsml,itype)
 ! vol means the volume of a cell. We calculate the mass of each particle according to mass = rho*vol

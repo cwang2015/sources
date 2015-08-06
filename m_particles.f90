@@ -1152,7 +1152,7 @@ end function
       integer i, j, d, scale_k, ntotal, niac    
       integer gcell(3),xcell,ycell,zcell,minxcell(3),maxxcell(3)
       integer dnxgcell(3),dpxgcell(3)
-      real(dp) hsml,dr,r,dx(3),tdwdx(3)
+      real(dp) hsml,dr,r,dx(3),tdwdx(3),x(3)
 
       INTEGER nthreads,n_per_threads, niac_per_threads, it
       integer,allocatable,dimension(:) :: n_start, n_end
@@ -1172,7 +1172,10 @@ end function
 !     Position particles on grid and create linked list:
       
       do i=1,ntotal
-        call parts%grid_geom(i,parts%x(:,i),gcell)
+        do d = 1, parts%dim
+           x(d) = parts%x(d,i)
+        enddo
+        call parts%grid_geom(i,x,gcell)
         do d=1,parts%dim
           parts%xgcell(d,i) = gcell(d)
         enddo
@@ -1322,7 +1325,7 @@ do it = 1, nthreads
       integer i, j, d, scale_k, ntotal, niac    
       integer gcell(3),xcell,ycell,zcell,minxcell(3),maxxcell(3)
       integer dnxgcell(3),dpxgcell(3)
-      real(dp) hsml,dr,r,dx(3),tdwdx(3)
+      real(dp) hsml,dr,r,dx(3),tdwdx(3),x(3)
 
       INTEGER nthreads,n_per_threads, niac_per_threads, it
       integer,allocatable,dimension(:) :: n_start, n_end
@@ -1343,7 +1346,10 @@ do it = 1, nthreads
 !     Position particles on grid and create linked list:
       
       do i=1,ntotal
-        call parts%grid_geom(i,parts%x(:,i),gcell)
+        do d = 1, parts%dim
+           x(d) = parts%x(d,i)
+        enddo
+        call parts%grid_geom(i,x,gcell)
         do d=1,parts%dim
           parts%xgcell(d,i) = gcell(d)
         enddo
@@ -1359,7 +1365,10 @@ do it = 1, nthreads
 !     Position particles on grid and create linked list:
       
       do i=1,part2%ntotal+part2%nvirt
-        call part2%grid_geom(i,part2%x(:,i),gcell)
+        do d = 1, part2%dim
+           x(d) = part2%x(d,i)
+        enddo      
+        call part2%grid_geom(i,x,gcell)
         do d=1,part2%dim
           part2%xgcell(d,i) = gcell(d)
         enddo
@@ -1511,7 +1520,7 @@ end subroutine
       integer i, j, d, scale_k, ntotal, niac    
       integer gcell(3),xcell,ycell,zcell,minxcell(3),maxxcell(3)
       integer dnxgcell(3),dpxgcell(3)
-      real(dp) hsml,dr,r,dx(3),tdwdx(3)
+      real(dp) hsml,dr,r,dx(3),tdwdx(3), x(3)
 
       INTEGER nthreads,n_per_threads, niac_per_threads, it
       integer,allocatable,dimension(:) :: n_start, n_end
@@ -1532,7 +1541,10 @@ end subroutine
 !     Position particles on grid and create linked list:
       
       do i=1,ntotal
-        call parts%grid_geom(i,parts%x(:,i),gcell)
+        do d = 1, parts%dim
+           x(d) = parts%x(d,i)
+        enddo            
+        call parts%grid_geom(i,x,gcell)
         do d=1,parts%dim
           parts%xgcell(d,i) = gcell(d)
         enddo
@@ -1541,6 +1553,11 @@ end subroutine
       enddo
      
       !call part2%init_grid
+      part2%maxgridx(1) = part2%x_maxgeom;  part2%mingridx(1) = part2%x_mingeom
+      part2%maxgridx(2) = part2%y_maxgeom;  part2%mingridx(2) = part2%y_mingeom
+      part2%maxgridx(3) = part2%z_maxgeom;  part2%mingridx(3) = part2%z_mingeom
+      part2%dgeomx = part2%maxgridx - part2%mingridx
+      
       part2%ngridx = parts%ngridx; part2%ghsmlx = parts%ghsmlx
       part2%grid = 0; part2%xgcell = 0; part2%celldata = 0
 
@@ -1548,7 +1565,10 @@ end subroutine
 !     Position particles on grid and create linked list:
       
       do i=1,part2%ntotal+part2%nvirt
-        call part2%grid_geom(i,part2%x(:,i),gcell)
+        do d = 1, part2%dim
+           x(d) = part2%x(d,i)
+        enddo            
+        call part2%grid_geom(i,x,gcell)
         do d=1,part2%dim
           part2%xgcell(d,i) = gcell(d)
         enddo
@@ -2699,11 +2719,13 @@ end subroutine
 
       class(particles) parts
       integer ntotal, i, j, k, d      
-      real(dp) selfdens, hv(3), r, wi(parts%maxn)     
+      real(dp) selfdens, hv(3), r
+      real(dp), allocatable, dimension(:) :: wi     
 
       ntotal = parts%ntotal + parts%nvirt
 
 !     wi(maxn)---integration of the kernel itself
+      allocate(wi(parts%maxn))
         
       hv = 0.d0
 
@@ -3721,7 +3743,7 @@ enddo
 ! For staturated soil
 !        if(volume_fraction) cf = water%vof(i)*water%rho(i)*(-gravity)/ks
 !        if(water%volume_fraction) cf = water%vof(i)*soil%vof(j)*water%rho(i)*(-gravity)/ks
-        cf = water%vof%r(i)*soil%vof%r(j)*water%rho%r(i)*(-gravity)/ks
+        cf = water%vof%r(i)*water%rho%r(i)*(-gravity)/ks
 
           vx_i = water%vx%cmpt(i); vx_j = soil%vx%cmpt(j)
           dvx_i = water%dvx%cmpt(i); dvx_j = soil%dvx%cmpt(j)
@@ -3801,7 +3823,7 @@ do it = 1,nthreads
 ! For staturated soil
 !        if(volume_fraction) cf = water%vof(i)*water%rho(i)*(-gravity)/ks
 !        if(water%volume_fraction) cf = water%vof(i)*soil%vof(j)*water%rho(i)*(-gravity)/ks
-        cf = water%vof%r(i)*soil%vof%r(j)*water%rho%r(i)*(-gravity)/ks
+        cf = water%vof%r(i)*water%rho%r(i)*(-gravity)/ks
 
           vx_i = water%vx%cmpt(i); vx_j = soil%vx%cmpt(j)
 !          dvx_i = water%dvx%cmpt(i); dvx_j = soil%dvx%cmpt(j)

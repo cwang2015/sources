@@ -468,6 +468,9 @@ contains
       case('BACKGROUND GRID RANGE')
                   read(pvalu,*) parts%x_mingeom,parts%x_maxgeom,  & 
                                 parts%y_mingeom,parts%y_maxgeom
+          write(*,*) 'Background grid grange: x_min, x_max, y_min, y_max'
+          write(*,*) parts%x_mingeom,parts%x_maxgeom,  & 
+                     parts%y_mingeom,parts%y_maxgeom
 
       case DEFAULT
 
@@ -1503,7 +1506,7 @@ if(trim(pl%imaterial)=='soil')then
    pl%dstr%x = 0.d0; pl%dstr%xy = 0.d0; pl%dstr%y = 0.d0; pl%dp = 0.d0
 endif
 
-if(trim(pl%imaterial)=='water') call inlet_boundary2
+!if(trim(pl%imaterial)=='water') call inlet_boundary2
 
 !---  Interaction parameters, calculating neighboring particles
 !     and optimzing smoothing length
@@ -2100,17 +2103,17 @@ end subroutine
 !      write(f_xv,*) parts%dvx(1,1:ntotal)
 !      write(f_xv,*) parts%dvx(2,1:ntotal)
 !      write(f_xv,*) mass(1:ntotal)
-      write(f_xv,*) p(1:ntotal) !, soil%p(1:ntotal2)
-      write(f_xv,*) parts%vof%r(1:ntotal)
+      write(f_xv,*) (p(i),i=1,ntotal) !, soil%p(1:ntotal2)
+      write(f_xv,*) (parts%vof%r(i),i=1,ntotal)
 !      write(f_xv,*) u(1:ntotal)
 !      write(f_xv,*) itype(1:ntotal)
 !      write(f_xv,*) hsml(1:ntotal)                                        
-      write(f_xv,*) parts%vx%x%r(1:ntotal)
-      write(f_xv,*) parts%vx%y%r(1:ntotal)
-      write(f_xv,*) parts%rho%r(1:ntotal)
-      write(f_xv,*) parts%zone(1:ntotal)
-      write(f_xv,*) parts%vof2%r(1:ntotal)
-      write(f_xv,*) parts%mass%r(1:ntotal)
+      write(f_xv,*) (parts%vx%x%r(i),i=1,ntotal)
+      write(f_xv,*) (parts%vx%y%r(i),i=1,ntotal)
+      write(f_xv,*) (parts%rho%r(i),i=1,ntotal)
+      write(f_xv,*) (parts%zone(i),i=1,ntotal)
+      write(f_xv,*) (parts%vof2%r(i),i=1,ntotal)
+      write(f_xv,*) (parts%mass%r(i),i=1,ntotal)
 
              elseif(trim(parts%imaterial)=='soil')then
 
@@ -2119,26 +2122,26 @@ end subroutine
       write(f_xv,*) '"sigma_yy", "zone" '
       write(f_xv,*) 'ZONE I=', ntotal, ' F=BLOCK'
  
-      write(f_xv,*)  parts%x(1,1:ntotal)
-      write(f_xv,*)  parts%x(2,1:ntotal)
+      write(f_xv,*)  (parts%x(1,i),i=1,ntotal)
+      write(f_xv,*)  (parts%x(2,i),i=1,ntotal)
 !      write(f_xv,*) vx(1,1:ntotal)
 !      write(f_xv,*) vx(2,1:ntotal)
 !      write(f_xv,*) parts%dvx(1,1:ntotal)
 !      write(f_xv,*) parts%dvx(2,1:ntotal)
 !      write(f_xv,*) mass(1:ntotal)
-      write(f_xv,*)  parts%p%r(1:ntotal)
+      write(f_xv,*)  (parts%p%r(i),i=1,ntotal)
 !      write(f_state,*)  soil%fail(1:ntotal2)
-      write(f_xv,*)  parts%vof%r(1:ntotal)
-      write(f_xv,*)  parts%epsilon_p%r(1:ntotal)
-      write(f_xv,*)  parts%str%xy%r(1:ntotal)
-      write(f_xv,*)  parts%str%x%r(1:ntotal)
-      write(f_xv,*)  parts%str%y%r(1:ntotal)
-      write(f_xv,*)  parts%vx%x%r(1:ntotal)
-      write(f_xv,*)  parts%vx%y%r(1:ntotal)
-      write(f_xv,*)  parts%rho%r(1:ntotal)
-      write(f_xv,*)  parts%mass%r(1:ntotal)
-      write(f_xv,*)  -parts%p%r(1:ntotal) + parts%str%y%r(1:ntotal)
-      write(f_xv,*)  parts%zone(1:ntotal)
+      write(f_xv,*)  (parts%vof%r(i),i=1,ntotal)
+      write(f_xv,*)  (parts%epsilon_p%r(i),i=1,ntotal)
+      write(f_xv,*)  (parts%str%xy%r(i),i=1,ntotal)
+      write(f_xv,*)  (parts%str%x%r(i),i=1,ntotal)
+      write(f_xv,*)  (parts%str%y%r(i),i=1,ntotal)
+      write(f_xv,*)  (parts%vx%x%r(i),i=1,ntotal)
+      write(f_xv,*)  (parts%vx%y%r(i),i=1,ntotal)
+      write(f_xv,*)  (parts%rho%r(i),i=1,ntotal)
+      write(f_xv,*)  (parts%mass%r(i),i=1,ntotal)
+      write(f_xv,*)  (-parts%p%r(i) + parts%str%y%r(i),i=1,ntotal)
+      write(f_xv,*)  (parts%zone(i),i=1,ntotal)
       write(f_other,*) time, -parts%p%r(395)+parts%str%y%r(395)
 
              endif
@@ -2150,32 +2153,42 @@ end subroutine
       write(f_state,*) '"sigma_yy", "zone" '
       write(f_state,*) 'ZONE I=', ntotal2, ' F=BLOCK'
  
-      write(f_state,*)  soil%x(1,1:ntotal2)
-      write(f_state,*)  soil%x(2,1:ntotal2)
+      write(f_state,*)  (soil%x(1,i),i=1,ntotal2)
+      write(f_state,*)  (soil%x(2,i),i=1,ntotal2)
 !      write(f_xv,*) vx(1,1:ntotal)
 !      write(f_xv,*) vx(2,1:ntotal)
 !      write(f_xv,*) parts%dvx(1,1:ntotal)
 !      write(f_xv,*) parts%dvx(2,1:ntotal)
 !      write(f_xv,*) mass(1:ntotal)
-      write(f_state,*)  soil%p%r(1:ntotal2)
+      write(f_state,*)  (soil%p%r(i),i=1,ntotal2)
 !      write(f_state,*)  soil%fail(1:ntotal2)
-      write(f_state,*)  soil%vof%r(1:ntotal2)
-      write(f_state,*)  soil%epsilon_p%r(1:ntotal2)
-      write(f_state,*)  soil%str%xy%r(1:ntotal2)
-      write(f_state,*)  soil%str%x%r(1:ntotal2)
-      write(f_state,*)  soil%str%y%r(1:ntotal2)
-      write(f_state,*)  soil%vx%x%r(1:ntotal2)
-      write(f_state,*)  soil%vx%y%r(1:ntotal2)
-      write(f_state,*)  soil%rho%r(1:ntotal2)
-      write(f_state,*)  soil%mass%r(1:ntotal2)
-      write(f_state,*)  -soil%p%r(1:ntotal2) + soil%str%y%r(1:ntotal2)
-      write(f_state,*)  soil%zone(1:ntotal2)
+      write(f_state,*)  (soil%vof%r(i),i=1,ntotal2)
+      write(f_state,*)  (soil%epsilon_p%r(i),i=1,ntotal2)
+      write(f_state,*)  (soil%str%xy%r(i),i=1,ntotal2)
+      write(f_state,*)  (soil%str%x%r(i),i=1,ntotal2)
+      write(f_state,*)  (soil%str%y%r(i),i=1,ntotal2)
+      write(f_state,*)  (soil%vx%x%r(i),i=1,ntotal2)
+      write(f_state,*)  (soil%vx%y%r(i),i=1,ntotal2)
+      write(f_state,*)  (soil%rho%r(i),i=1,ntotal2)
+      write(f_state,*)  (soil%mass%r(i),i=1,ntotal2)
+      write(f_state,*)  (-soil%p%r(i) + soil%str%y%r(i),i=1,ntotal2)
+      write(f_state,*)  (soil%zone(i),i=1,ntotal2)
       !write(f_other,*) time, -soil%p(420)+soil%syy(420)
       !write(f_other,*) time, -soil%p(395)+soil%syy(395)
       !write(f_other,*) time, -parts%p(420)+parts%syy(420)
 
       return
       end subroutine
+
+!---------------------------------------------------------------------
+!      subroutine output_cas
+!---------------------------------------------------------------------
+!implicit none
+
+!write(f_cas,*) ''single_phase
+
+!return
+!end subroutine
 
 !--------------------------
    subroutine time_print
