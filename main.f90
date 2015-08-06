@@ -58,8 +58,10 @@ do while (.true.)
       !if(single_phase.and.parts%imaterial=='soil')  call time_integration_for_soil
       if(.not.single_phase) call time_integration
    elseif(integrate_scheme==2)then
-      call time_integration_for_water_by_verlet
-!      call time_integration_for_water
+     call time_integration_for_water_by_verlet
+ !    call time_integration_for_water
+   elseif(integrate_scheme==3)then
+      call time_integration_for_water_by_verlet_rho
    endif
 
    call time_elapsed(s2)

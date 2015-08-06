@@ -14,7 +14,9 @@ double precision element_size, soil_submerged_depth
 
 ! Set nozzle and tank geometry parameters
 
-call tank%set(xl=3.34d0,yl=1.86d0,m=334,n=186)
+!call tank%set(xl=3.34d0,yl=1.86d0,m=334,n=186)
+call tank%set(xl=3.34d0,yl=1.86d0,m=167,n=93)
+!call tank%set(xl=3.34d0,yl=1.86d0,m=668,n=372)
 !call tank%set(xl=3.74d0,yl=2.06d0,m=374,n=206)
 !call tank%set(xl=0.44d0,yl=0.22d0,m=352,n=176)
 npoint = tank%m*tank%n

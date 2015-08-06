@@ -102,7 +102,7 @@ real(dp) mingridx(3),maxgridx(3),dgeomx(3)
 
 !maxn: Maximum number of particles
 !max_interation : Maximum number of interaction pairs
-integer :: maxn = 40000, max_interaction = 10 * 40000
+integer :: maxn = 20000, max_interaction = 10 * 20000
   
 !SPH algorithm
 
@@ -288,6 +288,7 @@ integer :: skf = 4
        procedure :: pressure_soil
        procedure :: tension_instability_water 
        procedure :: sum_density
+       procedure :: sum_density_MLS
        procedure :: con_density
        procedure :: newtonian_fluid
        procedure :: art_visc
@@ -308,6 +309,8 @@ integer :: skf = 4
        procedure :: div
        procedure :: div_omp
        procedure :: div2
+       procedure :: div4
+       procedure :: div5
        procedure :: velocity_divergence
 !       procedure :: time_integration_for_water
 !       procedure :: find_particle_nearest2_point
@@ -2552,7 +2555,191 @@ enddo
 !$omp end parallel
 
 end function
+!目测3和2没有区别。
+!-------------------------------------------
+          function div3(parts,f) result(res)
+!-------------------------------------------
+implicit none
 
+type(array) :: f
+class(particles) parts
+type(array),allocatable :: res
+real(dp) df(3)
+real(dp) :: temp
+real(dp),pointer,dimension(:,:) :: dwdx
+integer, pointer, dimension(:) :: pair_i, pair_j
+real(dp), allocatable, dimension(:,:) :: local
+integer i,j,k,ntotal,nthreads,niac,dim,d, it
+type(p2r) f_i(3),f_j(3)
+
+ntotal = parts%ntotal + parts%nvirt
+nthreads = parts%nthreads
+niac = parts%niac; dim = parts%dim
+dwdx =>parts%dwdx
+
+allocate(res);allocate(res%r(ntotal))
+res%ndim1 = ntotal
+
+allocate(local(ntotal,nthreads))
+call parts%get_niac_start_end
+
+!$omp parallel
+!$omp do private(k,i,j,f_i,f_j,d,df,temp) 
+do it = 1, nthreads
+   do i = 1, ntotal
+       local(i,it) = 0.d0
+   enddo    
+do k = parts%niac_start(it),parts%niac_end(it)
+   i = parts%pair_i(k)
+   j = parts%pair_j(k)
+   f_i = f%cmpt(i); f_j = f%cmpt(j)
+   temp = 0.d0
+   do d=1,dim
+      df(d) = f_j(d)%p - f_i(d)%p
+      temp = temp + df(d)*dwdx(d,k)
+   enddo
+   local(i,it) = local(i,it) + parts%mass%r(j)*temp
+   local(j,it) = local(j,it) + parts%mass%r(i)*temp
+enddo !k
+enddo !it
+!$omp end do
+
+!$omp do private(it)
+do i = 1, ntotal
+    res%r(i) = 0
+    do it = 1, nthreads
+        res%r(i) = res%r(i) + local(i,it)
+    enddo
+    res%r(i) = res%r(i)/parts%rho%r(i)
+enddo
+!$omp end do
+!$omp end parallel
+
+end function
+!船建师兄认为div4,适合两相流
+!-------------------------------------------
+          function div4(parts,f) result(res)
+!-------------------------------------------
+implicit none
+
+type(array) :: f
+class(particles) parts
+type(array),allocatable :: res
+real(dp) df(3)
+real(dp) :: temp
+real(dp),pointer,dimension(:,:) :: dwdx
+integer, pointer, dimension(:) :: pair_i, pair_j
+real(dp), allocatable, dimension(:,:) :: local
+integer i,j,k,ntotal,nthreads,niac,dim,d, it
+type(p2r) f_i(3),f_j(3)
+
+ntotal = parts%ntotal + parts%nvirt
+nthreads = parts%nthreads
+niac = parts%niac; dim = parts%dim
+dwdx =>parts%dwdx
+
+allocate(res);allocate(res%r(ntotal))
+res%ndim1 = ntotal
+
+allocate(local(ntotal,nthreads))
+call parts%get_niac_start_end
+
+!$omp parallel
+!$omp do private(k,i,j,f_i,f_j,d,df,temp) 
+do it = 1, nthreads
+   do i = 1, ntotal
+       local(i,it) = 0.d0
+   enddo    
+do k = parts%niac_start(it),parts%niac_end(it)
+   i = parts%pair_i(k)
+   j = parts%pair_j(k)
+   f_i = f%cmpt(i); f_j = f%cmpt(j)
+   temp = 0.d0
+   do d=1,dim
+      df(d) = f_j(d)%p - f_i(d)%p
+      temp = temp + df(d)*dwdx(d,k)
+   enddo
+   local(i,it) = local(i,it) + parts%mass%r(j)*temp/parts%rho%r(j)
+   local(j,it) = local(j,it) + parts%mass%r(i)*temp/parts%rho%r(i)
+enddo !k
+enddo !it
+!$omp end do
+
+!$omp do private(it)
+do i = 1, ntotal
+    res%r(i) = 0
+    do it = 1, nthreads
+        res%r(i) = res%r(i) + local(i,it)
+    enddo
+!    res%r(i) = res%r(i)/parts%rho%r(i)
+enddo
+!$omp end do
+!$omp end parallel
+
+end function
+          
+!div2加上了XSPH的版本。          
+!-------------------------------------------
+          function div5(parts,f) result(res)
+!-------------------------------------------
+implicit none
+
+type(array) :: f
+class(particles) parts
+type(array),allocatable :: res
+real(dp) df(3)
+real(dp) :: temp
+real(dp),pointer,dimension(:,:) :: dwdx
+integer, pointer, dimension(:) :: pair_i, pair_j
+real(dp), allocatable, dimension(:,:) :: local
+integer i,j,k,ntotal,nthreads,niac,dim,d, it
+type(p2r) f_i(3),f_j(3),avi(3),avj(3)
+
+ntotal = parts%ntotal + parts%nvirt
+nthreads = parts%nthreads
+niac = parts%niac; dim = parts%dim
+dwdx =>parts%dwdx
+
+allocate(res);allocate(res%r(ntotal))
+res%ndim1 = ntotal
+
+allocate(local(ntotal,nthreads))
+call parts%get_niac_start_end
+
+!$omp parallel
+!$omp do private(k,i,j,f_i,f_j,d,df,temp) 
+do it = 1, nthreads
+   do i = 1, ntotal
+       local(i,it) = 0.d0
+   enddo    
+do k = parts%niac_start(it),parts%niac_end(it)
+   i = parts%pair_i(k)
+   j = parts%pair_j(k)
+   f_i = f%cmpt(i); f_j = f%cmpt(j);avi = parts%av%cmpt(i);avj = parts%av%cmpt(j)
+   temp = 0.d0
+   do d=1,dim
+      df(d) = (f_j(d)%p + avj(d)%p) - (f_i(d)%p + avi(d)%p)
+      temp = temp + df(d)*dwdx(d,k)
+   enddo
+   local(i,it) = local(i,it) + parts%mass%r(j)*temp
+   local(j,it) = local(j,it) + parts%mass%r(i)*temp
+enddo !k
+enddo !it
+!$omp end do
+
+!$omp do private(it)
+do i = 1, ntotal
+    res%r(i) = 0
+    do it = 1, nthreads
+        res%r(i) = res%r(i) + local(i,it)
+    enddo
+    res%r(i) = res%r(i)/parts%rho%r(i)
+enddo
+!$omp end do
+!$omp end parallel
+
+end function          
+          
 !---------------------------------------------------------------------
       subroutine initial_density(parts)
 !---------------------------------------------------------------------
@@ -2695,8 +2882,9 @@ end subroutine
 
       class(particles) parts
       integer ntotal, i, j, k, d      
-      real(dp) selfdens, hv(3), r, wi(parts%maxn)     
-
+      real(dp) selfdens, hv(3), r!, wi(parts%maxn)     
+      real(dp), allocatable, dimension(:) :: wi
+      allocate(wi(parts%maxn))
       ntotal = parts%ntotal + parts%nvirt
 
 !     wi(maxn)---integration of the kernel itself
@@ -2743,6 +2931,115 @@ end subroutine
           parts%rho%r(i)=parts%rho%r(i)/wi(i)
         enddo
 !      endif 
+ 
+      end subroutine
+
+!Subroutine to calculate the density with SPH summation algorithm by MLS.
+!----------------------------------------------------------------------
+      subroutine sum_density_MLS(parts) 
+!----------------------------------------------------------------------
+      implicit none
+
+      class(particles) parts
+      integer ntotal, i, j, k, d, m, n,k0      
+      real(dp) selfdens, hv(3), r
+      real(dp), allocatable, dimension(:) :: wi,phi0,phi1,phi2
+      real(dp), allocatable, dimension(:,:,:) :: jz
+      real(dp) jz2(3,3),l(3,3),u(3,3),lt(3,3),inverse_jz2(3,3),inverse_u(3,3),inverse_l(3,3),inverse_lt(3,3)
+      ntotal = parts%ntotal + parts%nvirt
+
+      allocate(wi(parts%maxn))
+      allocate(phi0(parts%maxn))
+      allocate(phi1(parts%maxn))
+      allocate(phi2(parts%maxn))
+      allocate(jz(parts%maxn,3,3))
+      
+!     wi(maxn)---integration of the kernel itself
+        
+      hv = 0.d0
+
+!     Self density of each particle: Wii (Kernel for distance 0)
+!     and take contribution of particle itself:
+
+      r=0.d0
+      
+!     Firstly calculate the integration of the kernel over the space
+
+      do i=1,ntotal
+        do m=1,3
+            do n=1,3
+                jz(i,m,n)=0
+            enddo
+        enddo
+        call parts%kernel(r,hv,parts%hsml(i),selfdens,hv)
+        jz(i,1,1)=selfdens*parts%mass%r(i)/parts%rho%r(i)
+      enddo
+      
+        do k0=1,parts%niac
+          i = parts%pair_i(k0)
+          j = parts%pair_j(k0)
+          
+          jz(i,1,1)=jz(i,1,1) + parts%mass%r(j)/parts%rho%r(j)*parts%w(k0) 
+          jz(j,1,1)=jz(j,1,1) + parts%mass%r(i)/parts%rho%r(i)*parts%w(k0)   
+          jz(i,2,1)=jz(i,2,1) + parts%mass%r(j)/parts%rho%r(j)*parts%w(k0)*(parts%x(1,i)-parts%x(1,j))
+          jz(j,2,1)=jz(j,2,1) + parts%mass%r(i)/parts%rho%r(i)*parts%w(k0)*(parts%x(1,j)-parts%x(1,i))
+          jz(i,3,1)=jz(i,3,1) + parts%mass%r(j)/parts%rho%r(j)*parts%w(k0)*(parts%x(2,i)-parts%x(2,j))
+          jz(j,3,1)=jz(j,3,1) + parts%mass%r(i)/parts%rho%r(i)*parts%w(k0)*(parts%x(2,j)-parts%x(2,i))
+          jz(i,1,2)=jz(i,2,1)
+          jz(j,1,2)=jz(j,2,1)
+          jz(i,2,2)=jz(i,2,2) + parts%mass%r(j)/parts%rho%r(j)*parts%w(k0)*(parts%x(1,i)-parts%x(1,j))**2
+          jz(j,2,2)=jz(j,2,2) + parts%mass%r(i)/parts%rho%r(i)*parts%w(k0)*(parts%x(1,j)-parts%x(1,i))**2
+          jz(i,3,2)=jz(i,3,2) + parts%mass%r(j)/parts%rho%r(j)*parts%w(k0)*(parts%x(1,i)-parts%x(1,j))*(parts%x(2,i)-parts%x(2,j))
+          jz(j,3,2)=jz(j,3,2) + parts%mass%r(i)/parts%rho%r(i)*parts%w(k0)*(parts%x(1,j)-parts%x(1,i))*(parts%x(2,j)-parts%x(2,i))
+          jz(i,1,3)=jz(i,3,1)
+          jz(j,1,3)=jz(j,3,1)
+          jz(i,2,3)=jz(i,3,2)
+          jz(j,2,3)=jz(j,3,2)
+          jz(i,3,3)=jz(i,3,3) + parts%mass%r(j)/parts%rho%r(j)*parts%w(k0)*(parts%x(2,i)-parts%x(2,j))**2
+          jz(j,3,3)=jz(j,3,3) + parts%mass%r(i)/parts%rho%r(i)*parts%w(k0)*(parts%x(2,j)-parts%x(2,i))**2    
+        enddo    
+        do i=1,ntotal
+          do m=1,3
+            do n =1,3
+                jz2(m,n)=jz(i,m,n)
+            enddo
+          enddo
+         call LU_break(jz2,3,l,u)
+         call inverse_uptri_matrix(u,3,inverse_u)
+         call transpose_matrix(l,3,3,lt)
+         call inverse_uptri_matrix(lt,3,inverse_lt)
+         call transpose_matrix(inverse_lt,3,3,inverse_l)
+         call multiply_matrix(inverse_u,3,3,inverse_l,3,inverse_jz2)
+         phi0(i) = inverse_jz2(1,1)
+         phi1(i) = inverse_jz2(2,1)
+         phi2(i) = inverse_jz2(3,1) 
+        enddo 
+        
+      do i=1,ntotal
+        call parts%kernel(r,hv,parts%hsml(i),selfdens,hv)
+        parts%rho%r(i) = selfdens*parts%mass%r(i)
+      enddo
+      do k=1,parts%niac
+        i = parts%pair_i(k)
+        j = parts%pair_j(k)
+        parts%rho%r(i) = parts%rho%r(i) + parts%mass%r(j)*(phi0(i)+phi1(i)*(parts%x(1,i)-parts%x(1,j))+phi2(i)*(parts%x(2,i)-parts%x(2,j)))*parts%w(k)
+        parts%rho%r(j) = parts%rho%r(j) + parts%mass%r(i)*(phi0(j)+phi1(j)*(parts%x(1,j)-parts%x(1,i))+phi2(j)*(parts%x(2,j)-parts%x(2,i)))*parts%w(k)
+      enddo
+
+!      do i=1,ntotal
+!        call parts%kernel(r,hv,parts%hsml(i),selfdens,hv)
+!        wi(i) = selfdens*parts%mass%r(i)/parts%rho%r(i)
+!      enddo
+!      do k=1,parts%niac
+!        i = parts%pair_i(k)
+!        j = parts%pair_j(k)
+!        wi(i) = wi(i) + parts%mass%r(j)/parts%rho%r(j)*(phi0(i)+phi1(i)*(parts%x(1,i)-parts%x(1,j))+phi2(i)*(parts%x(2,i)-parts%x(2,j)))*parts%w(k)
+!        wi(j) = wi(j) + parts%mass%r(i)/parts%rho%r(i)*(phi0(j)+phi1(j)*(parts%x(1,j)-parts%x(1,i))+phi2(j)*(parts%x(2,j)-parts%x(2,i)))*parts%w(k)
+!      enddo
+     
+!        do i=1, ntotal
+!          parts%rho%r(i)=parts%rho%r(i)/wi(i)
+!        enddo
  
       end subroutine
 
@@ -4240,6 +4537,108 @@ enddo
 
 !end function
 
+!--------------------------------------------------
+subroutine LU_break(A,n,L,U)
+!--------------------------------------------------
+implicit none
+integer k,i,j,t,n
+real(dp) :: A(n,n),L(n,n),U(n,n)
+real(dp) :: sum1,sum2
+do k = 1,n
+    sum1=0 ; sum2=0
+    do j = k,n
+        sum1=0
+        do t=1,k-1
+            sum1=sum1+L(k,t)*U(t,j)
+        enddo
+        U(k,j)=A(k,j)-sum1
+    enddo
+    do j = 1,k-1
+        U(k,j)=0    
+    enddo
+    do i =k+1,n
+        do t=1,k-1
+            sum2=sum2+L(i,t)*U(t,k)
+        enddo
+        L(i,k)=(A(i,k)-sum2)/U(k,k)    
+    enddo
+    do i = k+1,n
+        L(k,i)=0
+    enddo
+enddo
+
+do j = 1,n
+    L(j,j)=1
+enddo
+return
+end subroutine
+    
+!求矩阵转置
+!--------------------------------------------------
+subroutine transpose_matrix(A,n,m,B)
+!--------------------------------------------------
+implicit none
+integer i,j,n,m
+real(dp) :: A(n,m),B(m,n),t
+do i = 1,m
+    do j =1,n
+        B(i,j)=A(j,i)
+    enddo
+enddo
+return
+end subroutine
+
+
+!--------------------------------------------------
+subroutine multiply_matrix(A,n,m,B,l,C)
+!--------------------------------------------------
+implicit none
+integer i,j,k,l,n,m
+real(dp) sum
+real(dp) A(n,m),B(m,l),C(n,l)
+do i =1,n
+    do j =1,l
+        sum=0
+        do k =1,m
+            sum=sum+A(i,k)*B(k,j)
+        enddo
+        C(i,j)=sum
+    enddo
+enddo
+return
+end subroutine
+        
+
+!--------------------------------------------------
+subroutine inverse_uptri_matrix(A,n,inverse_A)
+!--------------------------------------------------
+implicit none
+integer i,j,k,n
+real(dp) sum
+real(dp) A(n,n),inverse_A(n,n)
+
+do i=1,n
+    do j=1,n
+    inverse_A(i,j)=0
+    enddo
+enddo
+
+do i =1,n
+    inverse_A(i,i)=1/A(i,i)
+enddo
+do i =1,n
+    do j =1,n
+        if (i<j)then
+            sum = 0 
+            do k=i,j-1
+                sum=sum+inverse_A(i,k)*A(k,j)
+            enddo
+            inverse_A(i,j)=-sum/A(j,j)
+        endif
+    enddo
+enddo
+return
+end subroutine
 
 !--------------------------------------------------
     subroutine get_num_threads(this)
