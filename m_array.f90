@@ -13,6 +13,7 @@ type array
    real(dp), pointer, dimension(:) :: r  => null()
    type(array), pointer :: x => null(), y => null(), z => null()
    type(array), pointer :: xy => null(), xz => null(), yz => null()
+   type(array), pointer, dimension(:) :: v => null()
    contains
        procedure :: cmpt
        !procedure :: p2cmpt
