@@ -42,7 +42,7 @@ integer :: nnps = 1
 
 ! Artificial viscosity
 ! alpha: shear viscosity; beta: bulk viscosity; etq: parameter to avoid sigularities   
-   real(dp) :: alpha=0.1d0, beta=0.d0, etq=0.1d0
+   real(dp) :: alpha=0.1d0, beta=0.d0, etq=0.1d0     !这里的alpha,beta的值值得商榷，在某一篇文献中，好像看到了类似的取值，但在LIU的书中，写的是1.0左右,Monaghan建议的值是0.1和0.0
 
 ! Leonard_Johns repulsive force
    real(dp) :: dd = 0.1d0, p1 = 12, p2 = 4
@@ -102,7 +102,7 @@ real(dp) mingridx(3),maxgridx(3),dgeomx(3)
 
 !maxn: Maximum number of particles
 !max_interation : Maximum number of interaction pairs
-integer :: maxn = 20000, max_interaction = 10 * 20000
+integer :: maxn = 15000, max_interaction = 10 * 15000
   
 !SPH algorithm
 
@@ -129,7 +129,8 @@ integer :: sle = 0
 !    = 2, Gauss kernel   (Gingold and Monaghan 1981) 
 !    = 3, Quintic kernel (Morris 1997)
 !    = 4, Wendland    
-integer :: skf = 4 
+!    = 5, improved cubic spline kernel for a better pressure stability (M.B.Liu 2012)
+integer :: skf = 4
 
    character(len=32) :: imaterial
    class(*), pointer :: material => null()
@@ -290,9 +291,11 @@ integer :: skf = 4
        procedure :: sum_density
        procedure :: sum_density_MLS
        procedure :: con_density
+       procedure :: freesurface
        procedure :: newtonian_fluid
        procedure :: art_visc
        procedure :: art_visc_omp
+       procedure :: art_visc2
        procedure :: delta_sph
        procedure :: delta_sph_omp
        procedure :: av_vel
@@ -923,6 +926,8 @@ select case (this%skf)
      scale_k = 3
   case(4)
      scale_k = 2
+  case(5)
+     scale_k = 2   
   case default
      stop 'get_scale_k: No such kernel function!'
 end select 
@@ -1720,6 +1725,7 @@ end subroutine
 !            = 2, Gauss kernel   (Gingold and Monaghan 1981) 
 !            = 3, Quintic kernel (Morris 1997)
 !            = 4, Wendland kernel
+!            = 5, improved cubic spline kernel for a better pressure stability (M.B.Liu 2012)
 !----------------------------------------------------------------------
       implicit none
       class(particles) this
@@ -1841,8 +1847,42 @@ end subroutine
           do d = 1, dim
             dwdx(d) = 0.
           enddo  
-        endif 
-           
+    endif 
+     
+     elseif(skf.eq.5)then    ! improved cubic spline kernel for a better pressure stability (M.B.Liu 2012)
+
+        if (dim.eq.1) then
+          factor = 1.e0/(7.e0*hsml)
+        elseif (dim.eq.2) then
+          factor = 1.e0 /(3.e0*pi*hsml*hsml)
+        elseif (dim.eq.3) then
+          factor = 15.e0/(62.e0*pi*hsml*hsml*hsml)
+        else
+         print *,' >>> Error <<< : Wrong dimension: Dim =',dim
+         stop
+        endif    
+	if(q.eq.0) then
+        w = factor * 6
+        do d = 1, dim
+            dwdx(d) = 0
+        enddo
+	else if(q.gt.0.and.q.le.1) then
+          w = factor * ( q**3 - 6*q + 6 )
+          do d= 1, dim
+            dwdx(d) = factor * (3*q**2 - 6) /hsml*(dx(d)/r)
+          enddo 
+	else if(q.gt.1.and.q.le.2) then
+          w = factor * ( 2 - q )**3
+          do d= 1, dim
+            dwdx(d) = factor * 3 * ( -q**2 + 4*q - 4) /hsml*(dx(d))
+          enddo           
+	else   
+	  w = 0.
+          do d = 1, dim
+            dwdx(d) = 0.
+          enddo  
+    endif 
+    
       endif 
 		
       end subroutine
@@ -3017,7 +3057,7 @@ end subroutine
         
       do i=1,ntotal
         call parts%kernel(r,hv,parts%hsml(i),selfdens,hv)
-        parts%rho%r(i) = selfdens*parts%mass%r(i)
+        parts%rho%r(i) = phi0(i)*selfdens*parts%mass%r(i)
       enddo
       do k=1,parts%niac
         i = parts%pair_i(k)
@@ -3082,6 +3122,44 @@ end subroutine
 
       end subroutine
 
+!见光滑粒子动力学SPH方法应力不稳定性的一种改进方案
+!----------------------------------------------------------------------
+      subroutine freesurface(parts) 
+!----------------------------------------------------------------------
+      implicit none
+
+      class(particles) parts
+      integer ntotal, i, j, k, d      
+      real(dp) selfdens, hv(3), r!, wi(parts%maxn)     
+      real(dp), allocatable, dimension(:) :: wi
+      type(material),pointer :: water
+      water => parts%material
+      allocate(wi(parts%maxn))
+      ntotal = parts%ntotal + parts%nvirt
+
+!     wi(maxn)---integration of the kernel itself
+
+      do i=1,ntotal
+        call parts%kernel(r,hv,parts%hsml(i),selfdens,hv)
+        wi(i)=selfdens*parts%mass%r(i)/parts%rho%r(i)
+      enddo
+
+      do k=1,parts%niac
+        i = parts%pair_i(k)
+        j = parts%pair_j(k)
+        wi(i) = wi(i) + parts%mass%r(j)/parts%rho%r(j)*parts%w(k)
+        wi(j) = wi(j) + parts%mass%r(i)/parts%rho%r(i)*parts%w(k)
+      enddo
+      
+      do i = 1,ntotal 
+          if(wi(i).lt.0.9e0) then
+          parts%rho%r(i) = water%rho0
+          parts%p%r(i) = 0.d0
+          endif
+      enddo      
+      
+      end subroutine
+      
 !----------------------------------------------------------------------
       subroutine newtonian_fluid(parts)
 !----------------------------------------------------------------------
@@ -3264,6 +3342,105 @@ enddo
 return
 end subroutine
 
+! Subroutine to calculate the artificial viscosity (Colagrossi, 2003)
+      
+!----------------------------------------------------------------------      
+      subroutine art_visc2(parts)
+!----------------------------------------------------------------------
+      implicit none
+
+      class(particles) parts
+
+      type(numerical), pointer :: numeric
+      real(dp) dx, dvx(3), alpha, beta, etq, piv, muv, vr, rr, h, mc, mrho, hsml
+      real(dp) dudxi,dudxj,dudyi,dvdxi,dudyj,dvdxj,dvdyi,dvdyj,EiEj,eplison,uij
+      real(dp),allocatable,dimension(:) :: king
+      type(p2r) vx_i(3), vx_j(3)
+      type(array),allocatable :: dudx,dudy,dvdx,dvdy,divu
+      integer i,j,k,d,dim,ntotal,niac
+
+      allocate(king(parts%maxn))
+      allocate(dudx);allocate(dudx%r(parts%maxn))
+      allocate(dudy);allocate(dudy%r(parts%maxn))
+      allocate(dvdx);allocate(dvdx%r(parts%maxn))
+      allocate(dvdy);allocate(dvdy%r(parts%maxn))
+      allocate(divu);allocate(divu%r(parts%maxn))
+      dudx%ndim1 = parts%ntotal + parts%nvirt
+      dudy%ndim1 = parts%ntotal + parts%nvirt      
+      dvdx%ndim1 = parts%ntotal + parts%nvirt
+      dvdy%ndim1 = parts%ntotal + parts%nvirt 
+      divu%ndim1 = parts%ntotal + parts%nvirt 
+      
+      ntotal   =  parts%ntotal + parts%nvirt
+      niac     =  parts%niac; dim = parts%dim      
+      numeric  => parts%numeric      
+      alpha = 0.03                !0.005~0.03
+      beta = numeric%beta; etq = numeric%etq
+!      eplison = 0.1
+      hsml= parts%hsml(1)
+!     Calculate SPH sum for artificial viscosity
+        dudx = parts%df(parts%vx%x,'x')
+        dudy = parts%df(parts%vx%x,'y')
+        dvdx = parts%df(parts%vx%y,'x')
+        dvdy = parts%df(parts%vx%y,'y')
+        
+        divu=parts%div(parts%vx)
+
+      do i = 1,parts%ntotal+parts%nvirt
+          king(i) = 0 
+      enddo
+        
+      do k=1,niac
+        i = parts%pair_i(k)
+        j = parts%pair_j(k)
+
+!        vx_i = parts%vx%cmpt(i); vx_j = parts%vx%cmpt(j)
+!        dudxi = parts%df(vx_i(1),x)
+!        dudxj = parts%df(vx_j(1),x)
+!        dudyi = parts%df(vx_i(1),y)
+!        dvdxi = parts%df(vx_i(2),x)
+!        dudyj = parts%df(vx_j(1),y)
+!        dvdxj = parts%df(vx_j(2),x)
+!        dvdyi = parts%df(vx_i(2),y)
+!        dvdyj = parts%df(vx_j(2),y)xxczxc
+        EiEj = sqrt(abs(dudx%r(i)*dudx%r(j) + (dudy%r(i) + dvdx%r(i))*(dudy%r(j) + dvdx%r(j))/2 +dvdy%r(i)*dvdy%r(j)))
+        king(i)=king(i) + abs(divu%r(i))/(abs(divu%r(i)) + EiEj + parts%c%r(i)*1.0E-4/hsml)
+        king(j)=king(j) + abs(divu%r(i))/(abs(divu%r(i)) + EiEj + parts%c%r(j)*1.0E-4/hsml)
+        vr = 0.e0
+        rr = 0.e0
+        vx_i = parts%vx%cmpt(i); vx_j = parts%vx%cmpt(j)
+        do d=1,dim
+          dvx(1) = parts%vx%x%r(i) - parts%vx%x%r(j)
+          dvx(2) = parts%vx%y%r(i) - parts%vx%y%r(j)
+          !dvx(d) = vx_i(d)%p - vx_j(d)%p
+          dx     = parts%x(d,i)  - parts%x(d,j)
+          vr     = vr + dvx(d)*dx
+          rr     = rr + dx*dx
+        enddo
+        uij = hsml*(king(i) + king(j))*vr/(2*(rr+etq**2*hsml**2))
+!     Artificial viscous force only if v_ij * r_ij < 0
+        if (vr.lt.0.e0) then
+          mc   = 0.5e0*(parts%c%r(i) + parts%c%r(j))
+          mrho = 0.5e0*(parts%rho%r(i) + parts%rho%r(j))
+          piv  = -alpha*uij*mc/mrho
+
+         
+!     Calculate SPH sum for artificial viscous force
+         h = -piv*parts%dwdx(1,k)
+         parts%dvx%x%r(i) = parts%dvx%x%r(i) + parts%mass%r(j)*h
+         parts%dvx%x%r(j) = parts%dvx%x%r(j) - parts%mass%r(i)*h
+         if(dim.ge.2)then
+         h = -piv*parts%dwdx(2,k)
+         parts%dvx%y%r(i) = parts%dvx%y%r(i) + parts%mass%r(j)*h
+         parts%dvx%y%r(j) = parts%dvx%y%r(j) - parts%mass%r(i)*h
+         endif
+         
+        endif
+      enddo
+
+      return
+      end subroutine
+      
 !-------------------------------------------------------------------
       subroutine delta_sph(parts,f,df)
 !-------------------------------------------------------------------

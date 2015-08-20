@@ -1964,12 +1964,12 @@ endif
 !endif
 
 !---  Dynamic viscosity:
-     
 
-
+!为了满足XSPH，将状态方程往前挪动了。
 water => parts%material
 parts%p = water%b*((parts%rho/(water%rho0))**water%gamma-1.d0)
 
+!call freesurface(pl) 
 !parts%c%r(1:ntotal) = water%c*(parts%rho%r(1:ntotal)/(water%rho0))**3.0    
 
 
@@ -2004,11 +2004,12 @@ pl%tab%y = 2.d0/3.d0*(2.d0*pl%df4(pl%vx%y,'y')-pl%df4(pl%vx%x,'x'))
    pl%dvx%y = pl%dvx%y/pl%rho
    !write(*,*) pl%dvx%x%r(1:50),pl%dvx%y%r(1:50)
 
-
 !---  Artificial viscosity:
+!if(mod(itimestep,30)==0) then
+!visc2是师兄推荐的方法
+if (visc_artificial) call pl%art_visc
 
-if (visc_artificial) call pl%art_visc_omp
-       
+!endif       
 !if(trim(pl%imaterial)=='water'.and.water_artificial_volume)  &
         !call art_volume_fraction_water2(pl)
  !       call pl%delta_sph_omp(pl%vof,pl%dvof)
@@ -2022,13 +2023,14 @@ if (visc_artificial) call pl%art_visc_omp
 !      if (ex_force)then
 !          if(self_gravity) call gravity_force(pl)
 !          call repulsive_force(pl)
+
 call pl%repulsive_force_omp                ! can be tried
 !      endif
 
 pl%dvx%y = pl%dvx%y + gravity
 
 !     Calculating the neighboring particles and undating HSML
-      
+   
 !if (sle.ne.0) call h_upgrade(pl)
 
 !     Calculating average velocity of each partile for avoiding penetration

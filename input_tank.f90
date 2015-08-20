@@ -14,8 +14,9 @@ double precision element_size, soil_submerged_depth
 
 ! Set nozzle and tank geometry parameters
 
-!call tank%set(xl=3.34d0,yl=1.86d0,m=334,n=186)
-call tank%set(xl=3.34d0,yl=1.86d0,m=167,n=93)
+call tank%set(xl=3.34d0,yl=1.86d0,m=334,n=186)
+!call tank%set(xl=3.34d0,yl=1.86d0,m=167,n=93)
+!call tank%set(xl=3.3d0,yl=1.8d0,m=66,n=36)
 !call tank%set(xl=3.34d0,yl=1.86d0,m=668,n=372)
 !call tank%set(xl=3.74d0,yl=2.06d0,m=374,n=206)
 !call tank%set(xl=0.44d0,yl=0.22d0,m=352,n=176)
@@ -62,7 +63,8 @@ parts%vx%x = 0.d0
 parts%vx%y = 0.d0
 
 ! ...Pressure. You must define the free surface first.
-water_surface = 0.66d0
+!water_surface = 0.66d0
+water_surface = 0.655d0
 property => parts%material
 do i = 1,parts%ntotal+parts%nvirt
    parts%p%r(i) = property%rho0*gravity*(parts%x(2,i)-water_surface)
