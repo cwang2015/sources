@@ -1969,6 +1969,9 @@ endif
 water => parts%material
 parts%p = water%b*((parts%rho/(water%rho0))**water%gamma-1.d0)
 
+!第二种状态方程
+!parts%p = water%c**2*(parts%rho-water%rho0)
+
 !call freesurface(pl) 
 !parts%c%r(1:ntotal) = water%c*(parts%rho%r(1:ntotal)/(water%rho0))**3.0    
 
@@ -2037,7 +2040,7 @@ pl%dvx%y = pl%dvx%y + gravity
 
 if (average_velocity) call av_vel(pl) 
 
-if(mod(itimestep,20)==0) then
+if(mod(itimestep,30)==0) then
 call sum_density_MLS(pl)
 else             
 !    call sum_density(pl)         

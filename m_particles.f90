@@ -2,6 +2,7 @@
     module m_particles
 !---------------------------
 use m_array
+
 implicit none
 !integer, parameter :: dp = kind(0.d0)
 
@@ -43,16 +44,19 @@ integer :: nnps = 1
 ! Artificial viscosity
 ! alpha: shear viscosity; beta: bulk viscosity; etq: parameter to avoid sigularities   
    real(dp) :: alpha=0.1d0, beta=0.d0, etq=0.1d0     !这里的alpha,beta的值值得商榷，在某一篇文献中，好像看到了类似的取值，但在LIU的书中，写的是1.0左右,Monaghan建议的值是0.1和0.0
-
+!   real(dp) :: alpha=1.d0, beta=1d0, etq=0.1d0
 ! Leonard_Johns repulsive force
    real(dp) :: dd = 0.1d0, p1 = 12, p2 = 4
 
 ! Delta-SPH
    real(dp) :: delta = 0.1d0
 
-! Velocity average
-  real(dp) :: epsilon = 0.001
-   
+! Velocity average epsilon是一个常数，通过施加临近粒子的影响使自身的运动速度与临近粒子的平均速度相近，在“改进的物理粘性SPH方法及其在溃坝问题中的应用”中的取值为0.3，书上的推荐值也是
+!  real(dp) :: epsilon = 0.001
+!  real(dp) :: epsilon = 0.1
+!  real(dp) :: epsilon = 0.01
+!   real(dp) :: epsilon = 0.002
+  real(dp) :: epsilon = 0.0015
 end type
 
 ! Particles in SPH method
@@ -1864,7 +1868,7 @@ end subroutine
 	if(q.eq.0) then
         w = factor * 6
         do d = 1, dim
-            dwdx(d) = 0
+            dwdx(d) = -6 * factor
         enddo
 	else if(q.gt.0.and.q.le.1) then
           w = factor * ( q**3 - 6*q + 6 )
@@ -1874,7 +1878,7 @@ end subroutine
 	else if(q.gt.1.and.q.le.2) then
           w = factor * ( 2 - q )**3
           do d= 1, dim
-            dwdx(d) = factor * 3 * ( -q**2 + 4*q - 4) /hsml*(dx(d))
+            dwdx(d) = factor * 3 * ( -q**2 + 4*q - 4) /hsml*(dx(d)/r)
           enddo           
 	else   
 	  w = 0.
