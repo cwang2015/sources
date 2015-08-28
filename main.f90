@@ -46,6 +46,8 @@ call output
 
 call parts%minimum_time_step
 
+call output_parameters
+
 do while (.true.)
    write(*,*)'  ***************************************************' 
    write(*,*)'          Please input the maximal time steps '

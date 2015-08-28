@@ -2070,6 +2070,67 @@ close(f_other)
 return
 end subroutine
 
+!-----------------------------------
+    subroutine output_parameters
+!-----------------------------------
+implicit none
+type(numerical), pointer :: numeric
+type(material), pointer :: matt
+numeric => parts%numeric
+matt => parts%material
+
+write(f_other,*) 'Numerical parameters:'
+write(f_other,*) 'nnps = ', numeric%nnps 
+write(f_other,*) 'gravity = ', numeric%gravity 
+write(f_other,*) 'alpha, beta, etq = ', numeric%alpha, numeric%beta, numeric%etq
+write(f_other,*) 'dd, p1, p2 = ', numeric%dd, numeric%p1, numeric%p2
+write(f_other,*) 'delta = ', numeric%delta
+write(f_other,*) 'epsilon = ', numeric%epsilon
+
+write(f_other,*) 'Background grid range:'
+write(f_other,*) 'x_maxgeom, x_mingeom = ', parts%x_maxgeom, parts%x_mingeom
+write(f_other,*) 'y_maxgeom, y_mingeom = ', parts%y_maxgeom, parts%y_mingeom
+write(f_other,*) 'z_maxgeom, z_mingeom = ', parts%z_maxgeom, parts%z_mingeom
+write(f_other,*) 'maxngx, maxngy, maxngz = '
+write(f_other,*) parts%maxngx, parts%maxngy, parts%maxngz
+
+write(f_other,*) ' '
+write(f_other,*) 'maxn, max_interaction = ', parts%maxn, parts%max_interaction
+write(f_other,*) 'pa_sph = ', parts%pa_sph
+write(f_other,*) 'sle = ', parts%sle
+write(f_other,*) 'skf = ', parts%skf
+
+write(f_other,*) 'dt, print step, save step: '
+write(f_other,*) dt, print_step, save_step
+
+if(parts%imaterial=='water')then
+   write(f_other,*) 'rho0, b, gamma, c, viscosity = '
+   write(f_other,*) matt%rho0, matt%b, matt%gamma, matt%c, matt%viscosity
+elseif(parts%imaterial=='soil')then
+   write(f_other,*) 'rho0,k,Youngs,Poissons,c = '
+   write(f_other,*) matt%rho0,matt%k,matt%E,matt%niu,matt%c
+   write(f_other,*) 'porosity, permeability = '
+   write(f_other,*) matt%porosity, matt%permeability
+   write(f_other,*) 'Cohesion, phi = '
+   write(f_other,*) matt%cohesion, matt%phi
+endif
+
+write(f_other,*) 'single phase = ', single_phase
+
+if(single_phase) return
+matt => soil%material
+
+   write(f_other,*) 'rho0,k,Youngs,Poissons,c = '
+   write(f_other,*) matt%rho0,matt%k,matt%E,matt%niu,matt%c
+   write(f_other,*) 'porosity, permeability = '
+   write(f_other,*) matt%porosity, matt%permeability
+   write(f_other,*) 'Cohesion, phi = '
+   write(f_other,*) matt%cohesion, matt%phi
+
+return
+end subroutine
+
+
 !----------------------------------------------------------------------
       subroutine output
 !----------------------------------------------------------------------           

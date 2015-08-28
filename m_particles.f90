@@ -53,6 +53,9 @@ integer :: nnps = 1
 ! Velocity average
   real(dp) :: epsilon = 0.001
    
+  !contains
+  !   procedure :: write => write_numerical_parameters      
+
 end type
 
 ! Particles in SPH method
@@ -119,7 +122,7 @@ integer :: pa_sph = 2
 !nnps = 1 : Simplest and direct searching
 !       2 : Sorting grid linked list
 !       3 : Tree algorithm
-integer :: nnps = 1 
+!integer :: nnps = 1 
 
 !Smoothing length evolution (sle) algorithm
 !sle = 0 : Keep unchanged,
@@ -250,8 +253,6 @@ integer :: skf = 4
 ! For soil failure
    integer :: nfail = 0
    integer, pointer, dimension(:) :: fail => null()
-
-
 
 ! Boundry particles defined as type particles
    type(particles), pointer :: bor
