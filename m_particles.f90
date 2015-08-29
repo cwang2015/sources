@@ -29,6 +29,14 @@ type material
    
 end type
 
+type liquid
+  real(dp) rho0,b,gamma,c,viscosity
+end type
+
+type solid
+  real(dp) rho0,k,porosity,permeability,G,E,niu,cohesion,phi
+end type
+
 type numerical
 
 !     Nearest neighbor particle searching (nnps) method
@@ -58,9 +66,83 @@ integer :: nnps = 1
 
 end type
 
-! Particles in SPH method
-type particles
+! Artificial viscosity
+! alpha: shear viscosity; beta: bulk viscosity; etq: parameter to avoid sigularities
+type artificial_viscosity
+  real(dp) :: alpha=0.1d0, beta=0.d0, etq=0.1d0
+end type
 
+! Leonard_Johns repulsive force
+type repulsive_force
+  real(dp) :: dd = 0.1d0, p1 = 12, p2 = 4
+end type  
+
+!-------------
+!type params
+!-------------
+!dim : Dimension of the problem (1, 2 or 3)
+!  integer :: dim = 2        
+ 
+!  type(liquid) water
+!  type(solid) soil
+!  type(av_Monaghan) art_visc
+!  type(rf_LJ) repulsive_force
+
+!  integer :: nnps = 1
+
+! Gravitational acceleration
+!  real(dp) :: gravity = -9.8
+
+! Delta-SPH
+!  real(dp) :: delta = 0.1d0
+
+! Velocity average
+!  real(dp) :: epsilon = 0.001
+
+!  real(dp) :: x_maxgeom = 0.3e0, x_mingeom = -0.3e0,  &
+!!            y_maxgeom = 0.15e0, y_mingeom = -0.05e0,  &
+!            y_maxgeom = 0.35e0, y_mingeom = -0.05e0,  &
+!            z_maxgeom = 10.e0, z_mingeom = -10.e0
+
+!integer :: maxngx = 100,maxngy = 100, maxngz = 1
+
+!maxn: Maximum number of particles
+!max_interation : Maximum number of interaction pairs
+!integer :: maxn = 30000, max_interaction = 20 * 30000
+  
+!SPH algorithm
+
+!Particle approximation (pa_sph)
+!pa_sph = 1 : (e.g. (p(i)+p(j))/(rho(i)*rho(j))
+!         2 : (e.g. (p(i)/rho(i)**2+p(j)/rho(j)**2)
+!integer :: pa_sph = 2 
+
+!Nearest neighbor particle searching (nnps) method
+!nnps = 1 : Simplest and direct searching
+!       2 : Sorting grid linked list
+!       3 : Tree algorithm
+!integer :: nnps = 1 
+
+!Smoothing length evolution (sle) algorithm
+!sle = 0 : Keep unchanged,
+!      1 : h = fac * (m/rho)^(1/dim)
+!      2 : dh/dt = (-1/dim)*(h/rho)*(drho/dt)
+!      3 : Other approaches (e.g. h = h_0 * (rho_0/rho)**(1/dim) ) 
+!integer :: sle = 0 
+
+!Smoothing kernel function 
+!skf = 1, cubic spline kernel by W4 - Spline (Monaghan 1985)
+!    = 2, Gauss kernel   (Gingold and Monaghan 1981) 
+!    = 3, Quintic kernel (Morris 1997)
+!    = 4, Wendland    
+!integer :: skf = 4 
+
+!end type
+
+! Particles in SPH method
+!---------------
+type particles
+!---------------
 !Physics parameter
 !real(dp) :: gravity = -9.8
 
@@ -143,6 +225,9 @@ integer :: skf = 4
 
 ! Numerical parameters
    class(numerical), pointer :: numeric => null()
+
+   type(artificial_viscosity) av_params
+   type(repulsive_force) rf_params
 
 ! Particle interaction pair
    integer :: maxp = 0, minp = 0
