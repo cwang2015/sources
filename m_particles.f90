@@ -2838,7 +2838,7 @@ end subroutine
 !----------------------------------------------------------------------
       implicit none
 
-      class(particles) parts
+      class(particles), target :: parts
 
       type(numerical), pointer :: numeric
       real(dp) dx, dvx(3), alpha, beta, etq, piv, muv, vr, rr, h, mc, mrho, mhsml
@@ -2912,7 +2912,7 @@ end subroutine
 !----------------------------------------------------------------------
       implicit none
 
-      class(particles) parts
+      class(particles),target :: parts
 
       type(numerical), pointer :: numeric
       real(dp) dx, dvx(3), alpha, beta, etq, piv, muv, vr, rr, h, mc, mrho, mhsml
@@ -3717,7 +3717,7 @@ enddo
 !      use m_particles
       implicit none
 
-      type(particles) water, soil
+      type(particles),target :: water, soil
       double precision dx(3), ks, ns, gw, cf, sp, rrw
       type(p2r) vx_i(3), vx_j(3), dvx_i(3), dvx_j(3)
       type(material), pointer :: h2o,sio2  
@@ -3776,7 +3776,7 @@ enddo
 !      use m_particles
       implicit none
 
-      type(particles) water, soil
+      type(particles), target :: water, soil
       real(dp), allocatable, dimension(:,:,:) :: wlocal, slocal
       real(dp) dx(3), ks, ns, gw, cf, sp, rrw, gravity
       type(p2r) vx_i(3), vx_j(3), dvx_i(3), dvx_j(3)
@@ -4194,7 +4194,7 @@ enddo
 !      use m_particles
       implicit none
 
-      type(particles) water, soil
+      type(particles), target :: water, soil
       double precision dx(3), ks, ns, gw, cf, sp, rrw
       type(material), pointer :: h2o,sio2  
       type(numerical), pointer :: numeric

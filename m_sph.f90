@@ -118,7 +118,7 @@ character(len=32) particle_type
 
 type(material), target :: H2O, SiO2
 !type(parameters), target :: params
-type(numerical), target :: numeric
+!type(numerical), target :: numeric
 
 ! Particles 
 type(particles), target :: parts, soil
@@ -361,9 +361,9 @@ contains
           write(*,*) 'Save step = ', save_step
 
       case('PARTICLE PAIRS FIND METHOD')
-
-         read(pvalu,*) numeric%nnps
-         write(*,*) 'Particle pairs find method = ', numeric%nnps 
+         if(.not.associated(parts%numeric))allocate(parts%numeric)
+         read(pvalu,*) parts%numeric%nnps
+         write(*,*) 'Particle pairs find method = ', parts%numeric%nnps 
 
       case('RESULTS FILE')
                 
@@ -537,7 +537,8 @@ if(trim(parts%imaterial)=='water') parts%material => H2O
 if(trim(parts%imaterial)=='soil')  parts%material => SiO2
 
 ! Numerical parameters
-parts%numeric => numeric
+!parts%numeric => numeric
+if(.not.associated(parts%numeric))allocate(parts%numeric)
 
 call parts%get_num_threads
 
@@ -573,7 +574,7 @@ soil%tab => tab
 soil%wxy => tab%xy
 
 soil%material => SiO2
-soil%numeric => numeric
+soil%numeric => parts%numeric
 
 soil%x_maxgeom = parts%x_maxgeom; soil%x_mingeom = parts%x_mingeom
 soil%y_maxgeom = parts%y_maxgeom; soil%y_mingeom = parts%y_mingeom
