@@ -16,7 +16,7 @@ type block
      procedure :: set => set_block_sub
      procedure :: cell_center => get_cell_center_sub
 end type
-
+!-------------------------------------------------------------------------------------
 type material
 
 ! For water
@@ -28,25 +28,16 @@ type material
    real(dp) k,porosity,permeability,G,E,niu,cohesion,phi
    
 end type
-
+!------------------------------------------------------------------------------------
 type liquid
   real(dp) rho0,b,gamma,c,viscosity
 end type
-
+!------------------------------------------------------------------------------------
 type solid
   real(dp) rho0,k,porosity,permeability,G,E,niu,cohesion,phi
 end type
-
+!------------------------------------------------------------------------------------
 type numerical
-
-!     Nearest neighbor particle searching (nnps) method
-!     nnps = 1 : Simplest and direct searching
-!            2 : Sorting grid linked list
-!            3 : Tree algorithm
-integer :: nnps = 1
-
-! Gravitational acceleration
-  real(dp) :: gravity = -9.8
 
 ! Artificial viscosity
 ! alpha: shear viscosity; beta: bulk viscosity; etq: parameter to avoid sigularities   
@@ -61,99 +52,30 @@ integer :: nnps = 1
 ! Velocity average
   real(dp) :: epsilon = 0.001
    
-  !contains
-  !   procedure :: write => write_numerical_parameters      
-
 end type
-
+!-----------------------------------------------------------------------------------
 ! Artificial viscosity
 ! alpha: shear viscosity; beta: bulk viscosity; etq: parameter to avoid sigularities
-type artificial_viscosity
+type artvis
   real(dp) :: alpha=0.1d0, beta=0.d0, etq=0.1d0
 end type
-
+!----------------------------------------------------------------------------------
 ! Leonard_Johns repulsive force
-type repulsive_force
+type repforce
   real(dp) :: dd = 0.1d0, p1 = 12, p2 = 4
 end type  
-
-!-------------
-!type params
-!-------------
-!dim : Dimension of the problem (1, 2 or 3)
-!  integer :: dim = 2        
- 
-!  type(liquid) water
-!  type(solid) soil
-!  type(av_Monaghan) art_visc
-!  type(rf_LJ) repulsive_force
-
-!  integer :: nnps = 1
-
-! Gravitational acceleration
-!  real(dp) :: gravity = -9.8
-
-! Delta-SPH
-!  real(dp) :: delta = 0.1d0
-
-! Velocity average
-!  real(dp) :: epsilon = 0.001
-
-!  real(dp) :: x_maxgeom = 0.3e0, x_mingeom = -0.3e0,  &
-!!            y_maxgeom = 0.15e0, y_mingeom = -0.05e0,  &
-!            y_maxgeom = 0.35e0, y_mingeom = -0.05e0,  &
-!            z_maxgeom = 10.e0, z_mingeom = -10.e0
-
-!integer :: maxngx = 100,maxngy = 100, maxngz = 1
-
-!maxn: Maximum number of particles
-!max_interation : Maximum number of interaction pairs
-!integer :: maxn = 30000, max_interaction = 20 * 30000
-  
-!SPH algorithm
-
-!Particle approximation (pa_sph)
-!pa_sph = 1 : (e.g. (p(i)+p(j))/(rho(i)*rho(j))
-!         2 : (e.g. (p(i)/rho(i)**2+p(j)/rho(j)**2)
-!integer :: pa_sph = 2 
-
-!Nearest neighbor particle searching (nnps) method
-!nnps = 1 : Simplest and direct searching
-!       2 : Sorting grid linked list
-!       3 : Tree algorithm
-!integer :: nnps = 1 
-
-!Smoothing length evolution (sle) algorithm
-!sle = 0 : Keep unchanged,
-!      1 : h = fac * (m/rho)^(1/dim)
-!      2 : dh/dt = (-1/dim)*(h/rho)*(drho/dt)
-!      3 : Other approaches (e.g. h = h_0 * (rho_0/rho)**(1/dim) ) 
-!integer :: sle = 0 
-
-!Smoothing kernel function 
-!skf = 1, cubic spline kernel by W4 - Spline (Monaghan 1985)
-!    = 2, Gauss kernel   (Gingold and Monaghan 1981) 
-!    = 3, Quintic kernel (Morris 1997)
-!    = 4, Wendland    
-!integer :: skf = 4 
-
-!end type
 
 ! Particles in SPH method
 !---------------
 type particles
 !---------------
-!Physics parameter
-!real(dp) :: gravity = -9.8
 
 !Geometry parameters
 
 !dim : Dimension of the problem (1, 2 or 3)
 integer :: dim = 2        
         
-   integer :: niac  = 0
-   integer :: ntotal = 0, nvirt = 0
-   real(dp) dspp  ! initial particle interval  
+real(dp) dspp  ! initial particle interval  
 
 !Parameters for the computational geometry,  
 !x_maxgeom : Upper limit of allowed x-regime 
@@ -162,14 +84,9 @@ integer :: dim = 2
 !y_mingeom : Lower limit of allowed y-regime 
 !z_maxgeom : Upper limit of allowed z-regime 
 !z_mingeom : Lower limit of allowed z-regime 
-!real(dp) :: x_maxgeom = 0.75e0, x_mingeom = -0.25e0,  &
-!!            y_maxgeom = 0.15e0, y_mingeom = -0.05e0,  &
-!            y_maxgeom = 0.65e0, y_mingeom = -0.05e0,  &
-!            z_maxgeom = 10.e0, z_mingeom = -10.e0
-real(dp) :: x_maxgeom = 0.3e0, x_mingeom = -0.3e0,  &
-!            y_maxgeom = 0.15e0, y_mingeom = -0.05e0,  &
-            y_maxgeom = 0.35e0, y_mingeom = -0.05e0,  &
-            z_maxgeom = 10.e0, z_mingeom = -10.e0
+
+real(dp) :: x_maxgeom, x_mingeom, y_maxgeom, y_mingeom, z_maxgeom, z_mingeom
+
 !Parameter used for sorting grid cells in the link list algorithm
 !maxngx  : Maximum number of sorting grid cells in x-direction
 !maxngy  : Maximum number of sorting grid cells in y-direction
@@ -192,8 +109,56 @@ real(dp) mingridx(3),maxgridx(3),dgeomx(3)
 !maxn: Maximum number of particles
 !max_interation : Maximum number of interaction pairs
 integer :: maxn = 30000, max_interaction = 20 * 30000
-  
+
 !SPH algorithm
+
+!     Switches for different senarios
+
+!     summation_density = .TRUE. : Use density summation model in the code, 
+!                        .FALSE.: Use continuiity equation
+!     average_velocity = .TRUE. : Monaghan treatment on average velocity,
+!                       .FALSE.: No average treatment.
+!     config_input = .TRUE. : Load initial configuration data,
+!                   .FALSE.: Generate initial configuration.
+!     virtual_part = .TRUE. : Use vritual particle,
+!                   .FALSE.: No use of vritual particle.
+!     vp_input = .TRUE. : Load virtual particle information,
+!               .FALSE.: Generate virtual particle information.
+!     visc = .true. : Consider viscosity,
+!           .false.: No viscosity.
+!     ex_force =.true. : Consider external force,
+!               .false.: No external force.
+!     visc_artificial = .true. : Consider artificial viscosity,
+!                      .false.: No considering of artificial viscosity.
+!     heat_artificial = .true. : Consider artificial heating,
+!                      .false.: No considering of artificial heating.
+!     self_gravity = .true. : Considering self_gravity,
+!                    .false.: No considering of self_gravity
+!     nor_density =  .true. : Density normalization by using CSPM,
+!                    .false.: No normalization.
+logical single_phase
+integer :: integrate_scheme = 1  ! =1, LF; =2, Verlet
+logical :: summation_density  = .false.         
+logical :: average_velocity  = .true. 
+!logical :: visc  = .true.  
+!logical :: ex_force  = .true.
+logical :: visc_artificial  = .true. 
+!logical :: nor_density  = .false.              
+!logical :: self_gravity  = .true.      
+
+!integer :: soil_pressure = 2  ! =1, eos; =2, mean trace
+integer :: stress_integration = 1
+integer :: yield_criterion = 2
+integer :: plasticity = 3  ! =0 non; =1 Bui, =2 return mapping =3 Lopez
+logical :: artificial_density = .true.                  
+logical :: soil_artificial_stress = .true.
+
+logical :: volume_fraction = .true.
+logical :: water_artificial_volume = .true.
+logical :: volume_fraction_renorm = .true.
+
+! 0 ignor; 1 negative pressure to zero; 2 artficial stress
+!integer :: water_tension_instability = 0
 
 !Particle approximation (pa_sph)
 !pa_sph = 1 : (e.g. (p(i)+p(j))/(rho(i)*rho(j))
@@ -204,7 +169,7 @@ integer :: pa_sph = 2
 !nnps = 1 : Simplest and direct searching
 !       2 : Sorting grid linked list
 !       3 : Tree algorithm
-!integer :: nnps = 1 
+integer :: nnps = 1 
 
 !Smoothing length evolution (sle) algorithm
 !sle = 0 : Keep unchanged,
@@ -220,140 +185,112 @@ integer :: sle = 0
 !    = 4, Wendland    
 integer :: skf = 4 
 
-   character(len=32) :: imaterial
-   class(*), pointer :: material => null()
+character(len=32) :: imaterial
+class(*), pointer :: material => null()
 
 ! Numerical parameters
-   class(numerical), pointer :: numeric => null()
+class(numerical), pointer :: numeric => null()
 
-   type(artificial_viscosity) av_params
-   type(repulsive_force) rf_params
+type(artvis) av_params
+type(repforce) rf_params
+
+!Physics parameter
+real(dp) :: gravity = -9.8
+
+real(dp) :: dt, time = 0.d0
+integer :: maxtimestep = 0 , itimestep = 0
+
+! Control parameters for output 
+! int_stat = .true. : Print statistics about SPH particle interactions.
+!                     including virtual particle information.
+! print_step: Print Timestep (On Screen)
+! save_step : Save Timestep    (To Disk File)
+! moni_particle: The particle number for information monitoring.
+
+logical :: int_stat = .true.
+integer :: print_step, save_step, moni_particle = 264
+
+!Recorde time interval
+integer :: save_step_from = 0, save_step_to = 100
+
+integer :: nthreads = 1
+integer, pointer, dimension(:) :: niac_start, niac_end
+
+integer :: niac  = 0
+integer :: ntotal = 0, nvirt = 0
 
 ! Particle interaction pair
-   integer :: maxp = 0, minp = 0
-   integer :: maxiac = 0, miniac = 0
-   integer :: sumiac = 0, noiac  = 0
-   integer, pointer, dimension(:)  :: pair_i => null()
-   integer, pointer, dimension(:)  :: pair_j => null()
-   integer, pointer, dimension(:)  :: countiac=>null()
+integer :: maxp = 0, minp = 0
+integer :: maxiac = 0, miniac = 0
+integer :: sumiac = 0, noiac  = 0
+integer, pointer, dimension(:)  :: pair_i => null()
+integer, pointer, dimension(:)  :: pair_j => null()
+integer, pointer, dimension(:)  :: countiac=>null()
 
 ! Kernel and its derivative
-   real(dp), pointer, dimension(:)   :: w    => null()
-   real(dp), pointer, dimension(:,:) :: dwdx => null()
+real(dp), pointer, dimension(:)   :: w    => null()
+real(dp), pointer, dimension(:,:) :: dwdx => null()
 
 ! Particle fundamental data
-   integer,  pointer, dimension(:)   :: itype=> null()
-   real(dp), pointer, dimension(:,:) :: x    => null()
-   type(array), pointer :: vol  => null()
-   type(array), pointer :: mass => null()
-   real(dp), pointer, dimension(:)   :: hsml => null()
-   integer,  pointer, dimension(:)   :: zone => null()
+integer,  pointer, dimension(:)   :: itype=> null()
+real(dp), pointer, dimension(:,:) :: x    => null()
+type(array), pointer :: vol  => null()
+type(array), pointer :: mass => null()
+real(dp), pointer, dimension(:)   :: hsml => null()
+integer,  pointer, dimension(:)   :: zone => null()
 
 ! Volume of Fraction
-   type(array), pointer :: vof  => null()
-   type(array), pointer :: vof2=>null() ! phi_f= 1-phi_s
-   type(array), pointer :: dvof  => null()
-   type(array), pointer :: vof_min  => null()
+type(array), pointer :: vof  => null()
+type(array), pointer :: vof2=>null() ! phi_f= 1-phi_s
+type(array), pointer :: dvof  => null()
+type(array), pointer :: vof_min  => null()
 
 ! Field variables
-   !real(dp), pointer, dimension(:)   :: rho  => null()
-   type(array), pointer :: rho  => null()
-   !real(dp), pointer, dimension(:,:) :: vx   => null()   
-   type(array), pointer :: vx   => null()   
-   !real(dp), pointer, dimension(:)   :: p    => null()
-   type(array), pointer :: p => null()
-   !real(dp), pointer, dimension(:)   :: eta  => null()   
-!   real(dp), pointer, dimension(:)   :: c    => null()   
-   type(array), pointer :: c => null()
-!   real(dp), pointer, dimension(:)   :: u    => null()
+type(array), pointer :: rho  => null()
+type(array), pointer :: vx   => null()   
+type(array), pointer :: p => null()
+type(array), pointer :: c => null()
 
 ! Stress tensor 
-   type(array), pointer :: str => null()
-   !type(tensor), pointer, dimension(:)   :: st   => null() 
-   !real(dp), pointer, dimension(:) :: sxx => null(), syy => null()
-!   type(array), pointer :: sxx => null(), syy => null()
-   !real(dp), pointer, dimension(:) :: szz => null(), sxy => null()
-!   type(array), pointer :: szz => null(), sxy => null()
-!   real(dp), pointer, dimension(:) :: sxz => null(), syz => null()
+type(array), pointer :: str => null()
  
 ! Shear strain rate
-   type(array), pointer :: tab => null()
-!   type(array), pointer :: txx => null(), tyy => null()
-!   type(array), pointer :: tzz => null(), txy => null()
-!   type(array), pointer :: txz => null(), tyz => null()
-!   real(dp), pointer, dimension(:) :: txx => null(), tyy => null()
-!   real(dp), pointer, dimension(:) :: tzz => null(), txy => null()
-!   real(dp), pointer, dimension(:) :: txz => null(), tyz => null()
+type(array), pointer :: tab => null()
 ! Bulk strain rate, i.e. divergency of velocity
-!   real(dp), pointer, dimension(:) :: vcc => null()
-   type(array), pointer :: vcc => null()
+type(array), pointer :: vcc => null()
         
 ! Accumulative deviatoric strain
-!   real(dp), pointer, dimension(:) :: epsilon_p => null()
-   type(array), pointer :: epsilon_p => null()
+type(array), pointer :: epsilon_p => null()
 ! Rotation tensor
 !   real(dp), pointer, dimension(:) :: wxy => null()
-   type(array), pointer :: wxy => null()
+type(array), pointer :: wxy => null()
 ! Old values
 !   real(dp), pointer, dimension(:)   :: rho_min => null()
-   type(array), pointer :: rho_min => null()
-   type(array), pointer :: v_min => null()
-!   real(dp), pointer, dimension(:,:) :: v_min   => null()
-!   real(dp), pointer, dimension(:)   :: u_min   => null()
-!   type(array), pointer :: u_min => null()
-!   real(dp), pointer, dimension(:)   :: p_min   => null()
-   type(array), pointer :: p_min   => null()
-   type(array), pointer :: str_min => null()
-!   real(dp), pointer, dimension(:) :: sxx_min => null(), syy_min => null()
-!   real(dp), pointer, dimension(:) :: szz_min => null(), sxy_min => null()
-!   real(dp), pointer, dimension(:) :: sxz_min => null(), syz_min => null()
+type(array), pointer :: rho_min => null()
+type(array), pointer :: v_min => null()
+type(array), pointer :: p_min   => null()
+type(array), pointer :: str_min => null()
 
 ! Acceleration
-   type(array), pointer :: drho => null()
-   !real(dp), pointer, dimension(:,:)   :: dvx  => null()
-   type(array), pointer :: dvx  => null()
-!   real(dp), pointer, dimension(:)     :: du   => null()
-!   type(array), pointer :: du   => null()
-!   real(dp), pointer, dimension(:)     :: dp   => null()
-   type(array), pointer :: dp   => null()
-!   real(dp), pointer, dimension(:,:)   :: av   => null()
-   type(array), pointer :: av   => null()
+type(array), pointer :: drho => null()
+type(array), pointer :: dvx  => null()
+type(array), pointer :: dp   => null()
+type(array), pointer :: av   => null()
 
-!   type(tensor), pointer, dimension(:) :: dst  => null()
-   type(array), pointer :: dstr => null()
-!   real(dp), pointer, dimension(:) :: dsxx => null(), dsyy => null()
-!   real(dp), pointer, dimension(:) :: dszz => null(), dsxy => null()
-!   real(dp), pointer, dimension(:) :: dsxz => null(), dsyz => null()
+type(array), pointer :: dstr => null()
 
 ! For plasticity corrector step (return mapping algorithm)
-   type(array), pointer :: dstr2 => null()
-!   real(dp), pointer, dimension(:) :: dsxx2 => null(), dsyy2 => null()
-!   real(dp), pointer, dimension(:) :: dsxy2 => null(),  
-!   real(dp), pointer, dimension(:) :: dp2 => null()
-   type(array), pointer :: dp2 => null()
-
-! Density gradient
-!   type(array), pointer :: drhodx => null()
+type(array), pointer :: dstr2 => null()
+type(array), pointer :: dp2 => null()
 
 ! For soil failure
-   integer :: nfail = 0
-   integer, pointer, dimension(:) :: fail => null()
+integer :: nfail = 0
+integer, pointer, dimension(:) :: fail => null()
 
 ! Boundry particles defined as type particles
-   type(particles), pointer :: bor
+type(particles), pointer :: bor
 
-! Multiphase flow
-!   type(particles), pointer :: water => null(), soil => null()
-
-   integer itimestep
-   real(dp) dt
-
-   integer :: nthreads = 1
-   integer, pointer, dimension(:) :: niac_start, niac_end
-
-!   procedure(df),pointer :: diff => null() 
-
-   contains
+contains
 
        procedure :: write_particles
        procedure :: write_component 
@@ -1802,7 +1739,7 @@ implicit none
 class(particles) parts
 integer nnps
 
-nnps = parts%numeric%nnps
+nnps = parts%nnps
 if(nnps == 1)then
    call direct_find(parts)
 elseif(nnps == 2)then
@@ -3813,7 +3750,7 @@ enddo
       h2o => water%material
       sio2=>  soil%material
       numeric => water%numeric
-      gravity = numeric%gravity
+      gravity = water%gravity
       dim = water%dim
 
       gw = h2o%rho0*(-gravity); ns = sio2%porosity
@@ -3876,7 +3813,7 @@ enddo
       h2o => water%material
       sio2=>  soil%material
       numeric => water%numeric
-      gravity = numeric%gravity
+      gravity = water%gravity
       dim = water%dim
 
       gw = h2o%rho0*(-gravity); ns = sio2%porosity
@@ -4289,7 +4226,7 @@ enddo
       h2o => water%material
       sio2=>  soil%material
       numeric => water%numeric
-      gravity = numeric%gravity
+      gravity = water%gravity
       dim = water%dim
 
       gw = h2o%rho0*(-gravity) 

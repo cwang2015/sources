@@ -22,7 +22,7 @@ write(*,*) 'cas_file:', cas_file
 !cas_file = '..\data\cas_mix_Savage'
 call read_cas
 
-   CALL OMP_SET_NUM_THREADS(nthreads)
+   CALL OMP_SET_NUM_THREADS(parts%nthreads)
 
    write(*,*) "Max number of threads: ", omp_get_max_threads()
 
@@ -37,7 +37,7 @@ call input
    write(*,*)'  Total number of virtual particles  ', parts%nvirt    
    write(*,*)'  **************************************************'
 
-   if(.not.single_phase)then
+   if(.not.parts%single_phase)then
       write(*,*) 'Total number of real soil particles:', soil%ntotal
       write(*,*) 'Total number of virtual particles:  ', soil%nvirt
    endif
@@ -52,14 +52,14 @@ do while (.true.)
    write(*,*)'  ***************************************************' 
    write(*,*)'          Please input the maximal time steps '
    write(*,*)'  ***************************************************'
-   read(*,*) maxtimestep
+   read(*,*) parts%maxtimestep
       !maxtimestep = 400000      
 
-   if(integrate_scheme==1)then
-      if(single_phase.and.parts%imaterial=='water') call time_integration_for_water
-      if(single_phase.and.parts%imaterial=='soil')  call time_integration_for_soil
-      if(.not.single_phase) call time_integration
-   elseif(integrate_scheme==2)then
+   if(parts%integrate_scheme==1)then
+      if(parts%single_phase.and.parts%imaterial=='water') call time_integration_for_water
+      if(parts%single_phase.and.parts%imaterial=='soil')  call time_integration_for_soil
+      if(.not.parts%single_phase) call time_integration
+   elseif(parts%integrate_scheme==2)then
 !      call time_integration_for_water_by_verlet
       call time_integration_for_water
    endif

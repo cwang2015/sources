@@ -2,91 +2,7 @@
     module declarations_sph
 !-----------------------------
 use m_particles
-!use param
 implicit none
-
-!     Switches for different senarios
-
-!     summation_density = .TRUE. : Use density summation model in the code, 
-!                        .FALSE.: Use continuiity equation
-!     average_velocity = .TRUE. : Monaghan treatment on average velocity,
-!                       .FALSE.: No average treatment.
-!     config_input = .TRUE. : Load initial configuration data,
-!                   .FALSE.: Generate initial configuration.
-!     virtual_part = .TRUE. : Use vritual particle,
-!                   .FALSE.: No use of vritual particle.
-!     vp_input = .TRUE. : Load virtual particle information,
-!               .FALSE.: Generate virtual particle information.
-!     visc = .true. : Consider viscosity,
-!           .false.: No viscosity.
-!     ex_force =.true. : Consider external force,
-!               .false.: No external force.
-!     visc_artificial = .true. : Consider artificial viscosity,
-!                      .false.: No considering of artificial viscosity.
-!     heat_artificial = .true. : Consider artificial heating,
-!                      .false.: No considering of artificial heating.
-!     self_gravity = .true. : Considering self_gravity,
-!                    .false.: No considering of self_gravity
-!     nor_density =  .true. : Density normalization by using CSPM,
-!                    .false.: No normalization.
-
-integer :: integrate_scheme = 1  ! =1, LF; =2, Verlet
-logical :: summation_density  = .false.         
-logical :: average_velocity  = .true.         
-logical :: config_input  = .false. 
-logical :: virtual_part  = .true. 
-logical :: vp_input  = .false.  
-logical :: visc  = .true.  
-logical :: ex_force  = .true.
-logical :: visc_artificial  = .true. 
-logical :: heat_artificial  = .false. 
-!logical :: self_gravity  = .true.      
-logical :: nor_density  = .false.              
-
-integer :: soil_pressure = 2  ! =1, eos; =2, mean trace
-integer :: stress_integration = 1
-integer :: yield_criterion = 2
-integer :: plasticity = 3  ! =0 non; =1 Bui, =2 return mapping =3 Lopez
-logical :: artificial_density = .true.                  
-logical :: soil_artificial_stress = .true.
-
-logical :: volume_fraction = .true.
-logical :: water_artificial_volume = .true.
-logical :: volume_fraction_renorm = .true.
-
-! 0 ignor; 1 negative pressure to zero; 2 artficial stress
-integer :: water_tension_instability = 0
-
-! Symmetry of the problem
-! nsym = 0 : no symmetry,
-!      = 1 : axis symmetry,
-!      = 2 : center symmetry.     
-integer :: nsym = 0
-
-! Control parameters for output 
-! int_stat = .true. : Print statistics about SPH particle interactions.
-!                     including virtual particle information.
-! print_step: Print Timestep (On Screen)
-! save_step : Save Timestep    (To Disk File)
-! moni_particle: The particle number for information monitoring.
-logical :: int_stat = .true.
-integer :: print_step, save_step, moni_particle = 264
-           
-! double precision pi,gravity
-!double precision, parameter :: pi = 3.14159265358979323846 
-!parameter ( gravity = -9.8 )
-      
-
-!     Recorde time interval
-integer :: save_step_from = 0, save_step_to = 100
-
-! Control panel
-logical :: self_gravity = .true.
-!logical :: volume_fraction = .true.
-
-! Paramters
-double precision :: gravity = -9.8
-
 
 ! Logic unit of files
 
@@ -96,43 +12,15 @@ integer xv_vp,state_vp,other_vp
 ! Files
 character(len=32) results, res_water, res_soil, res_other
 
-! Filenames
-character(len=32) output_file_name(3)
-
 ! Boundary conditions
 double precision inlet_velocity
 
-! Geometry object
-!type(geo) wasserjet
-logical with_nozzle
-
-! Particle size: large, small?
-character(len=32) particle_size
-character(len=32) operating_mode
-
-logical single_phase
-logical dry_soil
-
-! Particle type : water, soil or mixture?
-character(len=32) particle_type
-
 type(material), target :: H2O, SiO2
-!type(parameters), target :: params
-!type(numerical), target :: numeric
 
 ! Particles 
 type(particles), target :: parts, soil
 
-! Working arrays
-   type(array), pointer :: tab => null()
-!double precision, pointer, dimension(:) :: txx=>null(), tyy=>null(), txy=>null()
 
-!Numerical paramters
-double precision :: dt, time = 0.d0
-integer :: maxtimestep = 0 , itimestep = 0
-
-!OpenMP Number of threads
-integer :: nthreads = 1
 contains
 
 !     *********************
@@ -352,18 +240,20 @@ contains
 !
       case('PRINT STEP')
 
-          read(pvalu,*) print_step
-          write(*,*) 'Print step = ', print_step
+          read(pvalu,*) parts%print_step
+          write(*,*) 'Print step = ', parts%print_step
+          soil%print_step = parts%print_step
 
       case('SAVE STEP')
 
-          read(pvalu,*) save_step
-          write(*,*) 'Save step = ', save_step
+          read(pvalu,*) parts%save_step
+          write(*,*) 'Save step = ', parts%save_step
+          soil%save_step = parts%save_step
 
       case('PARTICLE PAIRS FIND METHOD')
-         if(.not.associated(parts%numeric))allocate(parts%numeric)
-         read(pvalu,*) parts%numeric%nnps
-         write(*,*) 'Particle pairs find method = ', parts%numeric%nnps 
+         read(pvalu,*) parts%nnps
+         write(*,*) 'Particle pairs find method = ', parts%nnps 
+         soil%nnps = parts%nnps
 
       case('RESULTS FILE')
                 
@@ -382,8 +272,8 @@ contains
                 
                   ndim = 1
                   if(ncoma>=ndim) call trim_pvalu(trim(pvalu),',',ndim)
-                  read(pvalu,*) single_phase
-                  write(*,*) 'Single phase = ', single_phase
+                  read(pvalu,*) parts%single_phase
+                  write(*,*) 'Single phase = ', parts%single_phase
 
       case('FIRST PHASE')
 
@@ -395,21 +285,21 @@ contains
                   read(pvalu,*) soil%imaterial
                   write(*,*) 'Second phase = ', soil%imaterial
 
-      case('DRY SOIL')
+!      case('DRY SOIL')
 
-                  read(pvalu,*) dry_soil
-                  write(*,*) 'Dry soil = ', dry_soil
+!                  read(pvalu,*) dry_soil
+!                  write(*,*) 'Dry soil = ', dry_soil
 
-      case('PARTICLE SIZE')
-                  ndim = 1
-                  if(ncoma>=ndim) call trim_pvalu(trim(pvalu),',',ndim)
-                  read(pvalu,*) particle_size
-                  write(*,*) 'Particle size = ', particle_size
+!      case('PARTICLE SIZE')
+!                  ndim = 1
+!                  if(ncoma>=ndim) call trim_pvalu(trim(pvalu),',',ndim)
+!                  read(pvalu,*) particle_size
+!                  write(*,*) 'Particle size = ', particle_size
 
-       case('OPERATING MODE')
-
-                  read(pvalu,*) operating_mode
-                  write(*,*) 'Operating mode = ', operating_mode
+!       case('OPERATING MODE')
+!
+!                  read(pvalu,*) operating_mode
+!                  write(*,*) 'Operating mode = ', operating_mode
 
        case('IMMERSE DEPTH')
                   ndim = 1
@@ -417,10 +307,10 @@ contains
                   !read(pvalu,*) wasserjet%immerse
                   !write(*,*) 'Immerse depth = ', wasserjet%immerse
 
-       case('WITH NOZZLE')
-                  
-                  read(pvalu,*) with_nozzle
-                  write(*,*) 'With nozzle = ', with_nozzle
+!       case('WITH NOZZLE')
+!                  
+!                  read(pvalu,*) with_nozzle
+!                  write(*,*) 'With nozzle = ', with_nozzle
 
       case('WATER PROPERTY')
 
@@ -441,8 +331,8 @@ contains
           write(*,*) sio2%porosity, sio2%permeability
 
       case('INTEGRATION SCHEME')
-          read(pvalu,*) integrate_scheme
-          write(*,*) 'Integration scheme: ', integrate_scheme 
+          read(pvalu,*) parts%integrate_scheme
+          write(*,*) 'Integration scheme: ', parts%integrate_scheme 
 
       case('SOIL FAILURE CRITERIA')
        
@@ -453,8 +343,8 @@ contains
       case('TIME STEP SIZE')
                   ndim = 1
                   if(ncoma>=ndim) call trim_pvalu(trim(pvalu),',',ndim)
-                  read(pvalu,*) dt
-                  write(*,*) 'Time step size = ', dt
+                  read(pvalu,*) parts%dt
+                  write(*,*) 'Time step size = ', parts%dt
       case('MAXIMUM TIME STEP')
                   ndim = 1
                   if(ncoma>=ndim) call trim_pvalu(trim(pvalu),',',ndim)
@@ -463,8 +353,10 @@ contains
 
       case('OPENMP NUMBER OF THREADS')
 
-                  read(pvalu,*) nthreads
-                  write(*,*) 'Openmp number of threads = ', nthreads
+                  read(pvalu,*) parts%nthreads
+                  write(*,*) 'Openmp number of threads = ', parts%nthreads
+                  soil%nthreads = parts%nthreads
+
       case('BACKGROUND GRID RANGE')
                   read(pvalu,*) parts%x_mingeom,parts%x_maxgeom,  & 
                                 parts%y_mingeom,parts%y_maxgeom
@@ -516,19 +408,21 @@ allocate(parts%celldata(maxn)); parts%celldata = 0
 call allocate_particles_fields(parts)
 
 ! Working arrays outside particles type
-allocate(tab)
-allocate(tab%x, tab%y, tab%xy)
-allocate(tab%x%r(maxn),tab%y%r(maxn),tab%xy%r(maxn))
-tab%x = 0.d0; tab%y = 0.d0; tab%xy = 0.d0
+allocate(parts%tab)
+allocate(parts%tab%x, parts%tab%y, parts%tab%xy)
+allocate(parts%tab%x%r(maxn),parts%tab%y%r(maxn),parts%tab%xy%r(maxn))
+parts%tab%x = 0.d0; parts%tab%y = 0.d0; parts%tab%xy = 0.d0
 
-parts%tab => tab
+!parts%tab => tab
 
 if(trim(parts%imaterial)=='water')then
 !   allocate(parts%sxx,parts%sxy,parts%syy)
     allocate(parts%str);allocate(parts%str%x,parts%str%xy,parts%str%y)
-    parts%str%x%r => tab%x%r; parts%str%y%r => tab%y%r; parts%str%xy%r => tab%xy%r
+    parts%str%x%r => parts%tab%x%r
+    parts%str%y%r => parts%tab%y%r
+    parts%str%xy%r => parts%tab%xy%r
 elseif(trim(parts%imaterial)=='soil')then
-   parts%wxy => tab%xy
+   parts%wxy => parts%tab%xy
 endif   
 
 ! Material assignment
@@ -544,7 +438,7 @@ call parts%get_num_threads
 
 !--------------- Soil particles --------------------------------
 
-if(single_phase) return
+if(parts%single_phase) return
 
 soil%dim = dim
 soil%maxn= maxn
@@ -570,8 +464,8 @@ allocate(soil%celldata(maxn)); soil%celldata = 0
 ! Fields variables
 call allocate_particles_fields(soil)
 
-soil%tab => tab
-soil%wxy => tab%xy
+soil%tab => parts%tab
+soil%wxy => parts%tab%xy
 
 soil%material => SiO2
 soil%numeric => parts%numeric
@@ -716,24 +610,24 @@ end subroutine
       
       call parts%setup_ndim1; call soil%setup_ndim1
 
-      do it = 1, maxtimestep   
+      do it = 1, parts%maxtimestep   
   
-        itimestep = itimestep+1
+        parts%itimestep = parts%itimestep+1
 
-        parts%itimestep = itimestep
-        soil%itimestep  = itimestep
+        !parts%itimestep = itimestep
+        soil%itimestep  = parts%itimestep
 
-        if (mod(itimestep,print_step).eq.0) then
+        if (mod(parts%itimestep,parts%print_step).eq.0) then
          write(*,*)'______________________________________________'
          write(*,*)'  current number of time step =',              &
-                   itimestep,'     current time=', real(time+dt)
+                   parts%itimestep,'     current time=', real(parts%time+parts%dt)
          write(*,*)'______________________________________________'
         endif  
   
 !     If not first time step, then update thermal energy, density and 
 !     velocity half a time step  
 
-        if (itimestep .ne. 1) then
+        if (parts%itimestep .ne. 1) then
            pl => parts
            call first_half
         
@@ -751,6 +645,8 @@ end subroutine
 !---  Definition of variables out of the function vector:    
 
         call single_step
+
+!****************************************************************        
         do i = 1, parts%ntotal + parts%nvirt
            if(parts%zone(i)==4)then
               parts%dvx%x%r(i)=0.d0; parts%dvx%y%r(i)=0.d0
@@ -759,9 +655,9 @@ end subroutine
               parts%drho%r(i)=0.d0
            endif   
         enddo
+!***************************************************************
 
-
-        if (itimestep .eq. 1) then
+        if (parts%itimestep .eq. 1) then
            pl => parts
            call first_step
 
@@ -769,7 +665,7 @@ end subroutine
                                     pl => soil
                                     call first_step
 
-                                    if(plasticity==2)then
+                                    if(pl%plasticity==2)then
                                        call plastic_or_not(pl)
                                        call return_mapping
                                     endif
@@ -787,7 +683,7 @@ end subroutine
                                    pl => soil
                                    call second_half
 
-                                   if(plasticity==2)then
+                                   if(pl%plasticity==2)then
                                       call plastic_or_not(pl)
                                       call return_mapping
                                    endif
@@ -810,7 +706,7 @@ end subroutine
 !--------------------Velocity Inlet-----------------------
 
 
-        time = time + dt
+        parts%time = parts%time + parts%dt
 
 !	if (itimestep>=save_step_from.and.mod(itimestep,save_step).eq.0) then
 !          call output
@@ -841,31 +737,31 @@ type(p2r) vxi(3), dvxi(3), v_mini(3)
 
 !      do i = 1, pl%ntotal +pl%nvirt    ! originally only pl%ntotal       
             
-         if (.not.summation_density) then    
+         if (.not.pl%summation_density) then    
             pl%rho_min = pl%rho
-            pl%rho = pl%rho +(dt/2.)* pl%drho
+            pl%rho = pl%rho +(pl%dt/2.)* pl%drho
          endif
 
-         if(trim(pl%imaterial)=='water'.and.volume_fraction)then
+         if(trim(pl%imaterial)=='water'.and.pl%volume_fraction)then
             pl%vof_min = pl%vof
-            pl%vof = pl%vof+(dt/2.)*pl%dvof 
+            pl%vof = pl%vof+(pl%dt/2.)*pl%dvof 
          endif
  
          if(trim(pl%imaterial)=='soil')then
-                  if(stress_integration==1)then
+                  if(pl%stress_integration==1)then
          !pl%sxx(i) = pl%sxx(i) + dt*pl%dsxx(i)   ! Nothing to do!
          !pl%sxy(i) = pl%sxy(i) + dt*pl%dsxy(i)
          !pl%syy(i) = pl%syy(i) + dt*pl%dsyy(i)
-                  elseif(stress_integration==2)then
+                  elseif(pl%stress_integration==2)then
          pl%str_min%x = pl%str%x
          pl%str_min%xy = pl%str%xy
          pl%str_min%y = pl%str%y
          pl%p_min   = pl%p
-         pl%str%x = pl%str%x + (dt/2.)*pl%dstr%x
-         pl%str%xy = pl%str%xy + (dt/2.)*pl%dstr%xy
-         pl%str%y = pl%str%y + (dt/2.)*pl%dstr%y
+         pl%str%x = pl%str%x + (pl%dt/2.)*pl%dstr%x
+         pl%str%xy = pl%str%xy + (pl%dt/2.)*pl%dstr%xy
+         pl%str%y = pl%str%y + (pl%dt/2.)*pl%dstr%y
          !pl%str = pl%str + (dt/2.) * pl%dstr
-         pl%p = pl%p + (dt/2.)*pl%dp      !!!simultaneous pressure
+         pl%p = pl%p + (pl%dt/2.)*pl%dp      !!!simultaneous pressure
                   endif
          endif
       !write(*,*) pl%ntotal + pl%nvirt    
@@ -876,7 +772,7 @@ type(p2r) vxi(3), dvxi(3), v_mini(3)
          !   pl%v_min(d, i) = pl%vx(d, i)
          !   pl%vx(d, i) = pl%vx(d, i) + (dt/2.)*pl%dvx(d, i)
             v_mini(d)%p = vxi(d)%p
-            vxi(d)%p = vxi(d)%p + (dt/2.)*dvxi(d)%p         
+            vxi(d)%p = vxi(d)%p + (pl%dt/2.)*dvxi(d)%p         
          enddo
 
             !pl%v_min(1, i) = pl%vx%x%r(i)
@@ -895,25 +791,25 @@ type(p2r) vxi(3), dvxi(3), v_mini(3)
 
 !      do i=1,pl%ntotal +pl%nvirt     ! origionally pl%ntotal
          
-         if (.not.summation_density ) then
-            pl%rho = pl%rho + (dt/2.)* pl%drho
+         if (.not.pl%summation_density ) then
+            pl%rho = pl%rho + (pl%dt/2.)* pl%drho
          endif
 
-         if(trim(pl%imaterial)=='water'.and.volume_fraction)then
-            pl%vof = pl%vof+(dt/2.)*pl%dvof
+         if(trim(pl%imaterial)=='water'.and.pl%volume_fraction)then
+            pl%vof = pl%vof+(pl%dt/2.)*pl%dvof
          endif
 
          if(trim(pl%imaterial)=='soil')then
-                  if(stress_integration==1)then
-         pl%str%x = pl%str%x + dt*pl%dstr%x
-         pl%str%xy = pl%str%xy + dt*pl%dstr%xy
-         pl%str%y = pl%str%y + dt*pl%dstr%y
-         pl%p   = pl%p   + dt*pl%dp       !!! simultaneous pressure
-                  elseif(stress_integration==2)then
-         pl%str%x = pl%str%x + (dt/2.)*pl%dstr%x
-         pl%str%xy = pl%str%xy + (dt/2.)*pl%dstr%xy
-         pl%str%y = pl%str%y + (dt/2.)*pl%dstr%y
-         pl%p   = pl%p + (dt/2.)*pl%dp    !!! simultaneous pressure
+                  if(pl%stress_integration==1)then
+         pl%str%x = pl%str%x + pl%dt*pl%dstr%x
+         pl%str%xy = pl%str%xy + pl%dt*pl%dstr%xy
+         pl%str%y = pl%str%y + pl%dt*pl%dstr%y
+         pl%p   = pl%p   + pl%dt*pl%dp       !!! simultaneous pressure
+                  elseif(pl%stress_integration==2)then
+         pl%str%x = pl%str%x + (pl%dt/2.)*pl%dstr%x
+         pl%str%xy = pl%str%xy + (pl%dt/2.)*pl%dstr%xy
+         pl%str%y = pl%str%y + (pl%dt/2.)*pl%dstr%y
+         pl%p   = pl%p + (pl%dt/2.)*pl%dp    !!! simultaneous pressure
                   endif
          endif
         
@@ -924,8 +820,8 @@ type(p2r) vxi(3), dvxi(3), v_mini(3)
             !pl%vx(d, i) = pl%vx(d, i) + (dt/2.) * pl%dvx(d, i)   &
             !            + pl%av(d, i)
             !pl%x(d, i) = pl%x(d, i) + dt * pl%vx(d, i)
-            vxi(d)%p = vxi(d)%p + (dt/2.) * dvxi(d)%p + avi(d)%p
-            pl%x(d, i) = pl%x(d, i) + dt * vxi(d)%p            
+            vxi(d)%p = vxi(d)%p + (pl%dt/2.) * dvxi(d)%p + avi(d)%p
+            pl%x(d, i) = pl%x(d, i) + pl%dt * vxi(d)%p            
          enddo           
             !pl%vx(1, i) = pl%vx(1, i) + (dt/2.) * pl%dvx%x%r(i)   &
             !            + pl%av(1, i)
@@ -945,25 +841,25 @@ type(p2r) vxi(3), dvxi(3), v_mini(3)
       !$omp parallel do private(d,vxi,dvxi,v_mini,avi)
       do i=1,pl%ntotal +pl%nvirt  ! origionally pl%ntotal            
             
-         if (.not.summation_density ) then 
-            pl%rho%r(i) = pl%rho_min%r(i) + dt*pl%drho%r(i)
+         if (.not.pl%summation_density ) then 
+            pl%rho%r(i) = pl%rho_min%r(i) + pl%dt*pl%drho%r(i)
          endif
    
-         if(trim(pl%imaterial)=='water'.and.volume_fraction)then
-            pl%vof%r(i) = pl%vof_min%r(i)+dt*pl%dvof%r(i) 
+         if(trim(pl%imaterial)=='water'.and.pl%volume_fraction)then
+            pl%vof%r(i) = pl%vof_min%r(i)+pl%dt*pl%dvof%r(i) 
          endif
                  
          if(trim(pl%imaterial)=='soil')then 
-                  if(stress_integration==1)then 
-         pl%str%x%r(i) = pl%str%x%r(i) + dt*pl%dstr%x%r(i)
-         pl%str%xy%r(i) = pl%str%xy%r(i) + dt*pl%dstr%xy%r(i)
-         pl%str%y%r(i) = pl%str%y%r(i) + dt*pl%dstr%y%r(i)
-         pl%p%r(i)   = pl%p%r(i)   + dt*pl%dp%r(i)       !!! simultaneous pressure
-                  elseif(stress_integration==2)then
-         pl%str%x%r(i) = pl%str_min%x%r(i) + dt*pl%dstr%x%r(i)
-         pl%str%xy%r(i) = pl%str_min%xy%r(i) + dt*pl%dstr%xy%r(i)
-         pl%str%y%r(i) = pl%str_min%y%r(i) + dt*pl%dstr%y%r(i)
-         pl%p%r(i)   = pl%p_min%r(i) + dt*pl%dp%r(i)     !!! simultaneous pressure
+                  if(pl%stress_integration==1)then 
+         pl%str%x%r(i) = pl%str%x%r(i) + pl%dt*pl%dstr%x%r(i)
+         pl%str%xy%r(i) = pl%str%xy%r(i) + pl%dt*pl%dstr%xy%r(i)
+         pl%str%y%r(i) = pl%str%y%r(i) + pl%dt*pl%dstr%y%r(i)
+         pl%p%r(i)   = pl%p%r(i)   + pl%dt*pl%dp%r(i)       !!! simultaneous pressure
+                  elseif(pl%stress_integration==2)then
+         pl%str%x%r(i) = pl%str_min%x%r(i) + pl%dt*pl%dstr%x%r(i)
+         pl%str%xy%r(i) = pl%str_min%xy%r(i) + pl%dt*pl%dstr%xy%r(i)
+         pl%str%y%r(i) = pl%str_min%y%r(i) + pl%dt*pl%dstr%y%r(i)
+         pl%p%r(i)   = pl%p_min%r(i) + pl%dt*pl%dp%r(i)     !!! simultaneous pressure
                   endif
          endif
         
@@ -974,9 +870,9 @@ type(p2r) vxi(3), dvxi(3), v_mini(3)
             !pl%vx(d, i) = pl%v_min(d, i) + dt * pl%dvx(d, i)   &
             !            + pl%av(d, i)
             !pl%x(d, i) = pl%x(d, i) + dt * pl%vx(d, i)
-            vxi(d)%p = v_mini(d)%p + dt * dvxi(d)%p   &
+            vxi(d)%p = v_mini(d)%p + pl%dt * dvxi(d)%p   &
                         + avi(d)%p
-            pl%x(d, i) = pl%x(d, i) + dt * vxi(d)%p
+            pl%x(d, i) = pl%x(d, i) + pl%dt * vxi(d)%p
          !if(i>4160)write(*,*) i,vxi(2)%p
          enddo
             !pl%vx(1, i) = pl%v_min(1, i) + dt * pl%dvx%x%r(i)   &
@@ -998,16 +894,16 @@ type(p2r) vxi(3), dvxi(3), v_mini(3)
                  
          !if(trim(pl%imaterial)=='soil')then
          if(pl%fail(i)==1)then 
-                  if(stress_integration==1)then 
-         pl%str%x%r(i) = pl%str%x%r(i) + dt*pl%dstr2%x%r(i)
-         pl%str%xy%r(i) = pl%str%xy%r(i) + dt*pl%dstr2%xy%r(i)
-         pl%str%y%r(i) = pl%str%y%r(i) + dt*pl%dstr2%y%r(i)
-         pl%p%r(i)   = pl%p%r(i)   + dt*pl%dp2%r(i)       !!! simultaneous pressure
-                  elseif(stress_integration==2)then
-         pl%str%x%r(i) = pl%str_min%x%r(i) + dt*pl%dstr%x%r(i)
-         pl%str%xy%r(i) = pl%str_min%xy%r(i) + dt*pl%dstr%xy%r(i)
-         pl%str%y%r(i) = pl%str_min%y%r(i) + dt*pl%dstr%y%r(i)
-         pl%p%r(i)   = pl%p_min%r(i) + dt*pl%dp%r(i)     !!! simultaneous pressure
+                  if(pl%stress_integration==1)then 
+         pl%str%x%r(i) = pl%str%x%r(i) + pl%dt*pl%dstr2%x%r(i)
+         pl%str%xy%r(i) = pl%str%xy%r(i) + pl%dt*pl%dstr2%xy%r(i)
+         pl%str%y%r(i) = pl%str%y%r(i) + pl%dt*pl%dstr2%y%r(i)
+         pl%p%r(i)   = pl%p%r(i)   + pl%dt*pl%dp2%r(i)       !!! simultaneous pressure
+                  elseif(pl%stress_integration==2)then
+         pl%str%x%r(i) = pl%str_min%x%r(i) + pl%dt*pl%dstr%x%r(i)
+         pl%str%xy%r(i) = pl%str_min%xy%r(i) + pl%dt*pl%dstr%xy%r(i)
+         pl%str%y%r(i) = pl%str_min%y%r(i) + pl%dt*pl%dstr%y%r(i)
+         pl%p%r(i)   = pl%p_min%r(i) + pl%dt*pl%dp%r(i)     !!! simultaneous pressure
                   endif
          endif
          !endif
@@ -1032,22 +928,22 @@ type(p2r) vxi(3), dvxi(3), v_mini(3)
               
 call parts%setup_ndim1
 pl => parts
-do it = 1, maxtimestep    
-   itimestep = itimestep+1
-   parts%itimestep = itimestep
+do it = 1, parts%maxtimestep    
+   parts%itimestep = parts%itimestep+1
+   !parts%itimestep = itimestep
 
 
-        if (mod(itimestep,print_step).eq.0) then
+        if (mod(parts%itimestep,parts%print_step).eq.0) then
          write(*,*)'______________________________________________'
          write(*,*)'  current number of time step =',              &
-                   itimestep,'     current time=', real(time+dt)
+                   parts%itimestep,'     current time=', real(parts%time+parts%dt)
          write(*,*)'______________________________________________'
         endif  
    
 !     If not first time step, then update thermal energy, density and 
 !     velocity half a time step  
 
-   if(itimestep .ne. 1)then
+   if(parts%itimestep .ne. 1)then
 pl => parts
       call first_half
 !      do i = 1, pl%ntotal +pl%nvirt    ! originally only pl%ntotal       
@@ -1057,7 +953,7 @@ pl => parts
    call single_step_for_water
 !    call single_step
 
-   if(itimestep .eq. 1) then
+   if(parts%itimestep .eq. 1) then
 pl => parts
       call first_step
 
@@ -1069,7 +965,7 @@ pl => parts
 
    endif 
 
-   time = time + dt
+   parts%time = parts%time + parts%dt
 
 !  if(mod(itimestep,print_step).eq.0)then
 !      write(*,*)'______________________________________________'
@@ -1098,9 +994,9 @@ type(p2r) vxi(3), dvxi(3), v_mini(3)
 
 !      do i = 1, pl%ntotal +pl%nvirt    ! originally only pl%ntotal       
             
-         if (.not.summation_density) then    
+         if (.not.parts%summation_density) then    
             parts%rho_min = parts%rho
-            parts%rho = parts%rho +(dt/2.)* parts%drho
+            parts%rho = parts%rho +(parts%dt/2.)* parts%drho
          endif
 
 !         if(trim(pl%imaterial)=='water'.and.volume_fraction)then
@@ -1116,7 +1012,7 @@ type(p2r) vxi(3), dvxi(3), v_mini(3)
          !   pl%v_min(d, i) = pl%vx(d, i)
          !   pl%vx(d, i) = pl%vx(d, i) + (dt/2.)*pl%dvx(d, i)
             v_mini(d)%p = vxi(d)%p
-            vxi(d)%p = vxi(d)%p + (dt/2.)*dvxi(d)%p         
+            vxi(d)%p = vxi(d)%p + (parts%dt/2.)*dvxi(d)%p         
          enddo
 
             !pl%v_min(1, i) = pl%vx%x%r(i)
@@ -1136,8 +1032,8 @@ type(p2r) vxi(3), dvxi(3), v_mini(3)
 
 !      do i=1,pl%ntotal +pl%nvirt     ! origionally pl%ntotal
          
-         if (.not.summation_density ) then
-            parts%rho = parts%rho + (dt/2.)* parts%drho
+         if (.not.parts%summation_density ) then
+            parts%rho = parts%rho + (parts%dt/2.)* parts%drho
          endif
 
       do i=1,parts%ntotal +parts%nvirt     ! origionally pl%ntotal
@@ -1147,8 +1043,8 @@ type(p2r) vxi(3), dvxi(3), v_mini(3)
             !pl%vx(d, i) = pl%vx(d, i) + (dt/2.) * pl%dvx(d, i)   &
             !            + pl%av(d, i)
             !pl%x(d, i) = pl%x(d, i) + dt * pl%vx(d, i)
-            vxi(d)%p = vxi(d)%p + (dt/2.) * dvxi(d)%p + avi(d)%p
-            parts%x(d, i) = parts%x(d, i) + dt * vxi(d)%p            
+            vxi(d)%p = vxi(d)%p + (parts%dt/2.) * dvxi(d)%p + avi(d)%p
+            parts%x(d, i) = parts%x(d, i) + parts%dt * vxi(d)%p            
          enddo           
             !pl%vx(1, i) = pl%vx(1, i) + (dt/2.) * pl%dvx%x%r(i)   &
             !            + pl%av(1, i)
@@ -1168,8 +1064,8 @@ type(p2r) vxi(3), dvxi(3), v_mini(3)
       !$omp parallel do private(d,vxi,dvxi,v_mini,avi)
       do i=1,parts%ntotal +parts%nvirt  ! origionally pl%ntotal            
             
-         if (.not.summation_density ) then 
-            parts%rho%r(i) = parts%rho_min%r(i) + dt*parts%drho%r(i)
+         if (.not.parts%summation_density ) then 
+            parts%rho%r(i) = parts%rho_min%r(i) + parts%dt*parts%drho%r(i)
          endif
 
  !        if(trim(pl%imaterial)=='water'.and.volume_fraction)then
@@ -1185,9 +1081,9 @@ type(p2r) vxi(3), dvxi(3), v_mini(3)
             !pl%vx(d, i) = pl%v_min(d, i) + dt * pl%dvx(d, i)   &
             !            + pl%av(d, i)
             !pl%x(d, i) = pl%x(d, i) + dt * pl%vx(d, i)
-            vxi(d)%p = v_mini(d)%p + dt * dvxi(d)%p   &
+            vxi(d)%p = v_mini(d)%p + parts%dt * dvxi(d)%p   &
                         + avi(d)%p
-            parts%x(d, i) = parts%x(d, i) + dt * vxi(d)%p
+            parts%x(d, i) = parts%x(d, i) + parts%dt * vxi(d)%p
          enddo
             !pl%vx(1, i) = pl%v_min(1, i) + dt * pl%dvx%x%r(i)   &
             !            + pl%av(1, i)
@@ -1311,37 +1207,37 @@ integer :: i, j, k, d, ntotal, it
 type(particles), pointer :: pl
 type(p2r) vxi(3), dvxi(3), v_mini(3), avi(3)
               
-do it = 1, maxtimestep     
-   itimestep = itimestep+1
-   parts%itimestep = itimestep
+do it = 1, parts%maxtimestep     
+   parts%itimestep = parts%itimestep+1
+   !parts%itimestep = itimestep
   
 ! If not first time step, then update thermal energy, density and 
 ! velocity half a time step  
 
-   if(itimestep .ne. 1)then
+   if(parts%itimestep .ne. 1)then
 
       pl => parts
 !      call first_half
 !      do i = 1, pl%ntotal +pl%nvirt    ! originally only pl%ntotal       
             
-         if (.not.summation_density) then    
+         if (.not.pl%summation_density) then    
             pl%rho_min = pl%rho
-            pl%rho = pl%rho +(dt/2.)* pl%drho
+            pl%rho = pl%rho +(pl%dt/2.)* pl%drho
          endif
  
-         if(stress_integration==1)then
+         if(pl%stress_integration==1)then
             !pl%sxx(i) = pl%sxx(i) + dt*pl%dsxx(i)   ! Nothing to do!
             !pl%sxy(i) = pl%sxy(i) + dt*pl%dsxy(i)
             !pl%syy(i) = pl%syy(i) + dt*pl%dsyy(i)
-         elseif(stress_integration==2)then
+         elseif(pl%stress_integration==2)then
             pl%str_min%x = pl%str%x
             pl%str_min%xy = pl%str%xy
             pl%str_min%y = pl%str%y
             pl%p_min   = pl%p
-            pl%str%x = pl%str%x + (dt/2.)*pl%dstr%x
-            pl%str%xy = pl%str%xy + (dt/2.)*pl%dstr%xy
-            pl%str%y = pl%str%y + (dt/2.)*pl%dstr%y
-            pl%p = pl%p + (dt/2.)*pl%dp      !!!simultaneous pressure
+            pl%str%x = pl%str%x + (pl%dt/2.)*pl%dstr%x
+            pl%str%xy = pl%str%xy + (pl%dt/2.)*pl%dstr%xy
+            pl%str%y = pl%str%y + (pl%dt/2.)*pl%dstr%y
+            pl%p = pl%p + (pl%dt/2.)*pl%dp      !!!simultaneous pressure
          endif
           
       do i = 1, pl%ntotal +pl%nvirt    ! originally only pl%ntotal       
@@ -1351,7 +1247,7 @@ do it = 1, maxtimestep
          !   pl%v_min(d, i) = pl%vx(d, i)
          !   pl%vx(d, i) = pl%vx(d, i) + (dt/2.)*pl%dvx(d, i)
             v_mini(d)%p = vxi(d)%p
-            vxi(d)%p = vxi(d)%p + (dt/2.)*dvxi(d)%p                  
+            vxi(d)%p = vxi(d)%p + (pl%dt/2.)*dvxi(d)%p                  
          enddo
             !pl%v_min(1, i) = pl%vx(1, i)
             !pl%vx(1, i) = pl%vx(1, i) + (dt/2.)*pl%dvx%x%r(i)
@@ -1365,33 +1261,33 @@ do it = 1, maxtimestep
 
    call single_step_for_soil
 
-   if(itimestep .eq. 1)then
+   if(parts%itimestep .eq. 1)then
       pl => parts
 !           call first_step
 !      do i=1,pl%ntotal +pl%nvirt     ! origionally pl%ntotal
          
-         if(.not.summation_density )then
-            pl%rho = pl%rho + (dt/2.)* pl%drho
+         if(.not.pl%summation_density )then
+            pl%rho = pl%rho + (pl%dt/2.)* pl%drho
          endif
 
-         if(stress_integration==1)then
-            pl%str%x = pl%str%x + dt*pl%dstr%x
-            pl%str%xy = pl%str%xy + dt*pl%dstr%xy
-            pl%str%y = pl%str%y + dt*pl%dstr%y
-            pl%p   = pl%p   + dt*pl%dp       !!! simultaneous pressure
-         elseif(stress_integration==2)then
-            pl%str%x = pl%str%x + (dt/2.)*pl%dstr%x
-            pl%str%xy = pl%str%xy + (dt/2.)*pl%dstr%xy
-            pl%str%y = pl%str%y + (dt/2.)*pl%dstr%y
-            pl%p   = pl%p + (dt/2.)*pl%dp    !!! simultaneous pressure
+         if(pl%stress_integration==1)then
+            pl%str%x = pl%str%x + pl%dt*pl%dstr%x
+            pl%str%xy = pl%str%xy + pl%dt*pl%dstr%xy
+            pl%str%y = pl%str%y + pl%dt*pl%dstr%y
+            pl%p   = pl%p   + pl%dt*pl%dp       !!! simultaneous pressure
+         elseif(pl%stress_integration==2)then
+            pl%str%x = pl%str%x + (pl%dt/2.)*pl%dstr%x
+            pl%str%xy = pl%str%xy + (pl%dt/2.)*pl%dstr%xy
+            pl%str%y = pl%str%y + (pl%dt/2.)*pl%dstr%y
+            pl%p   = pl%p + (pl%dt/2.)*pl%dp    !!! simultaneous pressure
          endif
         
       do i=1,pl%ntotal +pl%nvirt     ! origionally pl%ntotal
          if(pl%itype(i)<0)cycle
          vxi = pl%vx%cmpt(i); dvxi = pl%dvx%cmpt(i); avi = pl%av%cmpt(i) 
          do d = 1, pl%dim        
-            vxi(d)%p = vxi(d)%p + (dt/2.) * dvxi(d)%p + avi(d)%p
-            pl%x(d, i) = pl%x(d, i) + dt * vxi(d)%p
+            vxi(d)%p = vxi(d)%p + (pl%dt/2.) * dvxi(d)%p + avi(d)%p
+            pl%x(d, i) = pl%x(d, i) + pl%dt * vxi(d)%p
          enddo           
             !pl%vx(1, i) = pl%vx(1, i) + (dt/2.) * pl%dvx%x%r(i)   &
             !            + pl%av(1, i)
@@ -1415,20 +1311,20 @@ do it = 1, maxtimestep
 !           call second_half          
 !      do i=1,pl%ntotal +pl%nvirt  ! origionally pl%ntotal            
             
-         if(.not.summation_density )then 
-            pl%rho = pl%rho_min + dt*pl%drho
+         if(.not.pl%summation_density )then 
+            pl%rho = pl%rho_min + pl%dt*pl%drho
          endif
                  
-         if(stress_integration==1)then 
-            pl%str%x = pl%str%x + dt*pl%dstr%x
-            pl%str%xy = pl%str%xy + dt*pl%dstr%xy
-            pl%str%y = pl%str%y + dt*pl%dstr%y
-            pl%p  = pl%p + dt*pl%dp       !!! simultaneous pressure
-         elseif(stress_integration==2)then
-            pl%str%x = pl%str_min%x + dt*pl%dstr%x
-            pl%str%xy = pl%str_min%xy + dt*pl%dstr%xy
-            pl%str%y = pl%str_min%y + dt*pl%dstr%y
-            pl%p   = pl%p_min + dt*pl%dp     !!! simultaneous pressure
+         if(pl%stress_integration==1)then 
+            pl%str%x = pl%str%x + pl%dt*pl%dstr%x
+            pl%str%xy = pl%str%xy + pl%dt*pl%dstr%xy
+            pl%str%y = pl%str%y + pl%dt*pl%dstr%y
+            pl%p  = pl%p + pl%dt*pl%dp       !!! simultaneous pressure
+         elseif(pl%stress_integration==2)then
+            pl%str%x = pl%str_min%x + pl%dt*pl%dstr%x
+            pl%str%xy = pl%str_min%xy + pl%dt*pl%dstr%xy
+            pl%str%y = pl%str_min%y + pl%dt*pl%dstr%y
+            pl%p   = pl%p_min + pl%dt*pl%dp     !!! simultaneous pressure
          endif
 
       do i=1,pl%ntotal +pl%nvirt  ! origionally pl%ntotal            
@@ -1436,9 +1332,9 @@ do it = 1, maxtimestep
          vxi = pl%vx%cmpt(i); dvxi = pl%dvx%cmpt(i); v_mini = pl%vx%cmpt(i)
          avi = pl%av%cmpt(i)
          do d = 1, pl%dim                   
-            vxi(d)%p = v_mini(d)%p + dt * dvxi(d)%p   &
+            vxi(d)%p = v_mini(d)%p + pl%dt * dvxi(d)%p   &
                         + avi(d)%p
-            pl%x(d, i) = pl%x(d, i) + dt * vxi(d)%p                  
+            pl%x(d, i) = pl%x(d, i) + pl%dt * vxi(d)%p                  
          enddo
             !pl%vx(1, i) = pl%v_min(1, i) + dt * pl%dvx%x%r(i)   &
             !            + pl%av(1, i)
@@ -1457,16 +1353,16 @@ do it = 1, maxtimestep
 
    endif 
 
-   time = time + dt
+   parts%time = parts%time + parts%dt
 
-   if(mod(itimestep,print_step).eq.0)then
+   if(mod(parts%itimestep,parts%print_step).eq.0)then
       write(*,*)'______________________________________________'
       write(*,*)'  current number of time step =',              &
-                itimestep,'     current time=', real(time+dt)
+                parts%itimestep,'     current time=', real(parts%time+parts%dt)
       write(*,*)'______________________________________________'
    endif  
         
-   if(itimestep>=save_step_from.and.mod(itimestep,save_step).eq.0) then
+   if(parts%itimestep>=parts%save_step_from.and.mod(parts%itimestep,parts%save_step).eq.0) then
       call output
    endif 
 
@@ -1495,7 +1391,7 @@ integer i, ntotal
 if(dbg) write(*,*) 'In single_step...'
 
                                       nphase = 2
-                                      if(single_phase) nphase=1
+                                      if(parts%single_phase) nphase=1
 
                                       do iphase = 1, nphase
                                          if(iphase==1) pl => parts  !!!
@@ -1512,21 +1408,21 @@ endif
 !---  Interaction parameters, calculating neighboring particles
 !     and optimzing smoothing length
   
-if (pl%numeric%nnps.eq.1) then 
+if (pl%nnps.eq.1) then 
    call direct_find(pl)
-else if (pl%numeric%nnps.eq.2) then
+else if (pl%nnps.eq.2) then
    call link_list(pl)     
 !        call link_list(itimestep, ntotal+nvirt,hsml(1),x,niac,pair_i,
 !     &       pair_j,w,dwdx,ns)
 !        call link_list(itimestep, parts%ntotal+parts%nvirt,
 !     &       parts%hsml(1),parts%x,parts%niac,parts%pair_i,
 !     &       parts%pair_j,parts%w,parts%dwdx,parts%countiac)
-else if (pl%numeric%nnps.eq.3) then 
+else if (pl%nnps.eq.3) then 
 !        call tree_search(itimestep, ntotal+nvirt,hsml,x,niac,pair_i,
 !     &       pair_j,w,dwdx,ns)
 endif         
 
-if(mod(itimestep,print_step).eq.0.and.int_stat) then
+if(mod(pl%itimestep,pl%print_step).eq.0.and.pl%int_stat) then
    call pl%interaction_statistics
 endif   
 
@@ -1542,7 +1438,7 @@ endif
     pl%drho = -pl.rho*pl.div2(pl.vx)
 !endif
       
-if(artificial_density)then
+if(pl%artificial_density)then
    !if(trim(pl%imaterial)=='water')then
       !!call renormalize_density_gradient(pl)
       !call art_density(pl)
@@ -1577,13 +1473,13 @@ if(trim(pl%imaterial)=='water')then
    call newtonian_fluid(pl)
 elseif(trim(pl%imaterial)=='soil')then
 
-   if(yield_criterion == 1)then
+   if(pl%yield_criterion == 1)then
       call mohr_coulomb_failure_criterion(pl)
-   elseif(yield_criterion == 2)then
+   elseif(pl%yield_criterion == 2)then
       call drucker_prager_failure_criterion(pl)
    endif
 
-   if(mod(itimestep,print_step).eq.0)    &
+   if(mod(pl%itimestep,pl%print_step).eq.0)    &
             write(*,*) 'Failured points: ', pl%nfail
 endif
 
@@ -1622,11 +1518,11 @@ endif
 !     we need txx,tyy,tzz, which was destroyed in Jaumann_rate!
 
 if(trim(pl%imaterial)=='soil')then   
-   if(plasticity==1)then 
+   if(pl%plasticity==1)then 
       call plastic_flow_rule(pl)
-   elseif(plasticity==2)then     
+   elseif(pl%plasticity==2)then     
       call plastic_flow_rule2(pl)
-   elseif(plasticity==3)then
+   elseif(pl%plasticity==3)then
       call plastic_or_not(pl)
       call plastic_flow_rule3(pl)
    endif
@@ -1638,16 +1534,16 @@ if(trim(pl%imaterial)=='soil')call Jaumann_rate(pl)
 
 !---  Artificial viscosity:
 
-if (visc_artificial) call pl%art_visc_omp
+if (pl%visc_artificial) call pl%art_visc_omp
 
-if(trim(pl%imaterial)=='soil'.and.soil_artificial_stress)then
+if(trim(pl%imaterial)=='soil'.and.pl%soil_artificial_stress)then
         !call art_stress(pl)
    call pl%delta_sph_omp(pl%p,pl%dp)
    call pl%delta_sph_omp(pl%str%x,pl%dstr%x)
    call pl%delta_sph_omp(pl%str%xy,pl%dstr%xy)
    call pl%delta_sph_omp(pl%str%y,pl%dstr%y)
 endif        
-if(trim(pl%imaterial)=='water'.and.water_artificial_volume)  &
+if(trim(pl%imaterial)=='water'.and.pl%water_artificial_volume)  &
         !call art_volume_fraction_water2(pl)
         call pl%delta_sph_omp(pl%vof,pl%dvof)
 
@@ -1663,7 +1559,7 @@ if(trim(pl%imaterial)=='water'.and.water_artificial_volume)  &
           call pl%repulsive_force_omp
 !      endif
 
-pl%dvx%y = pl%dvx%y + gravity
+pl%dvx%y = pl%dvx%y + pl%gravity
 
 !     Calculating the neighboring particles and undating HSML
       
@@ -1671,11 +1567,11 @@ pl%dvx%y = pl%dvx%y + gravity
 
 !     Calculating average velocity of each partile for avoiding penetration
 
-if (average_velocity) call av_vel_omp(pl) 
+if (pl%average_velocity) call av_vel_omp(pl) 
 
 !---  Convert velocity, force, and energy to f and dfdt  
       
-if(mod(itimestep,print_step).eq.0) then     
+if(mod(pl%itimestep,pl%print_step).eq.0) then     
 !  call pl%particle_monitor
    call pl%minimum_time_step  
 endif
@@ -1684,16 +1580,16 @@ endif
 
 !call drag_force(parts,soil)   !!! Porous media
 
-                if(.not.single_phase)then
+                if(.not.parts%single_phase)then
 
 !-------------------Water/soil interaction-------------------------------
 
 !---  Interaction parameters, calculating neighboring particles
 !     and optimzing smoothing length
   
-      if (parts%numeric%nnps.eq.1) then 
+      if (parts%nnps.eq.1) then 
          call direct_find_2(parts,soil)
-      else if (parts%numeric%nnps.eq.2) then
+      else if (parts%nnps.eq.2) then
           call link_list2_omp(parts,soil)
 !        call link_list(itimestep, ntotal+nvirt,hsml(1),x,niac,pair_i,
 !     &       pair_j,w,dwdx,ns)
@@ -1702,19 +1598,19 @@ endif
 !     &       pair_j,w,dwdx,ns)
       endif         
 
-      if(mod(itimestep,print_step).eq.0.and.int_stat) then
+      if(mod(parts%itimestep,parts%print_step).eq.0.and.parts%int_stat) then
          call parts%interaction_statistics
       endif    
 
       call darcy_law_omp(parts,soil)          
       call pore_water_pressure_omp(parts,soil) 
 
-      if(volume_fraction)then
+      if(parts%volume_fraction)then
          call volume_fraction_soil_omp(soil)
          call volume_fraction_water2_omp(parts,soil)
          call volume_fraction_water_omp(parts,soil)  ! phi_f = 1- phi_s
-         if(volume_fraction_renorm)then
-            if(mod(itimestep,40).eq.0) then
+         if(parts%volume_fraction_renorm)then
+            if(mod(parts%itimestep,40).eq.0) then
                ntotal = parts%ntotal+parts%nvirt
                parts%rho = parts%rho/parts%vof 
                parts%vof = parts%vof2
@@ -1728,8 +1624,8 @@ endif
      
              endif ! .not.single_phase
 
-      if(itimestep>=save_step_from.and.   &
-         mod(itimestep,save_step).eq.0)then
+      if(parts%itimestep>=parts%save_step_from.and.   &
+         mod(parts%itimestep,parts%save_step).eq.0)then
          call output
       endif 
 
@@ -1764,21 +1660,21 @@ pl%dvx%x = 0.d0; pl%dvx%y = 0.d0; pl%drho = 0.d0
 !---  Interaction parameters, calculating neighboring particles
 !     and optimzing smoothing length
   
-if (pl%numeric%nnps.eq.1) then 
+if (pl%nnps.eq.1) then 
    call direct_find(pl)
-else if (pl%numeric%nnps.eq.2) then
+else if (pl%nnps.eq.2) then
    call link_list(pl)     
 !        call link_list(itimestep, ntotal+nvirt,hsml(1),x,niac,pair_i,
 !     &       pair_j,w,dwdx,ns)
 !        call link_list(itimestep, parts%ntotal+parts%nvirt,
 !     &       parts%hsml(1),parts%x,parts%niac,parts%pair_i,
 !     &       parts%pair_j,parts%w,parts%dwdx,parts%countiac)
-else if (pl%numeric%nnps.eq.3) then 
+else if (pl%nnps.eq.3) then 
 !        call tree_search(itimestep, ntotal+nvirt,hsml,x,niac,pair_i,
 !     &       pair_j,w,dwdx,ns)
 endif         
 
-if(mod(itimestep,print_step).eq.0.and.int_stat) then
+if(mod(pl%itimestep,pl%print_step).eq.0.and.pl%int_stat) then
    call pl%interaction_statistics
 endif   
 
@@ -1794,7 +1690,7 @@ endif
     pl%drho = -pl.rho*pl.div2(pl.vx)
 !endif
       
-if(artificial_density)then
+if(pl%artificial_density)then
    !if(trim(pl%imaterial)=='water')then
       !!call renormalize_density_gradient(pl)
       !call art_density(pl)
@@ -1846,7 +1742,7 @@ pl%tab%y = 2.d0/3.d0*(2.d0*pl%df4(pl%vx%y,'y')-pl%df4(pl%vx%x,'x'))
 
 !---  Artificial viscosity:
 
-if (visc_artificial) call pl%art_visc_omp
+if (pl%visc_artificial) call pl%art_visc_omp
        
 !if(trim(pl%imaterial)=='water'.and.water_artificial_volume)  &
         !call art_volume_fraction_water2(pl)
@@ -1864,7 +1760,7 @@ if (visc_artificial) call pl%art_visc_omp
 call pl%repulsive_force_omp                ! can be tried
 !      endif
 
-pl%dvx%y = pl%dvx%y + gravity
+pl%dvx%y = pl%dvx%y + pl%gravity
 
 !     Calculating the neighboring particles and undating HSML
       
@@ -1872,17 +1768,17 @@ pl%dvx%y = pl%dvx%y + gravity
 
 !     Calculating average velocity of each partile for avoiding penetration
 
-if (average_velocity) call av_vel(pl) 
+if (pl%average_velocity) call av_vel(pl) 
 
 !---  Convert velocity, force, and energy to f and dfdt  
       
-if(mod(itimestep,print_step).eq.0) then     
+if(mod(pl%itimestep,pl%print_step).eq.0) then     
 !  call pl%particle_monitor
    call pl%minimum_time_step  
 endif
 
-      if(itimestep>=save_step_from.and.   &
-         mod(itimestep,save_step).eq.0)then
+      if(pl%itimestep>=pl%save_step_from.and.   &
+         mod(pl%itimestep,pl%save_step).eq.0)then
          call output
       endif 
 
@@ -1915,20 +1811,20 @@ pl%dp = 0.d0
   
 call pl%find_pairs
 
-if(mod(itimestep,print_step).eq.0.and.int_stat) then
+if(mod(pl%itimestep,pl%print_step).eq.0.and.pl%int_stat) then
    call pl%interaction_statistics
 endif   
 
 !---  Density approximation or change rate
      
-if (summation_density) then      
+if (pl%summation_density) then      
     call sum_density(pl)
 else             
     !call con_density(pl)
     pl%drho = -pl%rho*pl%div2(pl%vx)    
 endif
       
-if(artificial_density)then
+if(pl%artificial_density)then
    !if(trim(pl%imaterial)=='water')then
       !!call renormalize_density_gradient(pl)
       !call art_density(pl)
@@ -1954,9 +1850,9 @@ pl%vcc = pl%div_omp(pl%vx)
 
 call pressure(pl)
 
-if(yield_criterion == 1)then
+if(pl%yield_criterion == 1)then
    call mohr_coulomb_failure_criterion(pl)
-elseif(yield_criterion == 2)then
+elseif(pl%yield_criterion == 2)then
    call drucker_prager_failure_criterion(pl)
 endif
 
@@ -1971,11 +1867,11 @@ pl%dvx%y = pl%dvx%y/pl%rho
 ! --- Plasticity flow rule   ! This was done before Jaummann_rate, because we 
 !     we need txx,tyy,tzz, which was destroyed in Jaumann_rate!
 
-if(plasticity==1)then 
+if(pl%plasticity==1)then 
    call plastic_flow_rule(pl)
-elseif(plasticity==2)then     
+elseif(pl%plasticity==2)then     
    call plastic_flow_rule2(pl)
-elseif(plasticity==3)then
+elseif(pl%plasticity==3)then
    call plastic_or_not(pl)
    call plastic_flow_rule3(pl)
 endif
@@ -1986,10 +1882,10 @@ call Jaumann_rate(pl)
 
 !---  Artificial viscosity:
 
-if (visc_artificial) call pl%art_visc_omp
+if (pl%visc_artificial) call pl%art_visc_omp
 
 !if(soil_artificial_stress) call art_stress(pl)
-if(soil_artificial_stress)then
+if(pl%soil_artificial_stress)then
    call pl%delta_sph_omp(pl%p,pl%dp)
    call pl%delta_sph_omp(pl%str%x,pl%dstr%x)
    call pl%delta_sph_omp(pl%str%xy,pl%dstr%xy)
@@ -2007,7 +1903,7 @@ endif
 !          call repulsive_force(pl)
 !      endif
 
-pl%dvx%y = pl%dvx%y + gravity
+pl%dvx%y = pl%dvx%y + pl%gravity
 
 ! Calculating the neighboring particles and undating HSML
       
@@ -2015,11 +1911,11 @@ pl%dvx%y = pl%dvx%y + gravity
      
 ! Calculating average velocity of each partile for avoiding penetration
 
-if (average_velocity) call av_vel_omp(pl) 
+if (pl%average_velocity) call av_vel_omp(pl) 
 
 !---  Convert velocity, force, and energy to f and dfdt  
       
-if(mod(itimestep,print_step).eq.0) then     
+if(mod(pl%itimestep,pl%print_step).eq.0) then     
 !  call pl%particle_monitor
    call pl%minimum_time_step  
 endif
@@ -2081,8 +1977,8 @@ numeric => parts%numeric
 matt => parts%material
 
 write(f_other,*) 'Numerical parameters:'
-write(f_other,*) 'nnps = ', numeric%nnps 
-write(f_other,*) 'gravity = ', numeric%gravity 
+write(f_other,*) 'nnps = ', parts%nnps 
+write(f_other,*) 'gravity = ', parts%gravity 
 write(f_other,*) 'alpha, beta, etq = ', numeric%alpha, numeric%beta, numeric%etq
 write(f_other,*) 'dd, p1, p2 = ', numeric%dd, numeric%p1, numeric%p2
 write(f_other,*) 'delta = ', numeric%delta
@@ -2102,7 +1998,7 @@ write(f_other,*) 'sle = ', parts%sle
 write(f_other,*) 'skf = ', parts%skf
 
 write(f_other,*) 'dt, print step, save step: '
-write(f_other,*) dt, print_step, save_step
+write(f_other,*) parts%dt, parts%print_step, parts%save_step
 
 if(parts%imaterial=='water')then
    write(f_other,*) 'rho0, b, gamma, c, viscosity = '
@@ -2116,9 +2012,9 @@ elseif(parts%imaterial=='soil')then
    write(f_other,*) matt%cohesion, matt%phi
 endif
 
-write(f_other,*) 'single phase = ', single_phase
+write(f_other,*) 'single phase = ', parts%single_phase
 
-if(single_phase) return
+if(parts%single_phase) return
 matt => soil%material
 
    write(f_other,*) 'rho0,k,Youngs,Poissons,c = '
@@ -2204,11 +2100,11 @@ end subroutine
       write(f_xv,*)  (parts%mass%r(i),i=1,ntotal)
       write(f_xv,*)  (-parts%p%r(i) + parts%str%y%r(i),i=1,ntotal)
       write(f_xv,*)  (parts%zone(i),i=1,ntotal)
-      write(f_other,*) time, -parts%p%r(395)+parts%str%y%r(395)
+      write(f_other,*) parts%time, -parts%p%r(395)+parts%str%y%r(395)
 
              endif
 
-      if(single_phase) return
+      if(parts%single_phase) return
 
       write(f_state,*) 'VARIABLES="X","Y","Pressure", "VoF", "ep", '
       write(f_state,*) '"sxy", "sxx","syy","vx","vy", "rho","mass" '
