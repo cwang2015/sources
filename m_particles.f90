@@ -2995,7 +2995,7 @@ end subroutine
             p=0
           do m=1,3
             do n =1,3
-                jz2(m,n)=jz(i,m,n)
+                jz2(m,n )=jz(i,m,n)
 !                if(jz2(m,n)==0)then
 !                p=p+1
 !                write(*,*) 'p=',p
@@ -3028,11 +3028,17 @@ end subroutine
          call inverse_uptri_matrix(lt,3,inverse_lt)
          call transpose_matrix(inverse_lt,3,3,inverse_l)
          call multiply_matrix(inverse_u,3,3,inverse_l,3,inverse_jz2)
-         phi0(i) = inverse_jz2(1,1)
+         if((inverse_jz2(1,1)>-1000000.and.inverse_jz2(1,1)<1000000).and.(inverse_jz2(2,1) >-1000000.and.inverse_jz2(2,1) <1000000).and.(inverse_jz2(3,1)>-1000000.and.inverse_jz2(3,1) <1000000))then
+         phi0(i) = inverse_jz2(1,1)  
          phi1(i) = inverse_jz2(2,1)
          phi2(i) = inverse_jz2(3,1) 
+         else
+         phi0(i) = 1
+         phi1(i) = 0 
+         phi2(i) = 0
+         endif
+         
        enddo 
-        
         
         
       do i=1,ntotal
@@ -4874,10 +4880,10 @@ do k = 1,n
         do t=1,k-1
             sum2=sum2+L(i,t)*U(t,k)
         enddo
-        if(U(k,k)==0) then
-            write(*,*) 'U(k,k)=0 at LU_break'
-            stop
-        endif
+!        if(U(k,k)==0) then
+!            write(*,*) 'U(k,k)=0 at LU_break'
+!            stop
+!        endif
         L(i,k)=(A(i,k)-sum2)/U(k,k)    
         
     enddo
@@ -4944,10 +4950,10 @@ enddo
 
 do i =1,n
     inverse_A(i,i)=1/A(i,i)
-    if(A(i,i)==0)then
-    write(*,*),'A(i,i)=0 at MLS'
-    stop
-    endif
+!    if(A(i,i)==0)then
+!    write(*,*),'A(i,i)=0 at MLS'
+!    stop
+!    endif
 enddo
 do i =1,n
     do j =1,n
