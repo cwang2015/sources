@@ -1852,13 +1852,13 @@ endif
 !---  Density approximation or change rate
      
 !if(summation_density)then      
-!if(mod(itimestep,25)==0) then
+if(mod(itimestep,25)==0) then
 call sum_density_MLS(pl)
 !else             
 !    call sum_density(pl)         
     
-!    pl%drho = -pl.rho*pl.div2(pl.vx)
-!endif
+    pl%drho = -pl.rho*pl.div2(pl.vx)
+endif
       
 if(artificial_density)then
    !if(trim(pl%imaterial)=='water')then
@@ -1962,9 +1962,9 @@ endif
          call output
          endif 
 
-      if(itimestep>=8650.and.itimestep<=8777)then
-         call output
-      endif 
+!      if(itimestep>=8650.and.itimestep<=8777)then
+!         call output
+!      endif 
 
 
          

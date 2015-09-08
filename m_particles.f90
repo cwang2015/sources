@@ -1180,10 +1180,10 @@ end function
       call parts%init_grid
       
 !     Position particles on grid and create linked list:
-      write(*,*) 'now is ', parts%itimestep,'in link_list'
-      if(parts%itimestep == 8694)then
-        write(*,*)'dfs'  
-      endif
+!      write(*,*) 'now is ', parts%itimestep,'in link_list'
+!      if(parts%itimestep == 8694)then
+!        write(*,*)'dfs'  
+!      endif
       
       do i=1,ntotal
         call parts%grid_geom(i,parts%x(:,i),gcell)
@@ -3028,7 +3028,7 @@ end subroutine
          call inverse_uptri_matrix(lt,3,inverse_lt)
          call transpose_matrix(inverse_lt,3,3,inverse_l)
          call multiply_matrix(inverse_u,3,3,inverse_l,3,inverse_jz2)
-         if((inverse_jz2(1,1)>-1000000.and.inverse_jz2(1,1)<1000000).and.(inverse_jz2(2,1) >-1000000.and.inverse_jz2(2,1) <1000000).and.(inverse_jz2(3,1)>-1000000.and.inverse_jz2(3,1) <1000000))then
+         if((inverse_jz2(1,1)>-100000000.and.inverse_jz2(1,1)<100000000).and.(inverse_jz2(2,1) >-100000000.and.inverse_jz2(2,1) <100000000).and.(inverse_jz2(3,1)>-100000000.and.inverse_jz2(3,1) <100000000))then
          phi0(i) = inverse_jz2(1,1)  
          phi1(i) = inverse_jz2(2,1)
          phi2(i) = inverse_jz2(3,1) 
