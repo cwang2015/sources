@@ -1183,7 +1183,7 @@ type(p2r) vxi(3), dvxi(3), v_mini(3)
       
 !在verlet算法中添加了XSPH,但不知道对不对。如何保证只用在密度和运动方程而不用在动量方程呢？
 !----------------------------------------------------------------------      
-      subroutine time_integration_for_water_by_verlet
+      subroutine time_integration_for_water_by_verlet2
 !----------------------------------------------------------------------
 !use param
 !use declarations_sph
@@ -1262,7 +1262,7 @@ enddo
 return
 end subroutine      
 
-!DEC$IF(.FALSE.)
+      
 !----------------------------------------------------------------------      
       subroutine time_integration_for_water_by_verlet
 !----------------------------------------------------------------------
@@ -1296,6 +1296,7 @@ if(itimestep .eq. 1) lastrho = pl%rho
 
 do it = 1, maxtimestep 
     itimestep = itimestep+1
+    parts%itimestep = itimestep
    call single_step_for_water
 
 if(mod(itimestep,50) .ne. 0) then
@@ -1352,118 +1353,21 @@ pl%rho = lastrho
 lastrho = temp2
 
    time = time + dt
+   
+        if (mod(itimestep,print_step).eq.0) then
+         write(*,*)'______________________________________________'
+         write(*,*)'  current number of time step =',              &
+                   itimestep,'     current time=', real(time+dt)
+         write(*,*)'______________________________________________'
+        endif  
 
+   
 enddo
-
-
 
 return
 end subroutine      
-!DEC$ENDIF
-      
-!----------------------------------------------------------------------      
-      subroutine time_integration_for_water_by_verlet_rho
-!----------------------------------------------------------------------
-!use param
-!use declarations_sph
-implicit none     
-
-integer :: i, j, k, d, ntotal, it 
-real(dp),allocatable, dimension(:)   :: last_w    
-type(particles), pointer :: pl
-type(array) :: lastvx_x,lastvx_y,temp1_x,temp1_y,lastrho,temp2
-
-lastvx_x%ndim1 = parts%ntotal+parts%nvirt
-lastvx_y%ndim1 = parts%ntotal+parts%nvirt
-temp1_x%ndim1 = parts%ntotal+parts%nvirt
-temp1_y%ndim1 = parts%ntotal+parts%nvirt
-lastrho%ndim1 = parts%ntotal+parts%nvirt
-temp2%ndim1 = parts%ntotal+parts%nvirt
-allocate(lastvx_x%r(parts%ntotal+parts%nvirt))
-allocate(lastvx_y%r(parts%ntotal+parts%nvirt))
-allocate(temp1_x%r(parts%ntotal+parts%nvirt))
-allocate(temp1_y%r(parts%ntotal+parts%nvirt))
-allocate(lastrho%r(parts%ntotal+parts%nvirt))
-allocate(temp2%r(parts%ntotal+parts%nvirt))
-allocate(last_w(parts%max_interaction))
-    pl => parts
-    call parts%setup_ndim1
-    lastvx_x = pl%vx%x
-    lastvx_y = pl%vx%y
-    temp1_x = pl%vx%x
-    temp1_y = pl%vx%y
-if(itimestep .eq. 1) lastrho = pl%rho
 
 
-do it = 1, maxtimestep 
-    itimestep = itimestep+1
-   call single_step_for_water
-
-if(mod(itimestep,50) .ne. 0) then
-    do i = 1, pl%ntotal
-       !do d = 1, pl%dim
-       !   pl%x(d,i) = pl%x(d,i) + dt * pl%vx(d,i) +(dt**2./2.)*pl%dvx(d,i)
-       !   lastvx(d,i) = lastvx(d,i) + 2.*dt*pl%dvx(d,i)
-       
-       !enddo
-!          pl%x(1,i) = pl%x(1,i) + dt * pl%vx(1,i) +(dt**2./2.)*pl%dvx%x%r(i)
-!          lastvx(1,i) = lastvx(1,i) + 2.*dt*pl%dvx%x%r(i)
-!          pl%x(2,i) = pl%x(2,i) + dt * pl%vx(2,i) +(dt**2./2.)*pl%dvx%y%r(i)
-!          lastvx(2,i) = lastvx(2,i) + 2.*dt*pl%dvx%y%r(i)       
-           pl%x(1,i) = pl%x(1,i) + dt * pl%vx%x%r(i) + (dt**2./2.)*pl%dvx%x%r(i)
-           lastvx_x%r(i) = lastvx_x%r(i) + 2.*dt*pl%dvx%x%r(i)
-           pl%x(2,i) = pl%x(2,i) + dt * pl%vx%y%r(i) + (dt**2./2.)*pl%dvx%y%r(i)
-           lastvx_y%r(i) = lastvx_y%r(i) + 2.*dt*pl%dvx%y%r(i)
-    enddo
-else
-    do i = 1, pl%ntotal
-       !do d = 1, pl%dim
-       !   pl%x(d,i) = pl%x(d,i) + dt * pl%vx(d,i) +(dt**2./2.)*pl%dvx(d,i)
-       !   lastvx(d,i) = pl%vx(d,i) + dt*pl%dvx(d,i)
-       !enddo
-!          pl%x(1,i) = pl%x(1,i) + dt * pl%vx(1,i) +(dt**2./2.)*pl%dvx%x%r(i)
-!          lastvx(1,i) = pl%vx(1,i) + dt*pl%dvx%x%r(i)
-!          pl%x(2,i) = pl%x(2,i) + dt * pl%vx(2,i) +(dt**2./2.)*pl%dvx%y%r(i)
-!          lastvx(2,i) = pl%vx(2,i) + dt*pl%dvx%y%r(i)       
-           pl%x(1,i) = pl%x(1,i) + dt * pl%vx%x%r(i) + (dt**2./2.)*pl%dvx%x%r(i)
-           lastvx_x%r(i) = pl%vx%x%r(i) + dt*pl%dvx%x%r(i)
-           pl%x(2,i) = pl%x(2,i) + dt * pl%vx%y%r(i) + (dt**2./2.)*pl%dvx%y%r(i)
-           lastvx_y%r(i) = pl%vx%y%r(i) + dt*pl%dvx%y%r(i)
-    enddo
-endif
-temp1_x = pl%vx%x;temp1_y = pl%vx%y
-pl%vx%x = lastvx_x;pl%vx%y = lastvx_y
-lastvx_x = temp1_x;lastvx_y = temp1_y
-
-if(itimestep .eq. 1) then 
-do i = 1,pl%ntotal+pl%nvirt
-parts%rho%r(i) = 0
-enddo
-endif
-
-      do k=1,parts%niac
-        i = parts%pair_i(k)
-        j = parts%pair_j(k)
-        parts%rho%r(i) = parts%rho%r(i) + parts%mass%r(j)*(parts%w(k)-last_w(k))
-        parts%rho%r(j) = parts%rho%r(j) + parts%mass%r(i)*(parts%w(k)-last_w(k))
-      enddo
-
-      do k=1,parts%niac
-          last_w(k) = parts%w(k)
-      enddo
-
-
-   time = time + dt
-
-enddo
-
-
-
-return
-end subroutine      
-      
-
-      
 !DEC$IF(.FALSE.)
 !----------------------------------------------------------------------
              subroutine time_integration_for_soil
@@ -1896,6 +1800,7 @@ endif
 return
 end subroutine
 
+
 !-------------------------------------------------
       subroutine single_step_for_water
 !-------------------------------------------------
@@ -1947,25 +1852,25 @@ endif
 !---  Density approximation or change rate
      
 !if(summation_density)then      
-!if(mod(itimestep,20)==0) then
-!call sum_density2(pl)
+!if(mod(itimestep,25)==0) then
+call sum_density_MLS(pl)
 !else             
 !    call sum_density(pl)         
     
 !    pl%drho = -pl.rho*pl.div2(pl.vx)
 !endif
       
-!if(artificial_density)then
+if(artificial_density)then
    !if(trim(pl%imaterial)=='water')then
       !!call renormalize_density_gradient(pl)
       !call art_density(pl)
-!      call delta_sph_omp(pl,pl%rho,pl%drho)
+      call delta_sph_omp(pl,pl%rho,pl%drho)
+!       call delta_rho(pl,pl%rho,pl%drho)
    !endif
-!endif
+endif
 
 !---  Dynamic viscosity:
-
-!为了满足XSPH，将状态方程往前挪动了。
+     
 water => parts%material
 parts%p = water%b*((parts%rho/(water%rho0))**water%gamma-1.d0)
 
@@ -2007,12 +1912,17 @@ pl%tab%y = 2.d0/3.d0*(2.d0*pl%df4(pl%vx%y,'y')-pl%df4(pl%vx%x,'x'))
    pl%dvx%y = pl%dvx%y/pl%rho
    !write(*,*) pl%dvx%x%r(1:50),pl%dvx%y%r(1:50)
 
+!if(artificial_density)then
+   !if(trim(pl%imaterial)=='water')then
+      !!call renormalize_density_gradient(pl)
+      !call art_density(pl)
+!       call delta_sph_vx(pl)
+   !endif
+!endif
 !---  Artificial viscosity:
-!if(mod(itimestep,30)==0) then
-!visc2是师兄推荐的方法
-if (visc_artificial) call pl%art_visc
 
-!endif       
+!if (visc_artificial) call pl%art_visc2
+       
 !if(trim(pl%imaterial)=='water'.and.water_artificial_volume)  &
         !call art_volume_fraction_water2(pl)
  !       call pl%delta_sph_omp(pl%vof,pl%dvof)
@@ -2026,35 +1936,18 @@ if (visc_artificial) call pl%art_visc
 !      if (ex_force)then
 !          if(self_gravity) call gravity_force(pl)
 !          call repulsive_force(pl)
-
 call pl%repulsive_force_omp                ! can be tried
 !      endif
 
 pl%dvx%y = pl%dvx%y + gravity
 
 !     Calculating the neighboring particles and undating HSML
-   
+      
 !if (sle.ne.0) call h_upgrade(pl)
 
 !     Calculating average velocity of each partile for avoiding penetration
 
 if (average_velocity) call av_vel(pl) 
-
-if(mod(itimestep,30)==0) then
-call sum_density_MLS(pl)
-else             
-!    call sum_density(pl)         
-    
-    pl%drho = -pl.rho*pl.div5(pl.vx)
-endif
-      
-if(artificial_density)then
-   !if(trim(pl%imaterial)=='water')then
-      !!call renormalize_density_gradient(pl)
-      !call art_density(pl)
-      call delta_sph_omp(pl,pl%rho,pl%drho)
-   !endif
-endif
 
 
 !---  Convert velocity, force, and energy to f and dfdt  
@@ -2067,8 +1960,14 @@ endif
       if(itimestep>=save_step_from.and.   &
          mod(itimestep,save_step).eq.0)then
          call output
+         endif 
+
+      if(itimestep>=8650.and.itimestep<=8777)then
+         call output
       endif 
 
+
+         
 return
 end subroutine
 !----------------------------------------------------------------------      
