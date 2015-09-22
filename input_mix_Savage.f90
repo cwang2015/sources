@@ -67,7 +67,7 @@ call soil%setup_ndim1
 parts%vol = tank%dx*tank%dy
 parts%hsml = tank%dx*1.2
 parts%dspp = tank%dx
-parts%dt   = dt
+!parts%dt   = dt
 
 ! itype is positive for real particles, negative for virtual particles.
  
@@ -83,7 +83,7 @@ parts%vx%y = 0.d0
 water_surface = 0.1
 wass => parts%material
 do i = 1,parts%ntotal+parts%nvirt
-   parts%p%r(i) = wass%rho0*gravity*(parts%x(2,i)-water_surface)
+   parts%p%r(i) = wass%rho0*parts%gravity*(parts%x(2,i)-water_surface)
    if(parts%zone(i)==6)parts%p%r(i)=0.0
 enddo
 !write(*,*) 'adf', parts%p%ndim1
@@ -97,8 +97,8 @@ do i = 1, parts%ntotal + parts%nvirt
    parts%vof%r(i) = 1.0
    if(parts%zone(i)==1.or.parts%zone(i)==2)parts%vof%r(i) = 0.45
 enddo
-if(single_phase) parts%vof%r = 1.0
-if(.not.volume_fraction)  parts%vof%r = 1.0
+if(parts%single_phase) parts%vof%r = 1.0
+if(.not.parts%volume_fraction)  parts%vof%r = 1.0
 
 ! Density and Mass
 !write(*,*) ntotal,parts%vof%ndim1,parts%p%ndim1
@@ -116,7 +116,7 @@ parts%mass = parts%vol * parts%rho
 soil%vol = tank%dx*tank%dy
 soil%hsml = tank%dx*1.2
 soil%dspp = tank%dx
-soil%dt = dt
+soil%dt = parts%dt
 
 ! itype is positive for real particles, negative for virtual particles.
  
@@ -132,7 +132,7 @@ soil%vx%y = 0.d0
 soil_surface = 0.048
 sand => soil%material
 do i = 1,soil%ntotal+soil%nvirt
-   soil%p%r(i) = (sand%rho0-wass%rho0)*gravity*(soil%x(2,i)-soil_surface)
+   soil%p%r(i) = (sand%rho0-wass%rho0)*soil%gravity*(soil%x(2,i)-soil_surface)
    if(soil%zone(i)==3.or.soil%zone(i)==5.or.soil%zone(i)==6)soil%p%r(i)=0.0
 enddo
 do i = 1, soil%ntotal+soil%nvirt   
@@ -149,7 +149,7 @@ soil%c = sand%c
 ! Volume fraction
 
 soil%vof%r = 0.55
-if(.not.volume_fraction)soil%vof%r = 1.0
+if(.not.soil%volume_fraction)soil%vof%r = 1.0
 
 ! Density and Mass
 soil%rho  = sand%rho0*soil%vof

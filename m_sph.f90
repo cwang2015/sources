@@ -647,14 +647,14 @@ end subroutine
         call single_step
 
 !****************************************************************        
-        do i = 1, parts%ntotal + parts%nvirt
-           if(parts%zone(i)==4)then
-              parts%dvx%x%r(i)=0.d0; parts%dvx%y%r(i)=0.d0
-              parts%av%x%r(i)=0.d0; parts%av%y%r(i)=0.d0
-              parts%dvof%r(i)=0.d0
-              parts%drho%r(i)=0.d0
-           endif   
-        enddo
+!        do i = 1, parts%ntotal + parts%nvirt
+!           if(parts%zone(i)==4)then
+!              parts%dvx%x%r(i)=0.d0; parts%dvx%y%r(i)=0.d0
+!              parts%av%x%r(i)=0.d0; parts%av%y%r(i)=0.d0
+!              parts%dvof%r(i)=0.d0
+!              parts%drho%r(i)=0.d0
+!           endif   
+!        enddo
 !***************************************************************
 
         if (parts%itimestep .eq. 1) then
