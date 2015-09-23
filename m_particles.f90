@@ -3,7 +3,6 @@
 !---------------------------
 use m_array
 implicit none
-!integer, parameter :: dp = kind(0.d0)
 
 type block             
      real(dp) xl, yl
@@ -29,14 +28,7 @@ type material
    
 end type
 !------------------------------------------------------------------------------------
-type liquid
-  real(dp) rho0,b,gamma,c,viscosity
-end type
-!------------------------------------------------------------------------------------
-type solid
-  real(dp) rho0,k,porosity,permeability,G,E,niu,cohesion,phi
-end type
-!------------------------------------------------------------------------------------
+
 type numerical
 
 ! Artificial viscosity
@@ -54,16 +46,6 @@ type numerical
    
 end type
 !-----------------------------------------------------------------------------------
-! Artificial viscosity
-! alpha: shear viscosity; beta: bulk viscosity; etq: parameter to avoid sigularities
-type artvis
-  real(dp) :: alpha=0.1d0, beta=0.d0, etq=0.1d0
-end type
-!----------------------------------------------------------------------------------
-! Leonard_Johns repulsive force
-type repforce
-  real(dp) :: dd = 0.1d0, p1 = 12, p2 = 4
-end type  
 
 ! Particles in SPH method
 !---------------
@@ -136,7 +118,8 @@ integer :: maxn = 30000, max_interaction = 20 * 30000
 !                    .false.: No considering of self_gravity
 !     nor_density =  .true. : Density normalization by using CSPM,
 !                    .false.: No normalization.
-logical single_phase
+
+logical :: single_phase = .true.
 integer :: integrate_scheme = 1  ! =1, LF; =2, Verlet
 logical :: summation_density  = .false.         
 logical :: average_velocity  = .true. 
@@ -185,18 +168,17 @@ integer :: sle = 0
 !    = 4, Wendland    
 integer :: skf = 4 
 
+!Material parameters
 character(len=32) :: imaterial
 class(*), pointer :: material => null()
 
-! Numerical parameters
+!Numerical parameters
 class(numerical), pointer :: numeric => null()
-
-type(artvis) av_params
-type(repforce) rf_params
 
 !Physics parameter
 real(dp) :: gravity = -9.8
 
+!Time stepping
 real(dp) :: dt, time = 0.d0
 integer :: maxtimestep = 0 , itimestep = 0
 
@@ -213,6 +195,7 @@ integer :: print_step, save_step, moni_particle = 264
 !Recorde time interval
 integer :: save_step_from = 0, save_step_to = 100
 
+!Paralle computing using OpenMP
 integer :: nthreads = 1
 integer, pointer, dimension(:) :: niac_start, niac_end
 
@@ -246,10 +229,10 @@ type(array), pointer :: dvof  => null()
 type(array), pointer :: vof_min  => null()
 
 ! Field variables
-type(array), pointer :: rho  => null()
-type(array), pointer :: vx   => null()   
-type(array), pointer :: p => null()
-type(array), pointer :: c => null()
+type(array), pointer :: rho  => null()  ! Density
+type(array), pointer :: vx   => null()  ! Velocity
+type(array), pointer :: p => null()     ! Pressure
+type(array), pointer :: c => null()     ! Sound speed
 
 ! Stress tensor 
 type(array), pointer :: str => null()
@@ -1037,7 +1020,9 @@ end function
       do i=1,ntotal
         parts%countiac(i) = 0
       enddo
-      part2%countiac = 0
+      do i = 1, part2%ntotal+part2%nvirt
+      part2%countiac(i) = 0
+      enddo
 
       niac = 0
 
@@ -1127,7 +1112,7 @@ end function
          parts%ghsmlx(d) = int(real(parts%ngridx(d))*hsml/parts%dgeomx(d)) + 1
       enddo
 
-      parts%grid = 0   ! Initialize grid
+      parts%grid = 0   ! Initialize grid  !! Better to move it out!
 
       end subroutine
 
@@ -1223,7 +1208,9 @@ end function
       enddo   
       n_end(nthreads) = n_end(nthreads) + mod(ntotal,nthreads)
 
-      parts%pair_i = 0; parts%pair_j=0
+      do i =1, parts%max_interaction
+      parts%pair_i(i) = 0; parts%pair_j(i)=0
+      enddo
 !      t1 = rtc()
 !$omp parallel 
 !$omp do private(niac,i,d,minxcell,maxxcell,dnxgcell,dpxgcell,xcell,ycell,zcell,j,dx,dr,r,tdwdx)
@@ -1261,8 +1248,8 @@ do it = 1, nthreads
                   dr    = dr + dx(d)*dx(d)
                 enddo
                 if (sqrt(dr).lt.scale_k*hsml) then
-                  if (niac.lt.parts%max_interaction) then
-                  !if (niac.lt.niac_per_threads) then
+                  !if (niac.lt.parts%max_interaction) then
+                  if (niac.lt.niac_per_threads*it) then
 
 !     Neighboring pair list, and totalinteraction number and
 !     the interaction number for each particle 
@@ -1362,9 +1349,14 @@ do it = 1, nthreads
       do i = 1,ntotal
          parts%countiac(i) = 0
       enddo
+      do i = 1, part2%ntotal+part2%nvirt
+         part2%countiac(i) = 0
+      enddo
 
       call parts%init_grid
-      parts%grid = 0; parts%xgcell = 0; parts%celldata = 0
+      parts%grid = 0; parts%xgcell = 0; parts%celldata = 0  !?? grid already
+                                                            ! initialized in
+                                                            ! init_grid
       
 !     Position particles on grid and create linked list:
       
@@ -1381,7 +1373,13 @@ do it = 1, nthreads
       enddo
      
       !call part2%init_grid
-      part2%ngridx = parts%ngridx; part2%ghsmlx = parts%ghsmlx
+
+      part2%maxgridx(1) = part2%x_maxgeom;  part2%mingridx(1) = part2%x_mingeom
+      part2%maxgridx(2) = part2%y_maxgeom;  part2%mingridx(2) = part2%y_mingeom
+      part2%maxgridx(3) = part2%z_maxgeom;  part2%mingridx(3) = part2%z_mingeom
+      part2%dgeomx = part2%maxgridx - part2%mingridx      
+
+      part2%ngridx = parts%ngridx; part2%ghsmlx = parts%ghsmlx   !Same grid
       part2%grid = 0; part2%xgcell = 0; part2%celldata = 0
 
       
@@ -1412,7 +1410,9 @@ do it = 1, nthreads
       enddo   
       n_end(nthreads) = n_end(nthreads) + mod(ntotal,nthreads)
 
-      parts%pair_i = 0; parts%pair_j=0
+      do i =1, parts%max_interaction
+      parts%pair_i(i) = 0; parts%pair_j(i) = 0
+      enddo
 
 !      t1 = rtc()
 
@@ -1422,7 +1422,7 @@ do it = 1, nthreads
 !       niac = parts%niac_start(it)
 !       do i = n_start(it),n_end(it)
 
-      niac = 0
+      niac = 0                       ! No parallel
       do i=1,ntotal   !ntotal-1
 
 !     Determine range of grid to go through:
@@ -1557,9 +1557,14 @@ end subroutine
       do i = 1,ntotal
          parts%countiac(i) = 0
       enddo
+      do i = 1, part2%ntotal+part2%nvirt
+         part2%countiac(i) = 0
+      enddo
 
       call parts%init_grid
-      parts%grid = 0; parts%xgcell = 0; parts%celldata = 0
+      parts%grid = 0; parts%xgcell = 0; parts%celldata = 0   ! grid already
+                                                             ! initialized in
+                                                             ! init_grid
       
 !     Position particles on grid and create linked list:
       
@@ -1612,7 +1617,9 @@ end subroutine
       enddo   
       n_end(nthreads) = n_end(nthreads) + mod(ntotal,nthreads)
 
-      parts%pair_i = 0; parts%pair_j=0
+      do i = 1, parts%max_interaction
+      parts%pair_i(i) = 0; parts%pair_j(i) = 0
+      enddo
 
 !      t1 = rtc()
 
@@ -1654,8 +1661,8 @@ do it = 1, nthreads
                   dr    = dr + dx(d)*dx(d)
                 enddo
                 if (sqrt(dr).lt.scale_k*hsml) then
-                  if (niac.lt.parts%max_interaction) then
-                  !if (niac.lt.niac_per_threads) then
+                  !if (niac.lt.parts%max_interaction) then
+                  if (niac.lt.niac_per_threads*it) then
 
 !     Neighboring pair list, and totalinteraction number and
 !     the interaction number for each particle 
@@ -1906,7 +1913,7 @@ p1 = parts%numeric%p1; p2 = parts%numeric%p2
 do k=1,parts%niac
    i = parts%pair_i(k)
    j = parts%pair_j(k)
-   if(parts%itype(i)*parts%itype(j)>0)cycle  
+   if(parts%itype(i)*parts%itype(j)>0)cycle    ! inlet boundary condition
 !   if(parts%itype(i).gt.0.and.parts%itype(j).lt.0)then  
       rr = 0.      
       do d=1,parts%dim
@@ -1919,13 +1926,15 @@ do k=1,parts%niac
          f = ((rr0/rr)**p1-(rr0/rr)**p2)/rr**2
          
          ii = i
-         if(parts%itype(i)<0)ii=j 
+         if(parts%itype(i)<0)then
+                 ii=j; f = -f       ! direction
+         endif        
 
          !do d = 1, parts%dim
          !   parts%dvx(d, ii) = parts%dvx(d, ii) + dd*dx(d)*f
          !enddo
 
-         parts%dvx%x%r(ii) = parts%dvx%x%r(ii) + dd * dx(1)*f
+         parts%dvx%x%r(ii) = parts%dvx%x%r(ii) + dd * dx(1)*f    ! direction?
          parts%dvx%y%r(ii) = parts%dvx%y%r(ii) + dd * dx(2)*f
 
       !endif
@@ -1933,7 +1942,7 @@ do k=1,parts%niac
 enddo   
        
 return
-      end subroutine
+end subroutine
 
 !--------------------------------------------------------------------------
       subroutine repulsive_force_omp(parts)
@@ -1962,7 +1971,7 @@ do it = 1,nthreads
 do k=parts%niac_start(it),parts%niac_end(it)
    i = parts%pair_i(k)
    j = parts%pair_j(k)
-   if(parts%itype(i)*parts%itype(j)>0)cycle  
+   if(parts%itype(i)*parts%itype(j)>0)cycle    ! inlet boundary condition
 !   if(parts%itype(i).gt.0.and.parts%itype(j).lt.0)then  
       rr = 0.      
       do d=1,dim
@@ -1975,11 +1984,13 @@ do k=parts%niac_start(it),parts%niac_end(it)
          f = ((rr0/rr)**p1-(rr0/rr)**p2)/rr**2
          
          ii = i
-         if(parts%itype(i)<0)ii=j 
+         if(parts%itype(i)<0)then
+                 ii=j; f = -f         ! direction
+         endif        
 
          do d = 1,dim
             !parts%dvx(d, ii) = parts%dvx(d, ii) + dd*dx(d)*f
-            local(d,ii,it) = local(d,ii,it) + dd * dx(d)*f
+            local(d,ii,it) = local(d,ii,it) + dd * dx(d)*f     ! direction?
          enddo
       !endif
    !endif        
