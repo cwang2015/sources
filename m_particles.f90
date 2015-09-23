@@ -1285,6 +1285,7 @@ do it = 1, nthreads
       parts%niac_end(it) = niac
       enddo !it      
 !$omp end do
+!$omp barrier
 !$omp end parallel
 !      t2 = rtc()
 !      write(*,*) t2-t1
@@ -1700,6 +1701,7 @@ do it = 1, nthreads
       parts%niac_end(it) = niac
       enddo !it      
 !$omp end do
+!$omp barrier
 !$omp end parallel
 
 !      t2 = rtc()
@@ -1998,6 +2000,7 @@ enddo  !k
 enddo  !it
 !$omp end do
 
+!$omp barrier
 !$omp do private(it)
 do i = 1,ntotal
    do it = 1,nthreads
@@ -2168,6 +2171,8 @@ enddo
 !$omp end do
 !$omp end parallel
 
+val%ndim1 = ntotal !!!
+
 end function
 
 ! Calculate partial derivatives of a field
@@ -2296,13 +2301,14 @@ do i = 1, ntotal
    do it = 1, nthreads
       df3_omp%r(i) = df3_omp%r(i)+local(i,it)
    enddo
+   df3_omp%r(i) = df3_omp%r(i)*parts%rho%r(i)
 enddo   
 !$omp end do
 !$omp end parallel
 
-do i = 1, ntotal
-   df3_omp%r(i) = df3_omp%r(i)*parts%rho%r(i)
-enddo
+!do i = 1, ntotal    !moved up
+!   df3_omp%r(i) = df3_omp%r(i)*parts%rho%r(i)
+!enddo
 
 
 end function
@@ -2597,6 +2603,7 @@ do k = parts%niac_start(it),parts%niac_end(it)
 enddo !k
 enddo !it
 !$omp end do
+!$omp barrier
 
 !$omp do private(it)
 do i = 1, ntotal
