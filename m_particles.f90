@@ -49,13 +49,21 @@ integer :: nnps = 1
    real(dp) :: dd = 0.1d0, p1 = 12, p2 = 4
 
 ! Delta-SPH
-   real(dp) :: delta = 0.1d0, delta_alpha = 0.02d0
+   real(dp) :: delta = 0.1d0,delta_alpha=0.1d0
 
 ! Velocity average epsilon是一个常数，通过施加临近粒子的影响使自身的运动速度与临近粒子的平均速度相近，在“改进的物理粘性SPH方法及其在溃坝问题中的应用”中的取值为0.3，书上的推荐值也是
 !  real(dp) :: epsilon = 0.001
 !  real(dp) :: epsilon = 0.1
 !  real(dp) :: epsilon = 0.01
-   real(dp) :: epsilon = 0.001
+!   real(dp) :: epsilon = 0.001
+!   real(dp) :: epsilon = 0.0003
+!real(dp) :: epsilon = 0.00005
+!   real(dp) :: epsilon = 0.00001
+!real(dp) :: epsilon = 0.000001
+!   real(dp) :: epsilon = 0.0001   
+   real(dp) :: epsilon = 0.0003
+!   real(dp) :: epsilon = 0.0003
+!   real(dp) :: epsilon = 0.0005
 !  real(dp) :: epsilon = 0.001
    
 end type
@@ -135,9 +143,6 @@ integer :: sle = 0
 !    = 3, Quintic kernel (Morris 1997)
 !    = 4, Wendland    
 integer :: skf = 4 
-!for delta skf =2
-!integer :: skf = 2
-
 
    character(len=32) :: imaterial
    class(*), pointer :: material => null()
@@ -294,6 +299,7 @@ integer :: skf = 4
        procedure :: pressure
        procedure :: pressure_water
        procedure :: pressure_soil
+       procedure :: pressure_nvirt
        procedure :: tension_instability_water 
        procedure :: sum_density
        procedure :: sum_density_MLS
@@ -306,7 +312,7 @@ integer :: skf = 4
        procedure :: delta_sph
        procedure :: delta_sph_omp
        procedure :: delta_rho
-       procedure :: delta_sph_vx
+       procedure :: delta_sph_vx       
        procedure :: av_vel
        procedure :: repulsive_force
        procedure :: repulsive_force_omp
@@ -1183,12 +1189,17 @@ end function
       call parts%init_grid
       
 !     Position particles on grid and create linked list:
+!      write(*,*) 'now is ', parts%itimestep,'in link_list'
+!      if(parts%itimestep == 8694)then
+!        write(*,*)'dfs'  
+!      endif
       
       do i=1,ntotal
         call parts%grid_geom(i,parts%x(:,i),gcell)
         do d=1,parts%dim
           parts%xgcell(d,i) = gcell(d)
-        enddo
+        enddo           
+        
         parts%celldata(i) = parts%grid(gcell(1),gcell(2),gcell(3))
         parts%grid(gcell(1),gcell(2),gcell(3)) = i
       enddo
@@ -2817,31 +2828,40 @@ parts%p%r(1:ntotal) = water%b*((parts%rho%r(1:ntotal)/(water%rho0  &
 parts%c%r(1:ntotal) = water%c*(parts%rho%r(1:ntotal)/(water%rho0*parts%vof%r(1:ntotal)))**3.0         
 
 return
-            end subroutine
-
-
-!--------------------------------------------------------------------------
-      subroutine pressure_nvirt(parts)
-!--------------------------------------------------------------------------
-implicit none
-
-class(particles) parts
-double precision dx(3), rr, f, rr0, dd, p1, p2     
-integer ntotal, i, j, k, d, m, n,k0      
-real(dp) selfdens, hv(3), r
-real(dp), allocatable, dimension(:) :: w_mls,phi0,phi1,phi2
-real(dp), allocatable, dimension(:,:,:) :: jz
-real(dp) jz2(3,3),l(3,3),u(3,3),lt(3,3),inverse_jz2(3,3),inverse_u(3,3),inverse_l(3,3),inverse_lt(3,3)
-      ntotal = parts%ntotal + parts%nvirt
-       
-      allocate(w_mls(parts%maxn))
-      allocate(phi0(parts%maxn))
-      allocate(phi1(parts%maxn))
-      allocate(phi2(parts%maxn))
-      allocate(jz(parts%maxn,3,3))
+end subroutine
+!just for dam break
+!----------------------------------------------------------------------
+       subroutine pressure_nvirt(parts)
+!----------------------------------------------------------------------
+!   Subroutine to calculate the smoothing funciton for each particle and
+!   the interaction parameters used by the SPH algorithm. Interaction 
+!   pairs are determined by directly comparing the particle distance 
+!   with the corresponding smoothing length.
+!-----------------------------------------------------------------------
+      implicit none
       
-!     wi(maxn)---integration of the kernel itself
-        
+      class(particles) parts
+
+      integer ntotal, niac,i,j,d,scale_k,k
+      real(dp) dxiac(3), driac, r, mhsml, tdwdx(3),A,hv(3),selfdens
+      integer,allocatable, dimension(:)  :: pair_i,pair_j
+      real(dp),allocatable, dimension(:)  :: w,wi
+      real(dp),allocatable, dimension(:,:)  :: dwdx,x
+      real(dp),allocatable, dimension(:)  :: strxx,strxyy,strxyx,stryy
+      logical :: dbg = .false.
+
+      allocate(pair_i(parts%max_interaction))
+      allocate(wi(parts%nvirt))
+      allocate(strxx(parts%nvirt))
+      allocate(strxyy(parts%nvirt))
+      allocate(stryy(parts%nvirt))
+      allocate(strxyx(parts%nvirt))
+      allocate(pair_j(parts%max_interaction))
+      allocate(w(parts%max_interaction))
+      allocate(dwdx(parts%dim,parts%max_interaction))
+      allocate(x(parts%dim,parts%max_interaction))
+      if(dbg) write(*,*) 'In direct_find...'
+
       hv = 0.d0
 
 !     Self density of each particle: Wii (Kernel for distance 0)
@@ -2849,96 +2869,144 @@ real(dp) jz2(3,3),l(3,3),u(3,3),lt(3,3),inverse_jz2(3,3),inverse_u(3,3),inverse_
 
       r=0.d0
       
-!     Firstly calculate the integration of the kernel over the space
-
+      ntotal   =   parts%ntotal + parts%nvirt
+      scale_k = parts%get_scale_k()
+      
       do i=1,ntotal
-        do m=1,3
-            do n=1,3
-                jz(i,m,n)=0
-            enddo
-        enddo
+        parts%countiac(i) = 0
+      enddo
+
+      niac = 0
+
+
+      
+      do i= parts%ntotal+1,parts%ntotal+parts%nvirt
+       if(parts%zone(i)==1.or.parts%zone(i)==4.or.parts%zone(i)==6) then 
+ !       parts%p%r(i) = 0
         call parts%kernel(r,hv,parts%hsml(i),selfdens,hv)
-        jz(i,1,1)=selfdens*parts%mass%r(i)/parts%rho%r(i)
+        parts%p%r(i) = selfdens*parts%p%r(i)*parts%mass%r(i)/parts%rho%r(i)
+          wi(i-parts%ntotal) = 0
+       endif
       enddo
       
-        do k0=1,parts%niac
-          i = parts%pair_i(k0)
-          j = parts%pair_j(k0)
-          
-          jz(i,1,1)=jz(i,1,1) + parts%mass%r(j)/parts%rho%r(j)*parts%w(k0) 
-          jz(j,1,1)=jz(j,1,1) + parts%mass%r(i)/parts%rho%r(i)*parts%w(k0)   
-!修改成delta中的形式。。
-          jz(i,2,1)=jz(i,2,1) + parts%mass%r(j)/parts%rho%r(j)*parts%w(k0)*(parts%x(1,j)-parts%x(1,i))
-          jz(j,2,1)=jz(j,2,1) + parts%mass%r(i)/parts%rho%r(i)*parts%w(k0)*(parts%x(1,i)-parts%x(1,j))
-          jz(i,3,1)=jz(i,3,1) + parts%mass%r(j)/parts%rho%r(j)*parts%w(k0)*(parts%x(2,j)-parts%x(2,i))
-          jz(j,3,1)=jz(j,3,1) + parts%mass%r(i)/parts%rho%r(i)*parts%w(k0)*(parts%x(2,i)-parts%x(2,j))
-          jz(i,1,2)=jz(i,2,1)
-          jz(j,1,2)=jz(j,2,1)
-          jz(i,2,2)=jz(i,2,2) + parts%mass%r(j)/parts%rho%r(j)*parts%w(k0)*(parts%x(1,j)-parts%x(1,i))**2
-          jz(j,2,2)=jz(j,2,2) + parts%mass%r(i)/parts%rho%r(i)*parts%w(k0)*(parts%x(1,i)-parts%x(1,j))**2
-          jz(i,3,2)=jz(i,3,2) + parts%mass%r(j)/parts%rho%r(j)*parts%w(k0)*(parts%x(1,j)-parts%x(1,i))*(parts%x(2,j)-parts%x(2,i))
-          jz(j,3,2)=jz(j,3,2) + parts%mass%r(i)/parts%rho%r(i)*parts%w(k0)*(parts%x(1,i)-parts%x(1,j))*(parts%x(2,i)-parts%x(2,j))
-          jz(i,1,3)=jz(i,3,1)
-          jz(j,1,3)=jz(j,3,1)
-          jz(i,2,3)=jz(i,3,2)
-          jz(j,2,3)=jz(j,3,2)
-          jz(i,3,3)=jz(i,3,3) + parts%mass%r(j)/parts%rho%r(j)*parts%w(k0)*(parts%x(2,j)-parts%x(2,i))**2
-          jz(j,3,3)=jz(j,3,3) + parts%mass%r(i)/parts%rho%r(i)*parts%w(k0)*(parts%x(2,i)-parts%x(2,j))**2    
-        enddo    
-        do i=1,ntotal
-          do m=1,3
-            do n =1,3
-                jz2(m,n)=jz(i,m,n)
-            enddo
+      do i = parts%ntotal+1,parts%ntotal+parts%nvirt !for all nvirt particles
+       if(parts%zone(i)==1.or.parts%zone(i)==4.or.parts%zone(i)==6) then 
+          if(parts%zone(i)==1) then 
+              x(1,i) = 0.12 - parts%x(1,i)
+              x(2,i) = parts%x(2,i)
+          elseif(parts%zone(i)==3) then
+              write(*,*) 'parts%zone(i)==3 is nothing'
+          elseif(parts%zone(i)==4) then
+              x(1,i) = parts%x(1,i)
+              x(2,i) = 0.12 - parts%x(2,i)
+          elseif(parts%zone(i)==5) then
+              write(*,*) 'parts%zone(i)==5 is nothing'
+          elseif(parts%zone(i)==6) then
+              x(1,i) = 3.28*2 - parts%x(1,i)
+              x(2,i) = parts%x(2,i)
+          endif
+         do j = 1,parts%ntotal !for all real particles
+          dxiac(1) = x(1,i) - parts%x(1,j)
+          driac    = dxiac(1)*dxiac(1)
+          do d=2,parts%dim
+            dxiac(d) = x(d,i) - parts%x(d,j)
+            driac    = driac + dxiac(d)*dxiac(d)
           enddo
-         call LU_break(jz2,3,l,u)
-         call inverse_uptri_matrix(u,3,inverse_u)
-         call transpose_matrix(l,3,3,lt)
-         call inverse_uptri_matrix(lt,3,inverse_lt)
-         call transpose_matrix(inverse_lt,3,3,inverse_l)
-         call multiply_matrix(inverse_u,3,3,inverse_l,3,inverse_jz2)
-         phi0(i) = inverse_jz2(1,1)
-         phi1(i) = inverse_jz2(2,1)
-         phi2(i) = inverse_jz2(3,1) 
-        enddo 
+          mhsml = (parts%hsml(i)+parts%hsml(j))/2.
+          if (sqrt(driac).lt.scale_k*mhsml) then
+            if (niac.lt.parts%max_interaction) then    
+              niac = niac + 1
+              pair_i(niac) = i
+              pair_j(niac) = j
+              r = sqrt(driac)
+              parts%countiac(i) = parts%countiac(i) + 1
+              parts%countiac(j) = parts%countiac(j) + 1
+              call parts%kernel(r,dxiac,mhsml,w(niac),tdwdx)
+              do d=1,parts%dim
+                dwdx(d,niac) = tdwdx(d)
+              enddo                                
+                
+                
+!      do i=1,ntotal-1     
+!        do j = i+1, ntotal
+!          dxiac(1) = parts%x(1,i) - parts%x(1,j)
+!          driac    = dxiac(1)*dxiac(1)
+!          do d=2,parts%dim
+!            dxiac(d) = parts%x(d,i) - parts%x(d,j)
+!            driac    = driac + dxiac(d)*dxiac(d)
+!          enddo
+!          mhsml = (parts%hsml(i)+parts%hsml(j))/2.
+!          if (sqrt(driac).lt.scale_k*mhsml) then
+!            if (niac.lt.parts%max_interaction) then    
 
-        
+!     Neighboring pair list, and totalinteraction number and
+!     the interaction number for each particle 
 
-do i = parts%ntotal+1,parts%ntotal+parts%nvirt
-    parts%p%r(i) = 0
-enddo
+!              niac = niac + 1
+!              parts%pair_i(niac) = i
+!              parts%pair_j(niac) = j
+!              r = sqrt(driac)
+!              parts%countiac(i) = parts%countiac(i) + 1
+!              parts%countiac(j) = parts%countiac(j) + 1
 
-do k=1,parts%niac
-   i = parts%pair_i(k)
-   j = parts%pair_j(k)
-   if(parts%itype(i)*parts%itype(j)<0)then
-   if(parts%itype(i).gt.0.and.parts%itype(j).lt.0)then  
-     parts%p%r(j) = parts%p%r(j) + parts%p%r(i) * (phi0(j)+phi1(j)*(parts%x(1,i)-parts%x(1,j))+phi2(j)*(parts%x(2,i)-parts%x(2,j)))*parts%w(k) * parts%mass%r(i)/parts%rho%r(i)
-     if(parts%x(1,j)<3.28.and.parts%x(1,j)>0.06)then 
-         parts%p%r(j) = parts%p%r(j) - 2*(parts%rho%r(j)-parts%rho%r(i))*parts%mass%r(j)*parts%numeric%gravity
-!     elseif(parts%x(1,j)==0.05.and.parts%x(2,j)==0.05)then
-!         parts%p%r(j) = parts%p%r(j) + sqrt(2.d0)*(parts%rho%r(j)-parts%rho%r(i))*parts%mass%r(j)*parts%numeric%gravity
-     endif    
-   elseif(parts%itype(i).lt.0.and.parts%itype(j).gt.0)then
-     parts%p%r(i) = parts%p%r(i) + parts%p%r(j) * (phi0(i)+phi1(i)*(parts%x(1,j)-parts%x(1,i))+phi2(i)*(parts%x(2,j)-parts%x(2,i)))*parts%w(k) * parts%mass%r(j)/parts%rho%r(j)
-      if(parts%x(1,i)<3.28.and.parts%x(1,i)>0.06)then 
-         parts%p%r(i) = parts%p%r(i) - 2*(parts%rho%r(i)-parts%rho%r(j))*parts%mass%r(j)*parts%numeric%gravity
-!     elseif(parts%x(1,i)==3.29.and.parts%x(2,i)==0.05)then
-!         parts%p%r(i) = parts%p%r(i) + sqrt(2.d0)*(parts%rho%r(i)-parts%rho%r(j))*parts%mass%r(i)*parts%numeric%gravity
-      endif 
-   else 
-    parts%p%r(i) = parts%p%r(i)
-    parts%p%r(j) = parts%p%r(j)
-   endif  
-   endif
-   
-      !endif
-   !endif        
-enddo   
-       
-return
+!     Kernel and derivations of kernel
+!              call parts%kernel(r,dxiac,mhsml,parts%w(niac),tdwdx)
+!              do d=1,parts%dim
+!                parts%dwdx(d,niac) = tdwdx(d)
+!              enddo                                      
+            else
+              print *,  ' >>> ERROR <<< : Too many interactions' 
+              stop
+            endif
+          parts%p%r(i) = parts%p%r(i) + parts%p%r(j)*parts%mass%r(j)/parts%rho%r(j)*w(niac)
+          strxx(i-parts%ntotal) = strxx(i-parts%ntotal) + (parts%str%x%r(i) + parts%str%x%r(j))*dwdx(1,niac)*parts%mass%r(j)/parts%rho%r(j)
+          strxyx(i-parts%ntotal) = strxyx(i-parts%ntotal) + (parts%str%xy%r(i) + parts%str%xy%r(j))*dwdx(1,niac)*parts%mass%r(j)/parts%rho%r(j)
+          strxyy(i-parts%ntotal) = strxyy(i-parts%ntotal) + (parts%str%xy%r(i) + parts%str%xy%r(j))*dwdx(2,niac)*parts%mass%r(j)/parts%rho%r(j)
+          stryy(i-parts%ntotal) = stryy(i-parts%ntotal) + (parts%str%y%r(i) + parts%str%y%r(j))*dwdx(2,niac)*parts%mass%r(j)/parts%rho%r(j)
+                   wi(i-parts%ntotal) = wi(i-parts%ntotal) + w(niac)*parts%mass%r(j)/parts%rho%r(j)
+          endif
+         enddo
+       endif
+      enddo  
+      
+      
+!we do not konw weather to add itself
+!      do i= parts%ntotal+1,parts%ntotal+parts%nvirt
+!       if(parts%zone(i)==1.or.parts%zone(i)==4.or.parts%zone(i)==6) then 
+!        call parts%kernel(r,hv,parts%hsml(i),selfdens,hv)
+!        parts%p%r(i) = parts%p%r(i)*selfdens*parts%mass%r(i)/parts%rho%r(i)
+!       endif
+!      enddo
+      do i = 1,parts%nvirt
+          if(wi(i)==0) wi(i)=1
+      enddo
+      
+      do i= parts%ntotal+1,parts%ntotal+parts%nvirt
+       if(parts%zone(i)==1) then 
+           parts%p%r(i) = (parts%p%r(i) - (strxx(i-parts%ntotal) + strxyy(i-parts%ntotal))*(x(1,i) - 0.06)*2)/wi(i-parts%ntotal)
+       endif
+       if(parts%zone(i)==4) then 
+           parts%p%r(i) = (parts%p%r(i) - 2*(x(2,i)-0.06)*(parts%rho%r(i)*parts%mass%r(i)*parts%numeric%gravity + strxyx(i-parts%ntotal) + stryy(i-parts%ntotal)))/wi(i-parts%ntotal)
+       endif
+       if(parts%zone(i)==6) then 
+           parts%p%r(i) = (parts%p%r(i)+ (strxx(i-parts%ntotal) + strxyy(i-parts%ntotal))*(x(1,i) - 3.28)*2)/wi(i-parts%ntotal)
+       endif
+      enddo
+      
+      deallocate(pair_i)
+      deallocate(wi)
+      deallocate(strxx)
+      deallocate(strxyy)
+      deallocate(stryy)
+      deallocate(strxyx)
+      deallocate(pair_j)
+      deallocate(w)
+      deallocate(dwdx)
+      deallocate(x)
+      
+!      parts%niac = niac
+ 
       end subroutine
-
             
 !--------------------------------------------------------------
          subroutine tension_instability_water(parts)
@@ -3049,11 +3117,15 @@ end subroutine
       implicit none
 
       class(particles) parts
-      integer ntotal, i, j, k, d, m, n,k0      
-      real(dp) selfdens, hv(3), r
+      integer ntotal, i, j, k, d, m, n,k0,p,s1,s2
+      real(dp) selfdens, hv(3), r, W
       real(dp), allocatable, dimension(:) :: wi,phi0,phi1,phi2
       real(dp), allocatable, dimension(:,:,:) :: jz
       real(dp) jz2(3,3),l(3,3),u(3,3),lt(3,3),inverse_jz2(3,3),inverse_u(3,3),inverse_l(3,3),inverse_lt(3,3)
+      integer i1,j1,k1,n1
+      real(dp) sum1
+     
+      
       ntotal = parts%ntotal + parts%nvirt
 
       allocate(wi(parts%maxn))
@@ -3107,21 +3179,54 @@ end subroutine
           jz(j,3,3)=jz(j,3,3) + parts%mass%r(i)/parts%rho%r(i)*parts%w(k0)*(parts%x(2,j)-parts%x(2,i))**2    
         enddo    
         do i=1,ntotal
+            p=0
           do m=1,3
             do n =1,3
-                jz2(m,n)=jz(i,m,n)
+                jz2(m,n )=jz(i,m,n)
+!                if(jz2(m,n)==0)then
+!                p=p+1
+!                write(*,*) 'p=',p
+!                endif
             enddo
           enddo
+!         W = jz2(1,1)*jz2(2,2)*jz2(3,3)+jz2(1,2)*jz2(2,3)*jz2(3,1)+jz2(1,3)*jz2(2,3)*jz2(3,2)-jz2(3,1)*jz2(2,2)*jz2(1,3)-jz2(2,3)*jz2(3,2)*jz2(1,1)-jz2(1,2)*jz2(2,3)*jz2(3,3)
+!         if(W/=0)then 
+!            write(*,*)' A=0','i=',i
+!             write(*,*)'1=',jz2(1,1),jz2(1,2),jz2(1,3)
+!             write(*,*)'2=',jz2(2,1),jz2(2,2),jz2(2,3)
+!             write(*,*)'3=',jz2(3,1),jz2(3,2),jz2(3,3)
+             
+!             write(*,*)'1=',jz(59,1,1),jz(59,1,2),jz(59,1,3)
+!             write(*,*)'2=',jz(59,2,1),jz(59,2,2),jz(59,2,3)
+!             write(*,*)'3=',jz(59,3,1),jz(59,3,2),jz(59,3,3)
+             
+ !            do k0 = 1, parts%niac
+ !                s1 = parts%pair_i(k0)
+ !                s2 = parts%pair_j(k0)
+ !                if(s1==i.or.s2==i) then
+ !                    p = p+1
+ !                endif
+ !            enddo
+ !            write(*,*) 'p=',p
+ !        endif
          call LU_break(jz2,3,l,u)
          call inverse_uptri_matrix(u,3,inverse_u)
          call transpose_matrix(l,3,3,lt)
          call inverse_uptri_matrix(lt,3,inverse_lt)
          call transpose_matrix(inverse_lt,3,3,inverse_l)
          call multiply_matrix(inverse_u,3,3,inverse_l,3,inverse_jz2)
-         phi0(i) = inverse_jz2(1,1)
+         if((inverse_jz2(1,1)>-10**10.and.inverse_jz2(1,1)<10**10).and.(inverse_jz2(2,1) >-10**10.and.inverse_jz2(2,1) <10**10).and.(inverse_jz2(3,1)>-10**10.and.inverse_jz2(3,1) <10**10))then
+         phi0(i) = inverse_jz2(1,1)  
          phi1(i) = inverse_jz2(2,1)
          phi2(i) = inverse_jz2(3,1) 
-        enddo 
+         else
+         phi0(i) = 1
+         phi1(i) = 0 
+         phi2(i) = 0
+         endif
+         
+       enddo 
+        
         
       do i=1,ntotal
         call parts%kernel(r,hv,parts%hsml(i),selfdens,hv)
@@ -3548,88 +3653,7 @@ end subroutine
          df(i) = df(i) + delta*parts%hsml(i)*parts%c%r(i)*parts%mass%r(j)*h/parts%rho%r(j)
          df(j) = df(j) - delta*parts%hsml(j)*parts%c%r(j)*parts%mass%r(i)*h/parts%rho%r(i)
       enddo
-      end subroutine
 
-!-------------------------------------------------------------------
-      subroutine delta_rho(parts,f,df)
-!-------------------------------------------------------------------
-      implicit none
-      
-      class(particles) parts
-      type(array) f
-      type(array) df
-      real(dp), allocatable, dimension(:,:,:) :: w,rew
-      real(dp), allocatable, dimension(:,:) :: d_rho
-      real(dp) dx(3),delta, muv, rr, h, m, n,deter
-      integer i,j,k,d,ntotal,niac,dim,it,nthreads
-    
-      ntotal   =  parts%ntotal + parts%nvirt
-      niac     =  parts%niac; dim = parts%dim            
-      delta    = parts%numeric%delta
-          
-      allocate(w(ntotal,dim,dim))
-      allocate(rew(ntotal,dim,dim))
-      allocate(d_rho(dim,ntotal))
-      
-      do m =1,parts%dim
-          do n =1,parts%dim
-              do i =1,parts%ntotal+parts%nvirt
-                  w(i,m,n) = 0
-              enddo
-          enddo
-      enddo
-      
-      do k = 1,parts%niac
-         i = parts%pair_i(k)
-         j = parts%pair_j(k)
-!这里是不是dwdx如果对i用+，则对j就应该用-?
-         w(i,1,1) = w(i,1,1) + (parts%x(1,j) - parts%x(1,i))*parts%dwdx(1,k)*parts%mass%r(j)/parts%rho%r(j)
-         w(j,1,1) = w(j,1,1) - (parts%x(1,i) - parts%x(1,j))*parts%dwdx(1,k)*parts%mass%r(i)/parts%rho%r(i)
-         w(i,1,2) = w(i,1,2) + (parts%x(1,j) - parts%x(1,i))*parts%dwdx(2,k)*parts%mass%r(j)/parts%rho%r(j)
-         w(j,1,2) = w(j,1,2) - (parts%x(1,i) - parts%x(1,j))*parts%dwdx(2,k)*parts%mass%r(i)/parts%rho%r(i)
-         w(i,2,1) = w(i,2,1) + (parts%x(2,j) - parts%x(2,i))*parts%dwdx(1,k)*parts%mass%r(j)/parts%rho%r(j)
-         w(j,2,1) = w(j,2,1) - (parts%x(2,i) - parts%x(2,j))*parts%dwdx(1,k)*parts%mass%r(i)/parts%rho%r(i)
-         w(i,2,2) = w(i,2,2) + (parts%x(2,j) - parts%x(2,i))*parts%dwdx(2,k)*parts%mass%r(j)/parts%rho%r(j)
-         w(j,2,2) = w(j,2,2) - (parts%x(2,i) - parts%x(2,j))*parts%dwdx(2,k)*parts%mass%r(i)/parts%rho%r(i)
-      enddo
-      
-      do i =1,parts%ntotal+parts%nvirt
-          deter = w(i,1,1)*w(i,2,2)-w(i,1,2)*w(i,2,1)
-          rew(i,1,1) =  w(i,2,2)/deter
-          rew(i,1,2) = -w(i,1,2)/deter
-          rew(i,2,1) = -w(i,2,1)/deter
-          rew(i,2,2) =  w(i,1,1)/deter
-      enddo
-      
-      do k = 1, parts%niac
-          i = parts%pair_i(k)
-          j = parts%pair_j(k)
-          d_rho(1,i) = d_rho(1,i) + (parts%rho%r(j) - parts%rho%r(i))*(rew(i,1,1)*parts%dwdx(1,k)+rew(i,1,2)*parts%dwdx(2,k))*parts%mass%r(j)/parts%rho%r(j)
-          d_rho(2,i) = d_rho(2,i) + (parts%rho%r(j) - parts%rho%r(i))*(rew(i,2,1)*parts%dwdx(1,k)+rew(i,2,2)*parts%dwdx(2,k))*parts%mass%r(j)/parts%rho%r(j)
-          d_rho(1,j) = d_rho(1,j) - (parts%rho%r(i) - parts%rho%r(j))*(rew(j,1,1)*parts%dwdx(1,k)+rew(j,1,2)*parts%dwdx(2,k))*parts%mass%r(i)/parts%rho%r(i)
-          d_rho(2,j) = d_rho(2,j) - (parts%rho%r(i) - parts%rho%r(j))*(rew(j,2,1)*parts%dwdx(1,k)+rew(j,2,2)*parts%dwdx(2,k))*parts%mass%r(i)/parts%rho%r(i)
-      enddo
-      
-      do k=1,niac
-         i = parts%pair_i(k)
-         j = parts%pair_j(k)
-         rr = 0.e0
-         do d=1,dim
-            dx(d)  =  parts%x(d,i) -  parts%x(d,j)
-            rr     = rr + dx(d)*dx(d)
-         enddo
-            
-           muv = 2.0*(f%r(i)-f%r(j))/rr
-
-         h = 0.d0
-         do d=1,dim
-            !h = h + (dx(d)*muv - (drhodx(d,i)+drhodx(d,j)))*dwdx(d,k)
-            h = h + dx(d)*muv*parts%dwdx(d,k)
-         enddo
-         df%r(i) = df%r(i) + delta*parts%hsml(i)*parts%c%r(i)*parts%mass%r(j)*h/parts%rho%r(j)
-         df%r(j) = df%r(j) - delta*parts%hsml(j)*parts%c%r(j)*parts%mass%r(i)*h/parts%rho%r(i)
-      enddo
-      
       return
       end subroutine
 
@@ -3700,67 +3724,125 @@ end subroutine
 return
       end subroutine
       
-          
 !-------------------------------------------------------------------
-      subroutine delta_sph_vx(parts)
+      subroutine delta_rho(parts,f,df)
 !-------------------------------------------------------------------
       implicit none
-
-      class(particles) parts
-      type(material), pointer :: water
-!      real(dp), dimension(:) :: f,df
-
-      real(dp) dx(3),delta, muv, rr, h, dvx(3), delta_alpha
-      type(p2r) vx_i(3), vx_j(3)
-      integer i,j,k,d,ntotal,niac,dim
-
-!      write(*,*) 'In art_density...'
-
-      ntotal      =  parts%ntotal + parts%nvirt
-      niac        =  parts%niac; dim = parts%dim            
-      delta       = parts%numeric%delta
-      delta_alpha = parts%numeric%delta_alpha
-      water => parts%material
       
-      do k=1,niac
-         i = parts%pair_i(k)
-         j = parts%pair_j(k)
-         rr = 0.e0
-         do d=1,dim
-            dx(d)  =  parts%x(d,i) -  parts%x(d,j)
-            rr     = rr + dx(d)*dx(d)
-         enddo
-         
-        vx_i = parts%vx%cmpt(i); vx_j = parts%vx%cmpt(j)
-        do d=1,dim
-           dvx(d) = vx_i(d)%p - vx_j(d)%p   
-        enddo
-!         muv = 2.0*(f(i)-f(j))/rr
+      class(particles) parts
+      type(array) f
+      type(array) df
+      real(dp), allocatable, dimension(:,:,:) :: w,rew
+      real(dp), allocatable, dimension(:,:) :: d_rho
+      real(dp), allocatable, dimension(:,:) :: local
+      real(dp) dx(3),delta, muv, rr, h, m, n,deter
+      integer i,j,k,d,ntotal,niac,dim,it,nthreads
+    
+      ntotal   =  parts%ntotal + parts%nvirt
+      niac     =  parts%niac; dim = parts%dim            
+      delta    = parts%numeric%delta
+          
+      allocate(w(ntotal,dim,dim))
+      allocate(rew(ntotal,dim,dim))
+      allocate(d_rho(dim,ntotal))
 
-         h = 0.d0
-         do d=1,dim
-            !h = h + (dx(d)*muv - (drhodx(d,i)+drhodx(d,j)))*dwdx(d,k)
-            h = h + dx(d)*dvx(d)/rr*parts%dwdx(1,k)
-         enddo
-         parts%dvx%x%r(i) = parts%dvx%x%r(i) + delta_alpha*parts%hsml(i)*parts%c%r(i)*water%rho0*parts%mass%r(j)*h/parts%rho%r(j)/parts%rho%r(i)
-         parts%dvx%x%r(j) = parts%dvx%x%r(j) - delta_alpha*parts%hsml(j)*parts%c%r(j)*water%rho0*parts%mass%r(i)*h/parts%rho%r(i)/parts%rho%r(j)
-
-         h = 0.d0
-         do d=1,dim
-            !h = h + (dx(d)*muv - (drhodx(d,i)+drhodx(d,j)))*dwdx(d,k)
-            h = h + dx(d)*dvx(d)/rr*parts%dwdx(2,k)
-         enddo
-         parts%dvx%y%r(i) = parts%dvx%y%r(i) + delta_alpha*parts%hsml(i)*parts%c%r(i)*water%rho0*parts%mass%r(j)*h/parts%rho%r(j)/parts%rho%r(i)
-         parts%dvx%y%r(j) = parts%dvx%y%r(j) - delta_alpha*parts%hsml(j)*parts%c%r(j)*water%rho0*parts%mass%r(i)*h/parts%rho%r(i)/parts%rho%r(j)
+!      if(nthreads>=1)then
+!         allocate(local(ntotal,nthreads))
+!         call parts%get_niac_start_end
+!      endif   
+      
+      do m =1,parts%dim
+          do n =1,parts%dim
+              do i =1,parts%ntotal+parts%nvirt
+                  w(i,m,n) = 0
+              enddo
+          enddo
       enddo
       
+      do k = 1,parts%niac
+         i = parts%pair_i(k)
+         j = parts%pair_j(k)
+ !        if(i==5)then
+ !            write(*,*)'k=',k,'i=',i,'j=',j
+ !        endif
+           
+         !这里是不是dwdx如果对i用+，则对j就应该用-?
+         w(i,1,1) = w(i,1,1) + (parts%x(1,j) - parts%x(1,i))*parts%dwdx(1,k)*parts%mass%r(j)/parts%rho%r(j)
+         w(j,1,1) = w(j,1,1) - (parts%x(1,i) - parts%x(1,j))*parts%dwdx(1,k)*parts%mass%r(i)/parts%rho%r(i)
+         w(i,1,2) = w(i,1,2) + (parts%x(1,j) - parts%x(1,i))*parts%dwdx(2,k)*parts%mass%r(j)/parts%rho%r(j)
+         w(j,1,2) = w(j,1,2) - (parts%x(1,i) - parts%x(1,j))*parts%dwdx(2,k)*parts%mass%r(i)/parts%rho%r(i)
+         w(i,2,1) = w(i,2,1) + (parts%x(2,j) - parts%x(2,i))*parts%dwdx(1,k)*parts%mass%r(j)/parts%rho%r(j)
+         w(j,2,1) = w(j,2,1) - (parts%x(2,i) - parts%x(2,j))*parts%dwdx(1,k)*parts%mass%r(i)/parts%rho%r(i)
+         w(i,2,2) = w(i,2,2) + (parts%x(2,j) - parts%x(2,i))*parts%dwdx(2,k)*parts%mass%r(j)/parts%rho%r(j)
+         w(j,2,2) = w(j,2,2) - (parts%x(2,i) - parts%x(2,j))*parts%dwdx(2,k)*parts%mass%r(i)/parts%rho%r(i)
+      enddo
+      
+      do i =1,parts%ntotal+parts%nvirt
+          deter = w(i,1,1)*w(i,2,2)-w(i,1,2)*w(i,2,1)
+          rew(i,1,1) =  w(i,2,2)/deter
+          if(deter==0)then
+          rew(i,1,1) =  0
+          rew(i,1,2) =  0
+          rew(i,2,1) =  0
+          rew(i,2,2) =  0
+          else
+          rew(i,1,1) =  w(i,2,2)/deter
+          rew(i,1,2) = -w(i,1,2)/deter
+          rew(i,2,1) = -w(i,2,1)/deter
+          rew(i,2,2) =  w(i,1,1)/deter
+          endif
+          do d =1,parts%dim
+              d_rho(d,i) = 0
+          enddo
+      enddo
+      
+      
+      do k = 1, parts%niac
+          i = parts%pair_i(k)
+          j = parts%pair_j(k)
+          d_rho(1,i) = d_rho(1,i) + (parts%rho%r(j) - parts%rho%r(i))*(rew(i,1,1)*parts%dwdx(1,k)+rew(i,1,2)*parts%dwdx(2,k))*parts%mass%r(j)/parts%rho%r(j)
+          d_rho(2,i) = d_rho(2,i) + (parts%rho%r(j) - parts%rho%r(i))*(rew(i,2,1)*parts%dwdx(1,k)+rew(i,2,2)*parts%dwdx(2,k))*parts%mass%r(j)/parts%rho%r(j)
+          d_rho(1,j) = d_rho(1,j) - (parts%rho%r(i) - parts%rho%r(j))*(rew(j,1,1)*parts%dwdx(1,k)+rew(j,1,2)*parts%dwdx(2,k))*parts%mass%r(i)/parts%rho%r(i)
+          d_rho(2,j) = d_rho(2,j) - (parts%rho%r(i) - parts%rho%r(j))*(rew(j,2,1)*parts%dwdx(1,k)+rew(j,2,2)*parts%dwdx(2,k))*parts%mass%r(i)/parts%rho%r(i)
+!          d_rho(1,j) = d_rho(1,j) + (parts%rho%r(i) - parts%rho%r(j))*(rew(j,1,1)*parts%dwdx(1,k)+rew(j,1,2)*parts%dwdx(2,k))*parts%mass%r(i)/parts%rho%r(i)
+!          d_rho(2,j) = d_rho(2,j) + (parts%rho%r(i) - parts%rho%r(j))*(rew(j,2,1)*parts%dwdx(1,k)+rew(j,2,2)*parts%dwdx(2,k))*parts%mass%r(i)/parts%rho%r(i)
+       enddo
+      
+        do k = 1,parts%niac
+           i = parts%pair_i(k)
+           j = parts%pair_j(k)
+           rr = 0.e0
+           do d=1,dim
+              dx(d)  =  parts%x(d,i) -  parts%x(d,j)
+              rr     = rr + dx(d)*dx(d)
+           enddo
+           muv = 2.0*(f%r(i)-f%r(j))/rr
 
+         h = 0.d0
+         do d=1,dim
+            !h = h + (dx(d)*muv - (drhodx(d,i)+drhodx(d,j)))*dwdx(d,k)
+!            h = h + dx(d)*muv*parts%dwdx(d,k)
+           h = h + (dx(d)*muv-d_rho(d,i)-d_rho(d,j))*parts%dwdx(d,k)        
+!           h = h + dx(d)*muv*parts%dwdx(d,k)      
+         enddo
+          df%r(i) = df%r(i) + delta*parts%hsml(i)*parts%c%r(i)*parts%mass%r(j)*h/parts%rho%r(j)
+          df%r(j) = df%r(j) - delta*parts%hsml(j)*parts%c%r(j)*parts%mass%r(i)*h/parts%rho%r(i)
+!         local(i,it) = local(i,it) + delta*parts%hsml(i)*parts%c%r(i)*parts%mass%r(j)*h/parts%rho%r(j)
+!         local(j,it) = local(j,it) - delta*parts%hsml(j)*parts%c%r(j)*parts%mass%r(i)*h/parts%rho%r(i)
+      enddo
+!      WRITE(*,*) 'now is ',parts%itimestep
+      
+!      if(parts%itimestep==63789) then
+!         write(*,*) 'sd'
+!      endif
+
+      
       return
       end subroutine
 
 !     Subroutine to calculate the average velocity to correct velocity
 !     for preventing.penetration (monaghan, 1992)      
-      
+
       
 !----------------------------------------------------------------------      
       subroutine av_vel(parts)
@@ -3803,6 +3885,70 @@ return
       return
       end subroutine
 
+
+!-------------------------------------------------------------------
+      subroutine delta_sph_vx(parts)
+!-------------------------------------------------------------------
+      implicit none
+
+      class(particles) parts
+      type(material), pointer :: water
+!      real(dp), dimension(:) :: f,df
+
+      real(dp) dx(3),delta, muv, rr, h, dvx(3), delta_alpha
+      type(p2r) vx_i(3), vx_j(3)
+      integer i,j,k,d,ntotal,niac,dim
+
+!      write(*,*) 'In art_density...'
+
+      ntotal      =  parts%ntotal + parts%nvirt
+      niac        =  parts%niac; dim = parts%dim            
+      delta       = parts%numeric%delta
+      delta_alpha = parts%numeric%delta_alpha
+      water => parts%material
+      
+      do k=1,niac
+         i = parts%pair_i(k)
+         j = parts%pair_j(k)
+         rr = 0.e0
+         do d=1,dim
+            dx(d)  =  parts%x(d,i) -  parts%x(d,j)
+            rr     = rr + dx(d)*dx(d)
+         enddo
+         
+        vx_i = parts%vx%cmpt(i); vx_j = parts%vx%cmpt(j)
+        do d=1,dim
+           dvx(d) = vx_i(d)%p - vx_j(d)%p   
+        enddo
+!         muv = 2.0*(f(i)-f(j))/rr
+
+         h = 0.d0
+         if(rr/=0)then
+         do d=1,dim
+            !h = h + (dx(d)*muv - (drhodx(d,i)+drhodx(d,j)))*dwdx(d,k)
+            h = h + dx(d)*dvx(d)/rr*parts%dwdx(1,k)
+         enddo
+         endif
+         parts%dvx%x%r(i) = parts%dvx%x%r(i) + delta_alpha*parts%hsml(i)*parts%c%r(i)*water%rho0*parts%mass%r(j)*h/parts%rho%r(j)/parts%rho%r(i)
+         parts%dvx%x%r(j) = parts%dvx%x%r(j) - delta_alpha*parts%hsml(j)*parts%c%r(j)*water%rho0*parts%mass%r(i)*h/parts%rho%r(i)/parts%rho%r(j)
+
+         h = 0.d0
+         if(rr/=0)then
+         do d=1,dim
+            !h = h + (dx(d)*muv - (drhodx(d,i)+drhodx(d,j)))*dwdx(d,k)
+            h = h + dx(d)*dvx(d)/rr*parts%dwdx(2,k)
+         enddo
+         endif
+         parts%dvx%y%r(i) = parts%dvx%y%r(i) + delta_alpha*parts%hsml(i)*parts%c%r(i)*water%rho0*parts%mass%r(j)*h/parts%rho%r(j)/parts%rho%r(i)
+         parts%dvx%y%r(j) = parts%dvx%y%r(j) - delta_alpha*parts%hsml(j)*parts%c%r(j)*water%rho0*parts%mass%r(i)*h/parts%rho%r(i)/parts%rho%r(j)
+
+      enddo
+      
+
+      return
+      end subroutine
+
+      
 !----------------------------------------------------------------------      
       subroutine av_vel_omp(parts)
 !----------------------------------------------------------------------   
@@ -4951,7 +5097,12 @@ do k = 1,n
         do t=1,k-1
             sum2=sum2+L(i,t)*U(t,k)
         enddo
+!        if(U(k,k)==0) then
+!            write(*,*) 'U(k,k)=0 at LU_break'
+!            stop
+!        endif
         L(i,k)=(A(i,k)-sum2)/U(k,k)    
+        
     enddo
     do i = k+1,n
         L(k,i)=0
@@ -5016,6 +5167,10 @@ enddo
 
 do i =1,n
     inverse_A(i,i)=1/A(i,i)
+!    if(A(i,i)==0)then
+!    write(*,*),'A(i,i)=0 at MLS'
+!    stop
+!    endif
 enddo
 do i =1,n
     do j =1,n
