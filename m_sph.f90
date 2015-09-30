@@ -1851,15 +1851,26 @@ endif
 
 !---  Density approximation or change rate
      
-!if(summation_density)then      
+!if(summation_density)then   
+!if(itimestep<62000) then
 if(mod(itimestep,25)==0) then
-call sum_density_MLS(pl)
-!else             
+call sum_density(pl)
+else             
 !    call sum_density(pl)         
     
     pl%drho = -pl.rho*pl.div2(pl.vx)
 endif
-      
+!else
+!if(mod(itimestep,25)==0) then
+!call sum_density(pl)
+!else             
+!    call sum_density(pl)         
+    
+!    pl%drho = -pl.rho*pl.div2(pl.vx)
+!endif
+!endif
+    
+    
 if(artificial_density)then
    !if(trim(pl%imaterial)=='water')then
       !!call renormalize_density_gradient(pl)
@@ -1874,6 +1885,7 @@ endif
 water => parts%material
 parts%p = water%b*((parts%rho/(water%rho0))**water%gamma-1.d0)
 
+!call pressure_nvirt(pl)
 !第二种状态方程
 !parts%p = water%c**2*(parts%rho-water%rho0)
 
@@ -1906,8 +1918,15 @@ pl%tab%y = 2.d0/3.d0*(2.d0*pl%df4(pl%vx%y,'y')-pl%df4(pl%vx%x,'x'))
 
 !Calculate internal force for water phase !! -phi_f Grad(p)
 
-   pl%dvx%x = -pl%df(pl%p,'x') + pl%df(pl%str%x,'x') + pl%df(pl%str%xy,'y')
-   pl%dvx%y = -pl%df(pl%p,'y') + pl%df(pl%str%xy,'x') + pl%df(pl%str%y,'y')   
+
+!   pl%dvx%x = -pl%df(pl%p,'x') + pl%df(pl%str%x,'x') + pl%df(pl%str%xy,'y')
+!   pl%dvx%y = -pl%df(pl%p,'y') + pl%df(pl%str%xy,'x') + pl%df(pl%str%y,'y')   
+   pl%dvx%x = pl%df(pl%str%x,'x') + pl%df(pl%str%xy,'y')
+   pl%dvx%y = pl%df(pl%str%xy,'x') + pl%df(pl%str%y,'y') 
+   call pressure_nvirt(pl)
+   pl%dvx%x = pl%dvx%x - pl%df(pl%p,'x')
+   pl%dvx%y = pl%dvx%y - pl%df(pl%p,'y')
+   
    pl%dvx%x = pl%dvx%x/pl%rho
    pl%dvx%y = pl%dvx%y/pl%rho
    !write(*,*) pl%dvx%x%r(1:50),pl%dvx%y%r(1:50)
@@ -1921,7 +1940,7 @@ pl%tab%y = 2.d0/3.d0*(2.d0*pl%df4(pl%vx%y,'y')-pl%df4(pl%vx%x,'x'))
 !endif
 !---  Artificial viscosity:
 
-!if (visc_artificial) call pl%art_visc2
+if (visc_artificial) call pl%art_visc
        
 !if(trim(pl%imaterial)=='water'.and.water_artificial_volume)  &
         !call art_volume_fraction_water2(pl)
