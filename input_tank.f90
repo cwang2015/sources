@@ -15,12 +15,17 @@ double precision element_size, soil_submerged_depth
 ! Set nozzle and tank geometry parameters
 
 !call tank%set(xl=3.34d0,yl=1.86d0,m=334,n=186)
-call tank%set(xl=3.34d0,yl=1.86d0,m=167,n=93)
+!call tank%set(xl=3.34d0,yl=1.86d0,m=167,n=93)
 !call tank%set(xl=3.32d0,yl=1.86d0,m=166,n=93)
 !call tank%set(xl=3.4d0,yl=1.9d0,m=34,n=19)
 !call tank%set(xl=3.32d0,yl=1.86d0,m=664,n=372)
 !call tank%set(xl=3.74d0,yl=2.06d0,m=374,n=206)
 !call tank%set(xl=0.44d0,yl=0.22d0,m=352,n=176)
+
+call tank%set(xl=3.26d0,yl=1.82d0,m=163,n=91)
+
+!call tank%set(xl=3.26d0,yl=1.82d0,m=32,n=18)
+
 npoint = tank%m*tank%n
 allocate(tank%x(npoint),tank%y(npoint),tank%zone(npoint))
 call tank%cell_center
@@ -28,30 +33,48 @@ call tank%cell_center
 !      write(*,*) 'y=', tank%y
 !      just for test 1 
 
+!tank%zone = 2
+!do i = 1, tank%m*tank%n
+!   if(tank%x(i)<0.1.or.tank%x(i)>3.1.or.tank%y(i)<0.1) tank%zone(i) = 1
+!   if(tank%zone(i)==1.and.tank%x(i)<0.1.and.tank%y(i)>0.1) tank%zone(i)=3
+!   if(tank%zone(i)==1.and.tank%x(i)>0.01.and.tank%x(i)<3.1) tank%zone(i)=4
+!   if(tank%zone(i)==1.and.tank%x(i)>3.1) tank%zone(i)=5
+!   if(tank%zone(i)==2.and.tank%x(i)>1.3)tank%zone(i)= 7
+!   if(tank%zone(i)==2.and.tank%y(i)>0.7)tank%zone(i)= 7
+
+!enddo
+
+
 ! Zoning
 tank%zone = 2
 do i = 1, tank%m*tank%n
-!   if(tank%x(i)<0.06.or.tank%x(i)>3.28.or.tank%y(i)<0.06) tank%zone(i) = 1
-!   if(tank%zone(i)==1.and.tank%x(i)>1.28)tank%zone(i)=3
-!   if(tank%zone(i)==1.and.tank%y(i)>0.66)tank%zone(i)=3
-   if(tank%x(i)<0.06) tank%zone(i) = 1
-   if(tank%y(i)<0.06) tank%zone(i) = 4
-   if(tank%x(i)>3.28) tank%zone(i) = 6
-   if(tank%x(i)<0.06.and.tank%y(i)<0.06) tank%zone(i) = 3
-   if(tank%x(i)>3.28.and.tank%y(i)<0.06) tank%zone(i) = 5
-   if(tank%zone(i)==2.and.tank%x(i)>1.26)tank%zone(i)= 7
-   if(tank%zone(i)==2.and.tank%y(i)>0.66)tank%zone(i)= 7
+   if(tank%x(i)<0.02.or.tank%x(i)>3.24.or.tank%y(i)<0.02) tank%zone(i) = 1
+   if(tank%zone(i)==1.and.tank%x(i)<0.02.and.tank%y(i)>0.02) tank%zone(i)=3
+   if(tank%zone(i)==1.and.tank%x(i)>0.01.and.tank%x(i)<3.24) tank%zone(i)=4
+   if(tank%zone(i)==1.and.tank%x(i)>3.24) tank%zone(i)=5
+
+
+   !   if(tank%zone(i)==1.and.tank%y(i)>0.66)tank%zone(i)=3
+!   if(tank%x(i)<0.06) tank%zone(i) = 1
+!   if(tank%y(i)<0.06) tank%zone(i) = 4
+!   if(tank%x(i)>3.28) tank%zone(i) = 6
+!   if(tank%x(i)<0.06.and.tank%y(i)<0.06) tank%zone(i) = 3
+!   if(tank%x(i)>3.28.and.tank%y(i)<0.06) tank%zone(i) = 5
+   if(tank%zone(i)==2.and.tank%x(i)>1.21)tank%zone(i)= 7
+   if(tank%zone(i)==2.and.tank%y(i)>0.61)tank%zone(i)= 7
+
 !   if(tank%zone(i)==2.and.tank%x(i)>1.26)tank%zone(i)=4
 !   if(tank%zone(i)==2.and.tank%y(i)>0.66)tank%zone(i)=4
 enddo
 !      write(*,*) tank%zone
 
+
 call parts%take_real(tank,2)
-call parts%take_virtual(tank,1)
+!call parts%take_virtual(tank,1)
 call parts%take_virtual(tank,3)
 call parts%take_virtual(tank,4)
 call parts%take_virtual(tank,5)
-call parts%take_virtual(tank,6)
+!call parts%take_virtual(tank,6)
 
 call parts%setup_ndim1
 
@@ -75,12 +98,12 @@ parts%vx%x = 0.d0
 parts%vx%y = 0.d0
 
 ! ...Pressure. You must define the free surface first.
-water_surface = 0.66d0
+water_surface = 0.62d0
 property => parts%material
 do i = 1,parts%ntotal+parts%nvirt
    parts%p%r(i) = property%rho0*gravity*(parts%x(2,i)-water_surface)
-   if(parts%zone(i)==1.and.parts%x(2,i)>0.66)parts%p%r(i)=0.0
-   if(parts%x(1,i)>1.26)parts%p%r(i)=0.0
+   if(parts%zone(i)==3.and.parts%x(2,i)>0.62)parts%p%r(i)=0.0
+   if(parts%x(1,i)>1.21)parts%p%r(i)=0.0
 enddo
 
 parts%c = property%c
@@ -89,7 +112,21 @@ parts%c = property%c
   
 call initial_density(parts)
       
-parts%mass = parts%vol * parts%rho     
+!do i = 1,parts%ntotal +parts%nvirt 
+!    if(tank%zone(i)==1) parts%vol%r(i) =  tank%dx*tank%dy/2.0d0
+!    if(tank%zone(i)==3) parts%vol%r(i) =  tank%dx*tank%dy/4.0d0
+!    if(tank%zone(i)==4) parts%vol%r(i) =  tank%dx*tank%dy/4.0d0
+!enddo
+
+do i = 1,parts%ntotal + parts%nvirt 
+    if(parts%zone(i)==3.or.parts%zone(i)==4.or.parts%zone(i)==5)then 
+        parts%vol%r(i) = parts%vol%r(i)/2.0d0
+        if(parts%x(1,i)<0.02.and.parts%x(2,i)<0.02) parts%vol%r(i)=parts%vol%r(i)/2.0d0
+        if(parts%x(1,i)>3.24.and.parts%x(2,i)<0.02) parts%vol%r(i)=parts%vol%r(i)/2.0d0
+    endif
+enddo
+
+parts%mass = parts%vol * parts%rho
 
 return
 end subroutine
