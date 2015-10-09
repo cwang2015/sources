@@ -3161,8 +3161,6 @@ end subroutine
         wi(j) = wi(j) + parts%mass%r(i)/parts%rho%r(i)*parts%w(k)
       enddo
 
-!      divvx = -parts.rho*parts.div2(parts.vx)!这个地方不知道要不要改成只对流体粒子？？？
-      
       do k=1,parts%niac
           i = parts%pair_i(k)
           j = parts%pair_j(k)
@@ -3172,11 +3170,6 @@ end subroutine
           enddo
           parts%drho%r(i) = parts%drho%r(i) + parts%mass%r(j)*(dvx(1)*parts%dwdx(1,k)+dvx(2)*parts%dwdx(2,k))!书上的（4.34）
           parts%drho%r(j) = parts%drho%r(j) + parts%mass%r(i)*(dvx(1)*parts%dwdx(1,k)+dvx(2)*parts%dwdx(2,k))
-!          if(parts%itype(i)<0.and.parts%itype(j)>0)then
-!          parts%drho%r(j) = parts%drho%r(j) + (parts%dgu(1,k)*parts%vx%x%r(j) + parts%dgu(2,k)*parts%vx%y%r(j))*parts%rho%r(j)
-!          elseif(parts%itype(i)>0.and.parts%itype(j)<0)then
-!          parts%drho%r(i) = parts%drho%r(i) - (parts%dgu(1,k)*parts%vx%x%r(i) + parts%dgu(2,k)*parts%vx%y%r(i))*parts%rho%r(i)
-!          endif
       enddo
           
       do i = 1,ntotal
@@ -3190,7 +3183,7 @@ end subroutine
           j = parts%pair_j(k)
           if(parts%itype(i)<0.and.parts%itype(j)>0)then
           do d =1, parts%dim
-             dgua(d,j) = dgua(d,j) - parts%dgu(d,k) 
+             dgua(d,j) = dgua(d,j) + parts%dgu(d,k) 
          enddo
           elseif(parts%itype(i)>0.and.parts%itype(j)<0)then
           do d =1, parts%dim
@@ -3201,7 +3194,7 @@ end subroutine
       
       do i=1,parts%ntotal
           if(wi(i)==0)wi(i)=1
-          parts%drho%r(i) = parts%drho%r(i) !- parts%rho%r(i)*(dgua(1,i)*parts%vx%x%r(i)+dgua(2,i)*parts%vx%y%r(i))
+          parts%drho%r(i) = parts%drho%r(i) - parts%rho%r(i)*(dgua(1,i)*parts%vx%x%r(i)+dgua(2,i)*parts%vx%y%r(i))
           parts%drho%r(i)= parts%drho%r(i)/wi(i)
       enddo
       
@@ -3270,11 +3263,11 @@ end subroutine
           enddo
         if(parts%itype(i)>0.and.parts%itype(j)<0)then
           do d = 1,parts%dim
-           dpre(d,i) = dpre(d,i) + parts%rhos%r(j)*(parts%p%r(i)/parts%rho%r(i)**2+parts%ps%r(j)/parts%rho%r(j)**2)*parts%dgu(d,k)
+           dpre(d,i) = dpre(d,i) + parts%rhos%r(j)*(parts%p%r(i)/parts%rho%r(i)**2+parts%ps%r(j)/parts%rhos%r(j)**2)*parts%dgu(d,k)
           enddo
         elseif(parts%itype(i)<0.and.parts%itype(j)>0)then
           do d = 1,parts%dim
-           dpre(d,j) = dpre(d,j) - parts%rhos%r(i)*(parts%p%r(j)/parts%rho%r(j)**2+parts%ps%r(i)/parts%rho%r(i)**2)*parts%dgu(d,k)
+           dpre(d,j) = dpre(d,j) - parts%rhos%r(i)*(parts%p%r(j)/parts%rho%r(j)**2+parts%ps%r(i)/parts%rhos%r(i)**2)*parts%dgu(d,k)
           enddo
         endif
       enddo
@@ -3695,7 +3688,7 @@ end subroutine
 
       do i=parts%ntotal +1,parts%ntotal + parts%nvirt
         call parts%kernel(r,hv,parts%hsml(i),selfdens,hv)
-        wi(i)=0!selfdens*parts%mass%r(i)/parts%rho%r(i)
+        wi(i)=selfdens*parts%mass%r(i)/parts%rho%r(i)  !由于rho不能要自加，这里也要自加
       enddo
 
       do k=1,parts%niac
@@ -3712,7 +3705,7 @@ end subroutine
 
       do i=parts%ntotal +1,parts%ntotal + parts%nvirt
         call parts%kernel(r,hv,parts%hsml(i),selfdens,hv)
-        parts%rho%r(i) = selfdens*parts%mass%r(i)
+        parts%rho%r(i) = selfdens*parts%mass%r(i)   !rho不能为0
       enddo
 
 !     Calculate SPH sum for rho:
@@ -3757,14 +3750,8 @@ end subroutine
                   vxi = vxi + vx_i(d)%p*vx_i(d)%p
                   vxj = vxj + vx_j(d)%p*vx_j(d)%p
                 enddo        
-              if(parts%zone(i)==3)then
-                 parts%p%r(i) = parts%p%r(i) + (parts%p%r(j)/parts%rho%r(j) + (vxj - vxi)/2)*parts%w(k)*parts%mass%r(j)/parts%rho%r(j)
-              elseif(parts%zone(i)==4)then
                  dx = parts%x(2,j) - parts%x(2,i)
                  parts%p%r(i) = parts%p%r(i) + (parts%p%r(j)/parts%rho%r(j) - parts%numeric%gravity*dx + (vxj - vxi)/2)*parts%w(k)*parts%mass%r(j)/parts%rho%r(j)
-              elseif(parts%zone(i)==5)then
-                 parts%p%r(i) = parts%p%r(i) + (parts%p%r(j)/parts%rho%r(j) + (vxj - vxi)/2)*parts%w(k)*parts%mass%r(j)/parts%rho%r(j)
-              endif
             elseif(parts%itype(i)>0.and.parts%itype(j)<0)then
                 vxi=0.d0
                 vxj=0.d0
@@ -3774,14 +3761,8 @@ end subroutine
                   vxi = vxi + vx_i(d)%p*vx_i(d)%p  
                   vxj = vxj + vx_j(d)%p*vx_j(d)%p
                 enddo     
-              if(parts%zone(j)==3)then
-                  parts%p%r(j) = parts%p%r(j) + (parts%p%r(i)/parts%rho%r(i) + (vxi - vxj)/2)*parts%w(k)*parts%mass%r(i)/parts%rho%r(i)
-              elseif(parts%zone(j)==4)then
                   dx = parts%x(2,i) - parts%x(2,j)
                   parts%p%r(j) = parts%p%r(j) + (parts%p%r(i)/parts%rho%r(i) - parts%numeric%gravity*dx + (vxi - vxj)/2)*parts%w(k)*parts%mass%r(i)/parts%rho%r(i)
-              elseif(parts%zone(j)==5)then
-                  parts%p%r(j) = parts%p%r(j) + (parts%p%r(i)/parts%rho%r(i) + (vxi - vxj)/2)*parts%w(k)*parts%mass%r(i)/parts%rho%r(i)
-              endif
             endif
         enddo
         
@@ -3792,9 +3773,9 @@ end subroutine
         
         
         do i=parts%ntotal +1,parts%ntotal + parts%nvirt
-          if(i==1801) parts%ps%r(i) = (parts%p%r(i)+parts%p%r(1891))/2.0d0*parts%rho%r(i)
-          if(1802<=i<=1890) parts%ps%r(i) = (parts%p%r(i) + parts%p%r(i-1))/2.0d0*parts%rho%r(i)
-          if(i>=1891) parts%ps%r(i) = (parts%p%r(i) + parts%p%r(i+1))/2.0d0*parts%rho%r(i)
+          if(i==1801) parts%ps%r(i) = (parts%p%r(i)+parts%p%r(1891))/2.0d0*parts%rhos%r(i)
+          if(1802<=i<=1890) parts%ps%r(i) = (parts%p%r(i) + parts%p%r(i-1))/2.0d0*parts%rhos%r(i)
+          if(i>=1891) parts%ps%r(i) = (parts%p%r(i) + parts%p%r(i+1))/2.0d0*parts%rhos%r(i)
         enddo
         
         do i=parts%ntotal +1,parts%ntotal + parts%nvirt

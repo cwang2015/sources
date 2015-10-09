@@ -1952,7 +1952,7 @@ water => parts%material
 do i = 1,parts%ntotal
 parts%p%r(i) = water%b*((parts%rho%r(i)/(water%rho0))**water%gamma-1.d0)
 enddo
-!call momentum_equation_unified(pl)  !这个应该是对的
+call momentum_equation_unified(pl)  !这个应该是对的
 
 !up is for unified condition
  
@@ -1968,14 +1968,14 @@ enddo
 
 !call shear_strain_rate(pl)
 !3~~~~~~~~~down is before
-pl%tab%x%ndim1 = pl%ntotal+pl%nvirt
-pl%tab%xy%ndim1 = pl%tab%x%ndim1; pl%tab%y%ndim1 = pl%tab%x%ndim1
+!3pl%tab%x%ndim1 = pl%ntotal+pl%nvirt
+!3pl%tab%xy%ndim1 = pl%tab%x%ndim1; pl%tab%y%ndim1 = pl%tab%x%ndim1
 !write(*,*) pl%tab%x%ndim1,pl%vx%x%ndim1
 !Calculate SPH sum for shear tensor Tab = va,b + vb,a - 2/3 delta_ab vc,c
 
-pl%tab%x = 2.d0/3.d0*(2.d0*pl%df4(pl%vx%x,'x')-pl%df4(pl%vx%y,'y'))
-pl%tab%xy = pl%df4(pl%vx%x,'y')+pl%df4(pl%vx%y,'x')
-pl%tab%y = 2.d0/3.d0*(2.d0*pl%df4(pl%vx%y,'y')-pl%df4(pl%vx%x,'x'))
+!3pl%tab%x = 2.d0/3.d0*(2.d0*pl%df4(pl%vx%x,'x')-pl%df4(pl%vx%y,'y'))
+!3pl%tab%xy = pl%df4(pl%vx%x,'y')+pl%df4(pl%vx%y,'x')
+!3pl%tab%y = 2.d0/3.d0*(2.d0*pl%df4(pl%vx%y,'y')-pl%df4(pl%vx%x,'x'))
 
 !call velocity_divergence(pl)
 
@@ -1983,15 +1983,15 @@ pl%tab%y = 2.d0/3.d0*(2.d0*pl%df4(pl%vx%y,'y')-pl%df4(pl%vx%x,'x'))
 
 !   call newtonian_fluid(pl)
 
-      parts%str%x = water%viscosity*parts%tab%x
-      parts%str%y = water%viscosity*parts%tab%y
-      parts%str%xy = water%viscosity*parts%tab%xy
+!3      parts%str%x = water%viscosity*parts%tab%x
+!3      parts%str%y = water%viscosity*parts%tab%y
+!3      parts%str%xy = water%viscosity*parts%tab%xy
 
 !Calculate internal force for water phase !! -phi_f Grad(p)
 
 
-   pl%dvx%x = -pl%df(pl%p,'x') + pl%df(pl%str%x,'x') + pl%df(pl%str%xy,'y')
-   pl%dvx%y = -pl%df(pl%p,'y') + pl%df(pl%str%xy,'x') + pl%df(pl%str%y,'y')   
+!3   pl%dvx%x = -pl%df(pl%p,'x') + pl%df(pl%str%x,'x') + pl%df(pl%str%xy,'y')
+!3   pl%dvx%y = -pl%df(pl%p,'y') + pl%df(pl%str%xy,'x') + pl%df(pl%str%y,'y')   
 
 !down is for dealt-sph
 !   pl%dvx%x = pl%df(pl%str%x,'x') + pl%df(pl%str%xy,'y')
@@ -2001,8 +2001,8 @@ pl%tab%y = 2.d0/3.d0*(2.d0*pl%df4(pl%vx%y,'y')-pl%df4(pl%vx%x,'x'))
 !   pl%dvx%y = pl%dvx%y - pl%df(pl%p,'y')
 !up is for dealt-sph
 
-   pl%dvx%x = pl%dvx%x/pl%rho
-   pl%dvx%y = pl%dvx%y/pl%rho
+!3   pl%dvx%x = pl%dvx%x/pl%rho
+!3   pl%dvx%y = pl%dvx%y/pl%rho
    !write(*,*) pl%dvx%x%r(1:50),pl%dvx%y%r(1:50)
 !3~~~~~~~~~up is before
 !if(artificial_density)then
@@ -2038,7 +2038,7 @@ pl%tab%y = 2.d0/3.d0*(2.d0*pl%df4(pl%vx%y,'y')-pl%df4(pl%vx%x,'x'))
 !5~~~~not need now     
 
 !6~~~~not need now
-pl%dvx%y = pl%dvx%y + gravity
+!pl%dvx%y = pl%dvx%y + gravity
 !6~~~~not need now
 
 !     Calculating the neighboring particles and undating HSML
