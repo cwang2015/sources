@@ -3170,31 +3170,36 @@ end subroutine
           enddo
           parts%drho%r(i) = parts%drho%r(i) + parts%mass%r(j)*(dvx(1)*parts%dwdx(1,k)+dvx(2)*parts%dwdx(2,k))!ÊéÉÏµÄ£¨4.34£©
           parts%drho%r(j) = parts%drho%r(j) + parts%mass%r(i)*(dvx(1)*parts%dwdx(1,k)+dvx(2)*parts%dwdx(2,k))
+          if(parts%itype(i)>0.and.parts%itype(j)<0)then
+              parts%drho%r(i) = parts%drho%r(i) - parts%rhos%r(j)*(parts%vx%x%r(i)*parts%dgu(1,k) + parts%vx%y%r(i)*parts%dgu(2,k))
+          elseif(parts%itype(j)>0.and.parts%itype(i)<0)then
+              parts%drho%r(j) = parts%drho%r(j) - parts%rhos%r(i)*(parts%vx%x%r(j)*parts%dgu(1,k) + parts%vx%y%r(j)*parts%dgu(2,k))
+          endif    
       enddo
           
-      do i = 1,ntotal
-          do d= 1,parts%dim
-              dgua(d,i) = 0.d0
-          enddo
-      enddo
+!      do i = 1,ntotal
+!          do d= 1,parts%dim
+!              dgua(d,i) = 0.d0
+!          enddo
+!      enddo
      
-      do k=1,parts%niac
-          i = parts%pair_i(k)
-          j = parts%pair_j(k)
-          if(parts%itype(i)<0.and.parts%itype(j)>0)then
-          do d =1, parts%dim
-             dgua(d,j) = dgua(d,j) + parts%dgu(d,k) 
-         enddo
-          elseif(parts%itype(i)>0.and.parts%itype(j)<0)then
-          do d =1, parts%dim
-             dgua(d,i) = dgua(d,i) + parts%dgu(d,k)
-          enddo
-          endif
-      enddo
+!      do k=1,parts%niac
+!          i = parts%pair_i(k)
+!          j = parts%pair_j(k)
+!          if(parts%itype(i)<0.and.parts%itype(j)>0)then
+!          do d =1, parts%dim
+!             dgua(d,j) = dgua(d,j) + parts%dgu(d,k) 
+!         enddo
+!          elseif(parts%itype(i)>0.and.parts%itype(j)<0)then
+!          do d =1, parts%dim
+!             dgua(d,i) = dgua(d,i) + parts%dgu(d,k)
+!          enddo
+!          endif
+!      enddo
       
       do i=1,parts%ntotal
           if(wi(i)==0)wi(i)=1
-          parts%drho%r(i) = parts%drho%r(i) - parts%rho%r(i)*(dgua(1,i)*parts%vx%x%r(i)+dgua(2,i)*parts%vx%y%r(i))
+!          parts%drho%r(i) = parts%drho%r(i) - parts%rho%r(i)*(dgua(1,i)*parts%vx%x%r(i)+dgua(2,i)*parts%vx%y%r(i))
           parts%drho%r(i)= parts%drho%r(i)/wi(i)
       enddo
       
