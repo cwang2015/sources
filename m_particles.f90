@@ -181,6 +181,7 @@ integer :: skf = 4
    !real(dp), pointer, dimension(:)   :: rho  => null()
    type(array), pointer :: rho  => null()
    type(array), pointer :: rhos  => null()
+   type(array), pointer :: divvx  => null()
    !real(dp), pointer, dimension(:,:) :: vx   => null()   
    type(array), pointer :: vx   => null()   
    !real(dp), pointer, dimension(:)   :: p    => null()
@@ -882,6 +883,7 @@ ntotal = parts%ntotal + parts%nvirt
 
 if(associated(parts%rho))parts%rho%ndim1 = ntotal
 if(associated(parts%rhos))parts%rhos%ndim1 = ntotal
+if(associated(parts%divvx))parts%divvx%ndim1 = ntotal
 if(associated(parts%drho))parts%drho%ndim1 = ntotal
 if(associated(parts%mass))parts%mass%ndim1 = ntotal
 if(associated(parts%p))parts%p%ndim1 = ntotal
@@ -3128,14 +3130,14 @@ end subroutine
       class(particles) parts
       integer ntotal, i, j, k, d      
       real(dp) selfdens, hv(3), r, wi(parts%maxn),dvx(3) 
-      type(array),allocatable :: divvx
+!      type(array),allocatable :: divvx
       real(dp), allocatable, dimension(:,:) :: dgua
       type(p2r) vx_i(3), vx_j(3) 
 
       ntotal = parts%ntotal + parts%nvirt
-      allocate(divvx);allocate(divvx%r(parts%maxn))
+!      allocate(divvx);allocate(divvx%r(parts%maxn))
       allocate(dgua(parts%dim,parts%maxn))
-      divvx%ndim1 = ntotal
+!      divvx%ndim1 = ntotal
 
 !     wi(maxn)---integration of the kernel itself
         
@@ -3151,7 +3153,7 @@ end subroutine
       do i=1,parts%ntotal
         call parts%kernel(r,hv,parts%hsml(i),selfdens,hv)
         wi(i)=selfdens*parts%mass%r(i)/parts%rho%r(i)
-        parts%drho%r(i)=0.d0 
+        parts%divvx%r(i)=0.d0 
       enddo
 
       do k=1,parts%niac
@@ -3168,14 +3170,24 @@ end subroutine
           do d=1,parts%dim
           dvx(d) = vx_i(d)%p - vx_j(d)%p
           enddo
-          parts%drho%r(i) = parts%drho%r(i) + parts%mass%r(j)*(dvx(1)*parts%dwdx(1,k)+dvx(2)*parts%dwdx(2,k))!书上的（4.34）
-          parts%drho%r(j) = parts%drho%r(j) + parts%mass%r(i)*(dvx(1)*parts%dwdx(1,k)+dvx(2)*parts%dwdx(2,k))
+!          parts%drho%r(i) = parts%drho%r(i) + parts%mass%r(j)*(dvx(1)*parts%dwdx(1,k)+dvx(2)*parts%dwdx(2,k))!书上的（4.34）
+!          parts%drho%r(j) = parts%drho%r(j) + parts%mass%r(i)*(dvx(1)*parts%dwdx(1,k)+dvx(2)*parts%dwdx(2,k))
+           parts%divvx%r(i) = parts%divvx%r(i) - parts%mass%r(j)*(dvx(1)*parts%dwdx(1,k)+dvx(2)*parts%dwdx(2,k))
+           parts%divvx%r(j) = parts%divvx%r(j) - parts%mass%r(i)*(dvx(1)*parts%dwdx(1,k)+dvx(2)*parts%dwdx(2,k))
           if(parts%itype(i)>0.and.parts%itype(j)<0)then
-              parts%drho%r(i) = parts%drho%r(i) - parts%rhos%r(j)*(parts%vx%x%r(i)*parts%dgu(1,k) + parts%vx%y%r(i)*parts%dgu(2,k))
+!              parts%drho%r(i) = parts%drho%r(i) - parts%rhos%r(j)*(parts%vx%x%r(i)*parts%dgu(1,k) + parts%vx%y%r(i)*parts%dgu(2,k))
+              parts%divvx%r(i) = parts%divvx%r(i) + parts%rhos%r(j)*(parts%vx%x%r(i)*parts%dgu(1,k) + parts%vx%y%r(i)*parts%dgu(2,k))
           elseif(parts%itype(j)>0.and.parts%itype(i)<0)then
-              parts%drho%r(j) = parts%drho%r(j) - parts%rhos%r(i)*(parts%vx%x%r(j)*parts%dgu(1,k) + parts%vx%y%r(j)*parts%dgu(2,k))
+!              parts%drho%r(j) = parts%drho%r(j) - parts%rhos%r(i)*(parts%vx%x%r(j)*parts%dgu(1,k) + parts%vx%y%r(j)*parts%dgu(2,k))
+              parts%divvx%r(j) = parts%divvx%r(j) + parts%rhos%r(i)*(parts%vx%x%r(j)*parts%dgu(1,k) + parts%vx%y%r(j)*parts%dgu(2,k))
           endif    
       enddo
+      
+      do i = 1, parts%ntotal
+          if(wi(i)==0)wi(i)=1
+          parts%divvx%r(i) = parts%divvx%r(i)/(parts%rho%r(i)*wi(i))
+      enddo
+      
           
 !      do i = 1,ntotal
 !          do d= 1,parts%dim
@@ -3198,9 +3210,8 @@ end subroutine
 !      enddo
       
       do i=1,parts%ntotal
-          if(wi(i)==0)wi(i)=1
 !          parts%drho%r(i) = parts%drho%r(i) - parts%rho%r(i)*(dgua(1,i)*parts%vx%x%r(i)+dgua(2,i)*parts%vx%y%r(i))
-          parts%drho%r(i)= parts%drho%r(i)/wi(i)
+          parts%drho%r(i)= -parts%rho%r(i)*parts%divvx%r(i)
       enddo
       
       if(parts%itimestep==111)then
@@ -3224,17 +3235,17 @@ end subroutine
       class(particles) parts
       type(material), pointer :: water
       integer ntotal, i, j, k, d    
-      real(dp), allocatable, dimension(:,:) :: dpre,lap
-      type(array),allocatable :: divvx
+      real(dp), allocatable, dimension(:,:) :: dpre,lap!,laps
+!      type(array),allocatable :: divvx
       real(dp) selfdens, hv(3), r, wi(parts%maxn)  ,rr,dx(3),dvx(3),laps
       
       water => parts%material
       ntotal = parts%ntotal + parts%nvirt
-      allocate(divvx);allocate(divvx%r(ntotal))
-      divvx%ndim1 = ntotal
+ !     allocate(divvx);allocate(divvx%r(ntotal))
+ !     divvx%ndim1 = ntotal
       allocate(dpre(parts%dim,parts%max_interaction))
       allocate(lap(parts%dim,parts%max_interaction))
-
+!      allocate(laps(parts%dim,parts%max_interaction))
       
       do i=1,ntotal
         call parts%kernel(r,hv,parts%hsml(i),selfdens,hv)
@@ -3256,6 +3267,7 @@ end subroutine
           do d = 1,parts%dim
               dpre(d,i) = 0.d0
               lap(d,i) = 0.d0
+!              laps(d,i) = 0.d0
           enddo
       enddo
       
@@ -3268,7 +3280,7 @@ end subroutine
           enddo
         if(parts%itype(i)>0.and.parts%itype(j)<0)then
           do d = 1,parts%dim
-           dpre(d,i) = dpre(d,i) + parts%rhos%r(j)*(parts%p%r(i)/parts%rho%r(i)**2+parts%ps%r(j)/parts%rhos%r(j)**2)*parts%dgu(d,k)
+           dpre(d,i) = dpre(d,i) - parts%rhos%r(j)*(parts%p%r(i)/parts%rho%r(i)**2+parts%ps%r(j)/parts%rhos%r(j)**2)*parts%dgu(d,k)
           enddo
         elseif(parts%itype(i)<0.and.parts%itype(j)>0)then
           do d = 1,parts%dim
@@ -3283,7 +3295,7 @@ end subroutine
           enddo
       enddo
       
-      divvx  =  parts.div2(parts%vx)
+!      divvx  =  parts.div2(parts%vx)
       
       do k=1,parts%niac
         i = parts%pair_i(k)
@@ -3302,7 +3314,7 @@ end subroutine
               lap(d,j) = lap(d,j) - parts%mass%r(i)*water%viscosity*2/(parts%rho%r(i)*parts%rho%r(j))/rr**2*(dvx(1)*dx(1)+dvx(2)*dx(2))*parts%dwdx(d,k)
            enddo
         if(parts%itype(i)>0.and.parts%itype(j)<0)then
-            laps = sqrt(parts%dgu(1,k)**2+parts%dgu(2,k)**2)*(water%viscosity*divvx%r(i))/parts%rho%r(i)!这里用div2可以吧？？？(33)式的第二项
+            laps = sqrt(parts%dgu(1,k)**2+parts%dgu(2,k)**2)*(water%viscosity*parts%divvx%r(i))/parts%rho%r(i)!这里用div2可以吧？？？(33)式的第二项
             if(parts%zone(j)==3)then
               lap(1,i) = lap(1,i) - laps
             elseif(parts%zone(j)==4)then
@@ -3311,7 +3323,7 @@ end subroutine
               lap(1,i) = lap(1,i) + laps
             endif
         elseif(parts%itype(i)<0.and.parts%itype(j)>0)then
-            laps = sqrt(parts%dgu(1,k)**2+parts%dgu(2,k)**2)*(water%viscosity*divvx%r(j))/parts%rho%r(j)!这里用div2可以吧？？？
+            laps = sqrt(parts%dgu(1,k)**2+parts%dgu(2,k)**2)*(water%viscosity*parts%divvx%r(j))/parts%rho%r(j)!这里用div2可以吧？？？
             if(parts%zone(i)==3)then
               lap(1,j) = lap(1,j) - laps
             elseif(parts%zone(i)==4)then
@@ -3321,9 +3333,32 @@ end subroutine
             endif
         endif
       enddo
-    
+ 
+!      do k = 1,parts%niac
+!        i = parts%pair_i(k)
+!        j = parts%pair_j(k)
+!        if(parts%itype(i)>0.and.parts%itype(j)<0)then
+!          if(parts%zone(j)==3)then
+!            laps(1,i) = laps(1,i) + sqrt(parts%dgu(1,k)**2+parts%dgu(2,k)**2)*(water%viscosity*divvx%r(i))/parts%rho%r(i)
+!          elseif(parts%zone(j)==4)then
+!            laps(2,i) = laps(2,i) + sqrt(parts%dgu(1,k)**2+parts%dgu(2,k)**2)*(water%viscosity*divvx%r(i))/parts%rho%r(i)
+!          elseif(parts%zone(j)==5)then
+!            laps(1,i) = laps(1,i) - sqrt(parts%dgu(1,k)**2+parts%dgu(2,k)**2)*(water%viscosity*divvx%r(i))/parts%rho%r(i)
+!          endif
+!        elseif(parts%itype(i)<0.and.parts%itype(j)>0)then
+!          if(parts%zone(i)==3)then
+!            laps(1,j) = laps(1,j) + sqrt(parts%dgu(1,k)**2+parts%dgu(2,k)**2)*(water%viscosity*divvx%r(j))/parts%rho%r(j)
+!          elseif(parts%zone(i)==4)then
+!            laps(2,j) = laps(2,j) + sqrt(parts%dgu(1,k)**2+parts%dgu(2,k)**2)*(water%viscosity*divvx%r(j))/parts%rho%r(j)
+!          elseif(parts%zone(i)==5)then
+!            laps(1,j) = laps(1,j) - sqrt(parts%dgu(1,k)**2+parts%dgu(2,k)**2)*(water%viscosity*divvx%r(j))/parts%rho%r(j)
+!          endif
+!        endif
+!      enddo
+      
       do i=1, parts%ntotal
           do d=1, parts%dim
+!             lap(d,i)= (lap(d,i)-laps(d,i)/parts%rho%r(i))/wi(i)
              lap(d,i)= lap(d,i)/wi(i)!这里用的（27）其实就已经除以了密度，是作业里面的（14）中的第二项
           enddo
       enddo

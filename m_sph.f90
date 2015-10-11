@@ -620,6 +620,7 @@ allocate(parts%vx%x%r(maxn), parts%vx%y%r(maxn))
 parts%vx%x%r = 0.d0; parts%vx%y%r = 0.d0
 allocate(parts%rho); allocate(parts%rho%r(maxn)); parts%rho%r = 0.d0
 allocate(parts%rhos); allocate(parts%rhos%r(maxn)); parts%rhos%r = 0.d0
+allocate(parts%divvx); allocate(parts%divvx%r(maxn)); parts%rhos%r = 0.d0
 allocate(parts%p); allocate(parts%p%r(maxn)); parts%p%r = 0.d0
 allocate(parts%ps); allocate(parts%ps%r(maxn)); parts%ps%r = 0.d0
 !allocate(parts%u(maxn));       parts%u   = 0.d0
