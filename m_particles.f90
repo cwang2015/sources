@@ -3393,9 +3393,9 @@ end subroutine
               if(parts%zone(j)==3.and.j/=1801)then
                   if(j/=1801)then
                     q0  = (parts%x(1,i)-parts%x(1,j))/parts%hsml(j)
-                    q1  = (sqrt((parts%x(1,i)-parts%x(1,j))*(parts%x(1,i)-parts%x(1,j))+(parts%x(2,i)-parts%x(2,j))*(parts%x(2,i)-parts%x(2,j))))/parts%hsml(j)
-                    q2  = (sqrt((parts%x(1,i)-parts%x(1,j-1))*(parts%x(1,i)-parts%x(1,j-1))+(parts%x(2,i)-parts%x(2,j-1))*(parts%x(2,i)-parts%x(2,j-1))))/parts%hsml(j-1)
-                    if(parts%x(2,j)>parts%x(2,i).and.parts%x(2,j-1)>parts%x(2,i))then
+                    q1  = (sqrt((parts%x(1,i)-parts%x(1,j))**2+(parts%x(2,i)-parts%x(2,j))**2))/parts%hsml(j)
+                    q2  = (sqrt((parts%x(1,i)-parts%x(1,j-1))**2+(parts%x(2,i)-parts%x(2,j-1))**2))/parts%hsml(j-1)
+                    if(parts%x(2,j-1)>parts%x(2,i))then
                       q1c = (abs(parts%x(2,i)-parts%x(2,j)))/parts%hsml(j)
                       q2c = -(abs(parts%x(2,i)-parts%x(2,j-1)))/parts%hsml(j-1)
                     endif
@@ -3403,7 +3403,7 @@ end subroutine
                       q1c = (abs(parts%x(2,i)-parts%x(2,j)))/parts%hsml(j)
                       q2c = (abs(parts%x(2,i)-parts%x(2,j-1)))/parts%hsml(j-1)
                     endif
-                    if(parts%x(2,j)<parts%x(2,i).and.parts%x(2,j-1)<parts%x(2,i))then
+                    if(parts%x(2,j)<parts%x(2,i))then
                       q1c = -(abs(parts%x(2,i)-parts%x(2,j)))/parts%hsml(j)
                       q2c = (abs(parts%x(2,i)-parts%x(2,j-1)))/parts%hsml(j-1)
                     endif
@@ -3412,16 +3412,16 @@ end subroutine
                     parts%dgu(1,k) = (q2c/pi*Pq2-q1c/pi*Pq1+q0**4/pi*(105/64+35/512*q0**2)*(sign(q2c,q2c)*log((q2+abs(q2c))/abs(q0))-sign(q1c,q1c)*log((q1+abs(q1c))/abs(q0))))/parts%hsml(j)
                   else
                     q0  = (parts%x(1,i)-parts%x(1,j))/parts%hsml(j)
-                    q1  = (sqrt((parts%x(1,i)-parts%x(1,j))*(parts%x(1,i)-parts%x(1,j))+(parts%x(2,i)-parts%x(2,j))*(parts%x(2,i)-parts%x(2,j))))/parts%hsml(j)
-                    q2  = (sqrt((parts%x(1,i)-parts%x(1,1891))*(parts%x(1,i)-parts%x(1,1891))+(parts%x(2,i)-parts%x(2,1891))*(parts%x(2,i)-parts%x(2,1891))))/parts%hsml(1891)
-                    if(parts%x(2,j)>parts%x(2,i).and.parts%x(2,1891)>parts%x(2,i))then
+                    q1  = (sqrt((parts%x(1,i)-parts%x(1,j))**2+(parts%x(2,i)-parts%x(2,j))**2))/parts%hsml(j)
+                    q2  = (sqrt((parts%x(1,i)-parts%x(1,1891))**2+(parts%x(2,i)-parts%x(2,1891))**2))/parts%hsml(1891)
+                    if(parts%x(2,1891)>parts%x(2,i))then
                       write(*,*)'something is wrong'
                     endif
                     if(parts%x(2,j)>parts%x(2,i).and.parts%x(2,1891)<parts%x(2,i))then
                       q1c = (abs(parts%x(2,i)-parts%x(2,j)))/parts%hsml(j)
                       q2c = (abs(parts%x(2,i)-parts%x(2,1891)))/parts%hsml(1891)
                     endif
-                    if(parts%x(2,j)<parts%x(2,i).and.parts%x(2,1891)<parts%x(2,i))then
+                    if(parts%x(2,j)<parts%x(2,i))then
                       q1c = -(abs(parts%x(2,i)-parts%x(2,j)))/parts%hsml(j)
                       q2c = (abs(parts%x(2,i)-parts%x(2,1891)))/parts%hsml(1891)
                     endif
@@ -3431,9 +3431,9 @@ end subroutine
                   endif                    
               elseif(parts%zone(j)==4)then
                   q0  = (parts%x(2,i)-parts%x(2,j))/parts%hsml(j)
-                  q1  = (sqrt((parts%x(1,i)-parts%x(1,j))*(parts%x(1,i)-parts%x(1,j))+(parts%x(2,i)-parts%x(2,j))*(parts%x(2,i)-parts%x(2,j))))/parts%hsml(j)
-                  q2  = (sqrt((parts%x(1,i)-parts%x(1,j+1))*(parts%x(1,i)-parts%x(1,j+1))+(parts%x(2,i)-parts%x(2,j+1))*(parts%x(2,i)-parts%x(2,j+1))))/parts%hsml(j+1)
-                  if(parts%x(1,j)>parts%x(1,i).and.parts%x(1,j+1)>parts%x(1,i))then
+                  q1  = (sqrt((parts%x(1,i)-parts%x(1,j))**2+(parts%x(2,i)-parts%x(2,j))**2))/parts%hsml(j)
+                  q2  = (sqrt((parts%x(1,i)-parts%x(1,j+1))**2+(parts%x(2,i)-parts%x(2,j+1))**2))/parts%hsml(j+1)
+                  if(parts%x(1,j)>parts%x(1,i))then
                       q1c = -(abs(parts%x(1,i)-parts%x(1,j)))/parts%hsml(j)
                       q2c = (abs(parts%x(1,i)-parts%x(1,j+1)))/parts%hsml(j+1)
                   endif
@@ -3441,7 +3441,7 @@ end subroutine
                       q1c = (abs(parts%x(1,i)-parts%x(1,j)))/parts%hsml(j)
                       q2c = (abs(parts%x(1,i)-parts%x(1,j+1)))/parts%hsml(j+1)
                   endif
-                  if(parts%x(1,j)<parts%x(1,i).and.parts%x(1,j+1)<parts%x(1,i))then
+                  if(parts%x(1,j+1)<parts%x(1,i))then
                       q1c = (abs(parts%x(1,i)-parts%x(1,j)))/parts%hsml(j)
                       q2c = -(abs(parts%x(1,i)-parts%x(1,j+1)))/parts%hsml(j+1)
                   endif
@@ -3450,9 +3450,9 @@ end subroutine
                   parts%dgu(2,k) = (q2c/pi*Pq2-q1c/pi*Pq1+q0**4/pi*(105/64+35/512*q0**2)*(sign(q2c,q2c)*log((q2+abs(q2c))/abs(q0))-sign(q1c,q1c)*log((q1+abs(q1c))/abs(q0))))/parts%hsml(j)
               elseif(parts%zone(j)==5)then
                   q0  = (parts%x(1,j)-parts%x(1,i))/parts%hsml(j)
-                  q1  = (sqrt((parts%x(1,i)-parts%x(1,j))*(parts%x(1,i)-parts%x(1,j))+(parts%x(2,i)-parts%x(2,j))*(parts%x(2,i)-parts%x(2,j))))/parts%hsml(j)
-                  q2  = (sqrt((parts%x(1,i)-parts%x(1,j+1))*(parts%x(1,i)-parts%x(1,j+1))+(parts%x(2,i)-parts%x(2,j+1))*(parts%x(2,i)-parts%x(2,j+1))))/parts%hsml(j+1)
-                  if(parts%x(2,j)>parts%x(2,i).and.parts%x(2,j+1)>parts%x(2,i))then
+                  q1  = (sqrt((parts%x(1,i)-parts%x(1,j))**2+(parts%x(2,i)-parts%x(2,j))**2))/parts%hsml(j)
+                  q2  = (sqrt((parts%x(1,i)-parts%x(1,j+1))**2+(parts%x(2,i)-parts%x(2,j+1))**2))/parts%hsml(j+1)
+                  if(parts%x(2,j)>parts%x(2,i))then
                       q1c = -(abs(parts%x(2,i)-parts%x(2,j)))/parts%hsml(j)
                       q2c = (abs(parts%x(2,i)-parts%x(2,j+1)))/parts%hsml(j+1)
                   endif
@@ -3460,7 +3460,7 @@ end subroutine
                       q1c = (abs(parts%x(2,i)-parts%x(2,j)))/parts%hsml(j)
                       q2c = (abs(parts%x(2,i)-parts%x(2,j+1)))/parts%hsml(j+1)
                   endif
-                  if(parts%x(2,j)<parts%x(2,i).and.parts%x(2,j+1)<parts%x(2,i))then
+                  if(parts%x(2,j+1)<parts%x(2,i))then
                       q1c = (abs(parts%x(2,i)-parts%x(2,j)))/parts%hsml(j)
                       q2c = -(abs(parts%x(2,i)-parts%x(2,j+1)))/parts%hsml(j+1)
                   endif
@@ -3472,28 +3472,28 @@ end subroutine
               if(parts%zone(i)==3)then
                 if(i/=1801)then
                   q0  = (parts%x(1,j)-parts%x(1,i))/parts%hsml(i)
-                  q1  = (sqrt((parts%x(1,j)-parts%x(1,i))*(parts%x(1,j)-parts%x(1,i))+(parts%x(2,j)-parts%x(2,i))*(parts%x(2,j)-parts%x(2,i))))/parts%hsml(i)
-                  q2  = (sqrt((parts%x(1,j)-parts%x(1,i-1))*(parts%x(1,j)-parts%x(1,i-1))+(parts%x(2,j)-parts%x(2,i-1))*(parts%x(2,j)-parts%x(2,i-1))))/parts%hsml(i-1)
-                  if(parts%x(2,i)>parts%x(2,j).and.parts%x(2,i-1)>parts%x(2,j))then
+                  q1  = (sqrt((parts%x(1,j)-parts%x(1,i))**2+(parts%x(2,j)-parts%x(2,i))**2))/parts%hsml(i)
+                  q2  = (sqrt((parts%x(1,j)-parts%x(1,i-1))**2+(parts%x(2,j)-parts%x(2,i-1))**2))/parts%hsml(i-1)
+                  if(parts%x(2,i-1)>parts%x(2,j))then
                       q1c = (abs(parts%x(2,j)-parts%x(2,i)))/parts%hsml(i)
-                      q2c = -(abs(parts%x(2,j)-parts%x(2,i-1)))/parts%hsml(i)
+                      q2c = -(abs(parts%x(2,j)-parts%x(2,i-1)))/parts%hsml(i-1)
                   endif
                   if(parts%x(2,i)>parts%x(2,j).and.parts%x(2,i-1)<parts%x(2,j))then
                       q1c = (abs(parts%x(2,j)-parts%x(2,i)))/parts%hsml(i)
-                      q2c = (abs(parts%x(2,j)-parts%x(2,i-1)))/parts%hsml(i)
+                      q2c = (abs(parts%x(2,j)-parts%x(2,i-1)))/parts%hsml(i-1)
                   endif
-                  if(parts%x(2,i)<parts%x(2,j).and.parts%x(2,i-1)<parts%x(2,j))then
+                  if(parts%x(2,i)<parts%x(2,j))then
                       q1c = -(abs(parts%x(2,j)-parts%x(2,i)))/parts%hsml(i)
-                      q2c = (abs(parts%x(2,j)-parts%x(2,i-1)))/parts%hsml(i)
+                      q2c = (abs(parts%x(2,j)-parts%x(2,i-1)))/parts%hsml(i-1)
                   endif
                   Pq2 = 7/192*q2**5-21/64*q2**4+35/32*q2**3-35/24*q2**2+7/4+q0**2*(35/768*q2**3-7/16*q2**2+105/64*q2-35/12)+q0**4*(35/512*q2-7/8)
                   Pq1 = 7/192*q1**5-21/64*q1**4+35/32*q1**3-35/24*q1**2+7/4+q0**2*(35/768*q1**3-7/16*q1**2+105/64*q1-35/12)+q0**4*(35/512*q1-7/8)
                   parts%dgu(1,k) = (q2c/pi*Pq2-q1c/pi*Pq1+q0**4/pi*(105/64+35/512*q0**2)*(sign(q2c,q2c)*log((q2+abs(q2c))/abs(q0))-sign(q1c,q1c)*log((q1+abs(q1c))/abs(q0))))/parts%hsml(i)
                 else
                   q0  = (parts%x(1,j)-parts%x(1,i))/parts%hsml(i)
-                  q1  = (sqrt((parts%x(1,j)-parts%x(1,i))*(parts%x(1,j)-parts%x(1,i))+(parts%x(2,j)-parts%x(2,i))*(parts%x(2,j)-parts%x(2,i))))/parts%hsml(i)
-                  q2  = (sqrt((parts%x(1,j)-parts%x(1,1891))*(parts%x(1,j)-parts%x(1,1891))+(parts%x(2,j)-parts%x(2,1891))*(parts%x(2,j)-parts%x(2,1891))))/parts%hsml(1891)
-                  if(parts%x(2,i)>parts%x(2,j).and.parts%x(2,1891)>parts%x(2,j))then
+                  q1  = (sqrt((parts%x(1,j)-parts%x(1,i))**2+(parts%x(2,j)-parts%x(2,i))**2))/parts%hsml(i)
+                  q2  = (sqrt((parts%x(1,j)-parts%x(1,1891))**2+(parts%x(2,j)-parts%x(2,1891))**2))/parts%hsml(1891)
+                  if(parts%x(2,1891)>parts%x(2,j))then
                       q1c = (abs(parts%x(2,j)-parts%x(2,i)))/parts%hsml(i)
                       q2c = -(abs(parts%x(2,j)-parts%x(2,1891)))/parts%hsml(i)
                   endif
@@ -3512,19 +3512,19 @@ end subroutine
               endif
               if(parts%zone(i)==4)then
                   q0  = (parts%x(2,j)-parts%x(2,i))/parts%hsml(i)
-                  q1  = (sqrt((parts%x(1,j)-parts%x(1,i))*(parts%x(1,j)-parts%x(1,i))+(parts%x(2,j)-parts%x(2,i))*(parts%x(2,j)-parts%x(2,i))))/parts%hsml(i)
-                  q2  = (sqrt((parts%x(1,j)-parts%x(1,i+1))*(parts%x(1,j)-parts%x(1,i+1))+(parts%x(2,j)-parts%x(2,i+1))*(parts%x(2,j)-parts%x(2,i+1))))/parts%hsml(i+1)
-                  if(parts%x(1,i)>parts%x(1,j).and.parts%x(1,i+1)>parts%x(1,j))then
+                  q1  = (sqrt((parts%x(1,j)-parts%x(1,i))**2+(parts%x(2,j)-parts%x(2,i))**2))/parts%hsml(i)
+                  q2  = (sqrt((parts%x(1,j)-parts%x(1,i+1))**2+(parts%x(2,j)-parts%x(2,i+1))**2))/parts%hsml(i+1)
+                  if(parts%x(1,i)>parts%x(1,j))then
                       q1c = -(abs(parts%x(2,j)-parts%x(2,i)))/parts%hsml(i)
-                      q2c = (abs(parts%x(2,j)-parts%x(2,i+1)))/parts%hsml(i)
+                      q2c = (abs(parts%x(2,j)-parts%x(2,i+1)))/parts%hsml(i+1)
                   endif
                   if(parts%x(1,i)>parts%x(1,j).and.parts%x(1,i+1)<parts%x(1,j))then
                       q1c = (abs(parts%x(2,j)-parts%x(2,i)))/parts%hsml(i)
-                      q2c = (abs(parts%x(2,j)-parts%x(2,i+1)))/parts%hsml(i)
+                      q2c = (abs(parts%x(2,j)-parts%x(2,i+1)))/parts%hsml(i+1)
                   endif
-                  if(parts%x(1,i)<parts%x(1,j).and.parts%x(1,i+1)<parts%x(1,j))then
+                  if(parts%x(1,i+1)<parts%x(1,j))then
                       q1c = (abs(parts%x(2,j)-parts%x(2,i)))/parts%hsml(i)
-                      q2c = -(abs(parts%x(2,j)-parts%x(2,i+1)))/parts%hsml(i)
+                      q2c = -(abs(parts%x(2,j)-parts%x(2,i+1)))/parts%hsml(i+1)
                   endif
                   Pq2 = 7/192*q2**5-21/64*q2**4+35/32*q2**3-35/24*q2**2+7/4+q0**2*(35/768*q2**3-7/16*q2**2+105/64*q2-35/12)+q0**4*(35/512*q2-7/8)
                   Pq1 = 7/192*q1**5-21/64*q1**4+35/32*q1**3-35/24*q1**2+7/4+q0**2*(35/768*q1**3-7/16*q1**2+105/64*q1-35/12)+q0**4*(35/512*q1-7/8)
@@ -3532,19 +3532,19 @@ end subroutine
               endif
               if(parts%zone(i)==5)then
                   q0  = (parts%x(1,i)-parts%x(1,j))/parts%hsml(i)
-                  q1  = (sqrt((parts%x(1,j)-parts%x(1,i))*(parts%x(1,j)-parts%x(1,i))+(parts%x(2,j)-parts%x(2,i))*(parts%x(2,j)-parts%x(2,i))))/parts%hsml(i)
-                  q2  = (sqrt((parts%x(1,j)-parts%x(1,i+1))*(parts%x(1,j)-parts%x(1,i+1))+(parts%x(2,j)-parts%x(2,i+1))*(parts%x(2,j)-parts%x(2,i+1))))/parts%hsml(i+1)
-                  if(parts%x(2,i)>parts%x(2,j).and.parts%x(2,i+1)>parts%x(2,j))then
+                  q1  = (sqrt((parts%x(1,j)-parts%x(1,i))**2+(parts%x(2,j)-parts%x(2,i))**2))/parts%hsml(i)
+                  q2  = (sqrt((parts%x(1,j)-parts%x(1,i+1))**2+(parts%x(2,j)-parts%x(2,i+1))**2))/parts%hsml(i+1)
+                  if(parts%x(2,i)>parts%x(2,j))then
                       q1c = -(abs(parts%x(2,j)-parts%x(2,i)))/parts%hsml(i)
-                      q2c = (abs(parts%x(2,j)-parts%x(2,i+1)))/parts%hsml(i)
+                      q2c = (abs(parts%x(2,j)-parts%x(2,i+1)))/parts%hsml(i+1)
                   endif
                   if(parts%x(2,i)>parts%x(2,j).and.parts%x(2,i+1)<parts%x(2,j))then
                       q1c = (abs(parts%x(2,j)-parts%x(2,i)))/parts%hsml(i)
-                      q2c = (abs(parts%x(2,j)-parts%x(2,i+1)))/parts%hsml(i)
+                      q2c = (abs(parts%x(2,j)-parts%x(2,i+1)))/parts%hsml(i+1)
                   endif
-                  if(parts%x(2,i)<parts%x(2,j).and.parts%x(2,i+1)<parts%x(2,j))then
+                  if(parts%x(2,i+1)<parts%x(2,j))then
                       q1c = (abs(parts%x(2,j)-parts%x(2,i)))/parts%hsml(i)
-                      q2c = -(abs(parts%x(2,j)-parts%x(2,i+1)))/parts%hsml(i)
+                      q2c = -(abs(parts%x(2,j)-parts%x(2,i+1)))/parts%hsml(i+1)
                   endif
                   Pq2 = 7/192*q2**5-21/64*q2**4+35/32*q2**3-35/24*q2**2+7/4+q0**2*(35/768*q2**3-7/16*q2**2+105/64*q2-35/12)+q0**4*(35/512*q2-7/8)
                   Pq1 = 7/192*q1**5-21/64*q1**4+35/32*q1**3-35/24*q1**2+7/4+q0**2*(35/768*q1**3-7/16*q1**2+105/64*q1-35/12)+q0**4*(35/512*q1-7/8)
