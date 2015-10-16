@@ -184,6 +184,8 @@ integer :: skf = 4
    type(array), pointer :: divvx  => null()
    !real(dp), pointer, dimension(:,:) :: vx   => null()   
    type(array), pointer :: vx   => null()   
+   type(array), pointer :: mone   => null()   
+   type(array), pointer :: mons   => null()   
    !real(dp), pointer, dimension(:)   :: p    => null()
    type(array), pointer :: p => null()
    type(array), pointer :: ps => null()
@@ -915,6 +917,10 @@ if(associated(parts%v_min%y))parts%v_min%y%ndim1 = ntotal
 if(associated(parts%epsilon_p))parts%epsilon_p%ndim1 = ntotal
 if(associated(parts%vx%x))parts%vx%x%ndim1 = ntotal
 if(associated(parts%vx%y))parts%vx%y%ndim1 = ntotal
+if(associated(parts%mone%x))parts%mone%x%ndim1 = ntotal
+if(associated(parts%mone%y))parts%mone%y%ndim1 = ntotal
+if(associated(parts%mons%x))parts%mons%x%ndim1 = ntotal
+if(associated(parts%mons%y))parts%mons%y%ndim1 = ntotal
 if(associated(parts%dvx%x))parts%dvx%x%ndim1 = ntotal
 if(associated(parts%dvx%y))parts%dvx%y%ndim1 = ntotal
 if(associated(parts%vol))parts%vol%ndim1 = ntotal
@@ -3235,9 +3241,9 @@ end subroutine
       class(particles) parts
       type(material), pointer :: water
       integer ntotal, i, j, k, d    
-      real(dp), allocatable, dimension(:,:) :: dpre,lap!,laps
+      real(dp), allocatable, dimension(:,:) :: dpre,lap
 !      type(array),allocatable :: divvx
-      real(dp) selfdens, hv(3), r, wi(parts%maxn)  ,rr,dx(3),dvx(3),laps
+      real(dp) selfdens, hv(3), r, wi(parts%maxn)  ,rr,dx(3),dvx(3),lapa,lapsx,lapsy
       
       water => parts%material
       ntotal = parts%ntotal + parts%nvirt
@@ -3314,22 +3320,32 @@ end subroutine
               lap(d,j) = lap(d,j) - parts%mass%r(i)*water%viscosity*2/(parts%rho%r(i)*parts%rho%r(j))/rr**2*(dvx(1)*dx(1)+dvx(2)*dx(2))*parts%dwdx(d,k)
            enddo
         if(parts%itype(i)>0.and.parts%itype(j)<0)then
-            laps = sqrt(parts%dgu(1,k)**2+parts%dgu(2,k)**2)*(water%viscosity*parts%divvx%r(i))/parts%rho%r(i)!这里用div2可以吧？？？(33)式的第二项
+            lapsx = sqrt(parts%dgu(1,k)**2+parts%dgu(2,k)**2)*parts%mone%x%r(j)/parts%rho%r(i)
+            lapsy = sqrt(parts%dgu(1,k)**2+parts%dgu(2,k)**2)*parts%mone%y%r(j)/parts%rho%r(i)
+            lapa = sqrt(parts%dgu(1,k)**2+parts%dgu(2,k)**2)*(water%viscosity*parts%divvx%r(i))/parts%rho%r(i)!这里用div2可以吧？？？(33)式的第二项
             if(parts%zone(j)==3)then
-              lap(1,i) = lap(1,i) - laps
+              lap(1,i) = lap(1,i) - lapa - lapsx
+              lap(2,i) = lap(2,i) - lapsy
             elseif(parts%zone(j)==4)then
-              lap(2,i) = lap(2,i) - laps
-            elseif(parts%zone(j)==5)then
-              lap(1,i) = lap(1,i) + laps
+              lap(1,i) = lap(1,i) - lapsx  
+              lap(2,i) = lap(2,i) - lapa - lapsy
+            elseif(parts%zone(j)==5)then  
+              lap(1,i) = lap(1,i) + lapa - lapsx
+              lap(2,i) = lap(2,i) - lapsy
             endif
         elseif(parts%itype(i)<0.and.parts%itype(j)>0)then
-            laps = sqrt(parts%dgu(1,k)**2+parts%dgu(2,k)**2)*(water%viscosity*parts%divvx%r(j))/parts%rho%r(j)!这里用div2可以吧？？？
+            lapsx = sqrt(parts%dgu(1,k)**2+parts%dgu(2,k)**2)*parts%mone%x%r(i)/parts%rho%r(j)
+            lapsy = sqrt(parts%dgu(1,k)**2+parts%dgu(2,k)**2)*parts%mone%y%r(i)/parts%rho%r(j)         
+            lapa = sqrt(parts%dgu(1,k)**2+parts%dgu(2,k)**2)*(water%viscosity*parts%divvx%r(j))/parts%rho%r(j)!这里用div2可以吧？？？
             if(parts%zone(i)==3)then
-              lap(1,j) = lap(1,j) - laps
+              lap(1,j) = lap(1,j) - lapa - lapsx
+              lap(2,j) = lap(2,j) - lapsy
             elseif(parts%zone(i)==4)then
-              lap(2,j) = lap(2,j) - laps
+              lap(1,j) = lap(1,j) - lapsx  
+              lap(2,j) = lap(2,j) - lapa - lapsy
             elseif(parts%zone(i)==5)then
-              lap(1,j) = lap(1,j) + laps
+              lap(1,j) = lap(1,j) + lapa - lapsx
+              lap(2,j) = lap(2,j) - lapsy
             endif
         endif
       enddo
@@ -3392,9 +3408,9 @@ end subroutine
           if(parts%itype(i)>0)then
               if(parts%zone(j)==3.and.j/=1801)then
                   if(j/=1801)then
-                    q0  = (parts%x(1,i)-parts%x(1,j))/parts%hsml(j)
-                    q1  = (sqrt((parts%x(1,i)-parts%x(1,j))**2+(parts%x(2,i)-parts%x(2,j))**2))/parts%hsml(j)
-                    q2  = (sqrt((parts%x(1,i)-parts%x(1,j-1))**2+(parts%x(2,i)-parts%x(2,j-1))**2))/parts%hsml(j-1)
+                      q0  = (parts%x(1,i)-parts%x(1,j))/parts%hsml(j)
+                      q1  = (sqrt((parts%x(1,i)-parts%x(1,j))**2+(parts%x(2,i)-parts%x(2,j))**2))/parts%hsml(j)
+                      q2  = (sqrt((parts%x(1,i)-parts%x(1,j-1))**2+(parts%x(2,i)-parts%x(2,j-1))**2))/parts%hsml(j-1)
                     if(parts%x(2,j-1)>parts%x(2,i))then
                       q1c = (abs(parts%x(2,i)-parts%x(2,j)))/parts%hsml(j)
                       q2c = -(abs(parts%x(2,i)-parts%x(2,j-1)))/parts%hsml(j-1)
@@ -3407,9 +3423,9 @@ end subroutine
                       q1c = -(abs(parts%x(2,i)-parts%x(2,j)))/parts%hsml(j)
                       q2c = (abs(parts%x(2,i)-parts%x(2,j-1)))/parts%hsml(j-1)
                     endif
-                    Pq2 = 7/192*q2**5-21/64*q2**4+35/32*q2**3-35/24*q2**2+7/4+q0**2*(35/768*q2**3-7/16*q2**2+105/64*q2-35/12)+q0**4*(35/512*q2-7/8)
-                    Pq1 = 7/192*q1**5-21/64*q1**4+35/32*q1**3-35/24*q1**2+7/4+q0**2*(35/768*q1**3-7/16*q1**2+105/64*q1-35/12)+q0**4*(35/512*q1-7/8)
-                    parts%dgu(1,k) = (q2c/pi*Pq2-q1c/pi*Pq1+q0**4/pi*(105/64+35/512*q0**2)*(sign(q2c,q2c)*log((q2+abs(q2c))/abs(q0))-sign(q1c,q1c)*log((q1+abs(q1c))/abs(q0))))/parts%hsml(j)
+                      Pq2 = 7/192*q2**5-21/64*q2**4+35/32*q2**3-35/24*q2**2+7/4+q0**2*(35/768*q2**3-7/16*q2**2+105/64*q2-35/12)+q0**4*(35/512*q2-7/8)
+                      Pq1 = 7/192*q1**5-21/64*q1**4+35/32*q1**3-35/24*q1**2+7/4+q0**2*(35/768*q1**3-7/16*q1**2+105/64*q1-35/12)+q0**4*(35/512*q1-7/8)
+                      parts%dgu(1,k) = (q2c/pi*Pq2-q1c/pi*Pq1+q0**4/pi*(105/64+35/512*q0**2)*(sign(q2c,q2c)*log((q2+abs(q2c))/abs(q0))-sign(q1c,q1c)*log((q1+abs(q1c))/abs(q0))))/parts%hsml(j)
                   else
                     q0  = (parts%x(1,i)-parts%x(1,j))/parts%hsml(j)
                     q1  = (sqrt((parts%x(1,i)-parts%x(1,j))**2+(parts%x(2,i)-parts%x(2,j))**2))/parts%hsml(j)
@@ -3712,7 +3728,8 @@ end subroutine
       integer ntotal, i, j, k, d      
       real(dp) selfdens, hv(3), r, wi(parts%maxn),vxi,vxj,dx
       type(p2r) vx_i(3), vx_j(3) 
-
+      type(material),pointer :: water
+      water => parts%material
       ntotal = parts%ntotal + parts%nvirt
 
 !     wi(maxn)---integration of the kernel itself
@@ -3746,6 +3763,8 @@ end subroutine
       do i=parts%ntotal +1,parts%ntotal + parts%nvirt
         call parts%kernel(r,hv,parts%hsml(i),selfdens,hv)
         parts%rho%r(i) = selfdens*parts%mass%r(i)   !rho不能为0
+        parts%mone%x%r(i) = 0
+        parts%mone%y%r(i) = 0
       enddo
 
 !     Calculate SPH sum for rho:
@@ -3753,25 +3772,57 @@ end subroutine
         i = parts%pair_i(k)
         j = parts%pair_j(k)
         if(parts%itype(i)<0.and.parts%itype(j)>0)then
-        parts%rho%r(i) = parts%rho%r(i) + parts%mass%r(j)*parts%w(k)
+            parts%rho%r(i) = parts%rho%r(i) + parts%mass%r(j)*parts%w(k)
+            if(parts%zone(i) == 3)then
+                parts%mone%x%r(i) = parts%mone%x%r(i) + parts%mass%r(j)/parts%rho%r(j)*water%viscosity*parts%vx%x%r(j)/(parts%x(1,j)-parts%x(1,i))*parts%w(k)
+                parts%mone%y%r(i) = parts%mone%y%r(i) + parts%mass%r(j)/parts%rho%r(j)*water%viscosity*parts%vx%y%r(j)/(parts%x(1,j)-parts%x(1,i))*parts%w(k)
+            elseif(parts%zone(i) ==4)then
+                parts%mone%x%r(i) = parts%mone%x%r(i) + parts%mass%r(j)/parts%rho%r(j)*water%viscosity*parts%vx%x%r(j)/(parts%x(2,j)-parts%x(2,i))*parts%w(k)
+                parts%mone%y%r(i) = parts%mone%y%r(i) + parts%mass%r(j)/parts%rho%r(j)*water%viscosity*parts%vx%y%r(j)/(parts%x(2,j)-parts%x(2,i))*parts%w(k)
+            else
+                parts%mone%x%r(i) = parts%mone%x%r(i) + parts%mass%r(j)/parts%rho%r(j)*water%viscosity*parts%vx%x%r(j)/(parts%x(1,i)-parts%x(1,j))*parts%w(k)
+                parts%mone%y%r(i) = parts%mone%y%r(i) + parts%mass%r(j)/parts%rho%r(j)*water%viscosity*parts%vx%y%r(j)/(parts%x(1,i)-parts%x(1,j))*parts%w(k)
+            endif
         elseif(parts%itype(i)>0.and.parts%itype(j)<0)then
-        parts%rho%r(j) = parts%rho%r(j) + parts%mass%r(i)*parts%w(k)
+            parts%rho%r(j) = parts%rho%r(j) + parts%mass%r(i)*parts%w(k)
+            if(parts%zone(j) == 3)then
+                parts%mone%x%r(j) = parts%mone%x%r(j) + parts%mass%r(i)/parts%rho%r(i)*water%viscosity*parts%vx%x%r(i)/(parts%x(1,i)-parts%x(1,j))*parts%w(k)
+                parts%mone%y%r(j) = parts%mone%y%r(j) + parts%mass%r(i)/parts%rho%r(i)*water%viscosity*parts%vx%y%r(i)/(parts%x(1,i)-parts%x(1,j))*parts%w(k)
+            elseif(parts%zone(j) == 4)then
+                parts%mone%x%r(j) = parts%mone%x%r(j) + parts%mass%r(i)/parts%rho%r(i)*water%viscosity*parts%vx%x%r(i)/(parts%x(2,i)-parts%x(2,j))*parts%w(k)
+                parts%mone%y%r(j) = parts%mone%y%r(j) + parts%mass%r(i)/parts%rho%r(i)*water%viscosity*parts%vx%y%r(i)/(parts%x(2,i)-parts%x(2,j))*parts%w(k)
+            else
+                parts%mone%x%r(j) = parts%mone%x%r(j) + parts%mass%r(i)/parts%rho%r(i)*water%viscosity*parts%vx%x%r(i)/(parts%x(1,j)-parts%x(1,i))*parts%w(k)
+                parts%mone%y%r(j) = parts%mone%y%r(j) + parts%mass%r(i)/parts%rho%r(i)*water%viscosity*parts%vx%y%r(i)/(parts%x(1,j)-parts%x(1,i))*parts%w(k)
+            endif
         endif
       enddo
 
 !     Thirdly, calculate the normalized rho, rho=sum(rho)/sum(w)
-!      if (nor_density) then 
+
         do i=parts%ntotal +1,parts%ntotal + parts%nvirt
           if(wi(i)==0)wi(i)=1
           parts%rho%r(i)=parts%rho%r(i)/wi(i)
+          parts%mone%x%r(i) = parts%mone%x%r(i)/wi(i)
+          parts%mone%y%r(i) = parts%mone%y%r(i)/wi(i)
         enddo
-!      endif 
+
 !------get rhos
         do i=parts%ntotal +1,parts%ntotal + parts%nvirt
 !           write(*,*)'i=',i
-           if(i==1801)   parts%rhos%r(i) = (parts%rho%r(i)+parts%rho%r(1891))/2.0d0
-          if(1802<=i<=1890) parts%rhos%r(i) = (parts%rho%r(i) + parts%rho%r(i-1))/2.0d0
-          if(i>=1891) parts%rhos%r(i) = (parts%rho%r(i) + parts%rho%r(i+1))/2.0d0
+           if(i==1801)then
+               parts%rhos%r(i) = (parts%rho%r(i)+parts%rho%r(1891))/2.0d0
+               parts%mons%x%r(i) = (parts%mone%x%r(i) + parts%mone%x%r(1891))/2.0d0
+               parts%mons%y%r(i) = (parts%mone%y%r(i) + parts%mone%y%r(1891))/2.0d0
+           elseif(1802<=i<=1890)then
+               parts%rhos%r(i) = (parts%rho%r(i) + parts%rho%r(i-1))/2.0d0
+               parts%mons%x%r(i) = (parts%mone%x%r(i) + parts%mone%x%r(i-1))/2.0d0
+               parts%mons%y%r(i) = (parts%mone%y%r(i) + parts%mone%y%r(i-1))/2.0d0
+           elseif(i>=1891)then
+               parts%rhos%r(i) = (parts%rho%r(i) + parts%rho%r(i+1))/2.0d0
+               parts%mons%x%r(i) = (parts%mone%x%r(i) + parts%mone%x%r(i+1))/2.0d0
+               parts%mons%y%r(i) = (parts%mone%y%r(i) + parts%mone%y%r(i+1))/2.0d0
+           endif
         enddo
 
         do i=parts%ntotal +1,parts%ntotal + parts%nvirt
