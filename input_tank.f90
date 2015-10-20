@@ -84,7 +84,7 @@ call parts%setup_ndim1
 ! vol means the volume of a cell. We calculate the mass of each particle according to mass = rho*vol
 
 parts%vol = tank%dx*tank%dy
-parts%hsml = 3*tank%dx
+parts%hsml = 1.2*tank%dx
 parts%dspp = tank%dx
 
 ! itype is positive for real particles, negative for virtual particles.

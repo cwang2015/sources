@@ -1909,7 +1909,7 @@ endif
 !if(nor_density) call norm_density(pl)
 
 !______Analytical value of delta gamma
-call delta_gamma_unified(pl)
+call delta_gamma_unified2(pl)
 
 !------unified get rho of nvirt particles
 call nvirt_density_unified(pl)

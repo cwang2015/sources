@@ -312,6 +312,7 @@ integer :: skf = 4
        procedure :: nvirt_density_unified
        procedure :: con_density
        procedure :: delta_gamma_unified
+       procedure :: delta_gamma_unified2
        procedure :: real_density_unified
        procedure :: momentum_equation_unified       
        procedure :: freesurface
@@ -3571,6 +3572,230 @@ end subroutine
       
       end subroutine
 
+ 
+! Subroutine to calculate the delta gamma of unified condition.
+!----------------------------------------------------------------------      
+      subroutine delta_gamma_unified2(parts)
+!----------------------------------------------------------------------
+      implicit none
+  
+      class(particles) parts      
+      integer k,i,j,d
+      real(dp) q0,q1,q2,q1c,q2c,Pq2,Pq1,factor,hsml,dx,rr,w,q
+      real(dp) , parameter :: pi = 3.1415926535898
+      hsml = parts%hsml(1)
+      
+      factor = 7.e0 / (4.e0*pi*hsml*hsml)
+      dx = parts%x(2,1802) - parts%x(2,1801)
+
+      
+      do k = 1, parts%niac
+          do d = 1,parts%dim
+              parts%dgu(d,k)=0.d0
+          enddo
+          i = parts%pair_i(k)
+          j = parts%pair_j(k)
+          
+          
+          if(parts%itype(i)*parts%itype(j)>0)cycle
+          if(parts%itype(i)>0)then
+              if(parts%zone(j)==3)then
+!1                  parts%dgu(1,k) = parts%w(k) * (parts%x(1,i) - parts%x(1,j))
+!2                  parts%dgu(1,k) = parts%w(k) * parts%hsml(i)
+
+!3                   parts%dgu(1,k) = parts%dwdx(1,k) * (parts%x(1,i) - parts%x(1,j))
+!3                   parts%dgu(2,k) = parts%dwdx(2,k) * (parts%x(2,i) - parts%x(2,j))
+                   
+!4                   rr = sqrt((parts%x(1,i) - parts%x(1,j))**2 + (parts%x(2,i) - (parts%x(2,j) - dx/2))**2)
+!4                   q = rr/hsml
+!4                   w = factor * ( (1-q/2)**4 *(1+2*q) )
+!4                   parts%dgu(1,k) = w * dx
+    
+!5                     parts%dgu(1,k) = parts%w(k) * dx
+
+                     rr = sqrt((parts%x(1,i) - parts%x(1,j))**2 + (parts%x(2,i) - (parts%x(2,j) - dx))**2)
+                     q = rr/hsml
+                     w = factor * ( (1-q/2)**4 *(1+2*q) )
+                     parts%dgu(1,k) = (w + parts%w(k))/2 * dx
+              elseif(parts%zone(j)==4)then 
+                  if(j/=1891)then
+!1                      parts%dgu(2,k) = parts%w(k) * (parts%x(2,i) - parts%x(2,j))
+!2                      parts%dgu(2,k) = parts%w(k) * parts%hsml(i)
+
+!3                       parts%dgu(1,k) = parts%dwdx(1,k) * (parts%x(1,i) - parts%x(1,j))
+!3                       parts%dgu(2,k) = parts%dwdx(2,k) * (parts%x(2,i) - parts%x(2,j))
+                       
+!4                       rr = sqrt((parts%x(1,i) - (parts%x(1,j) + dx/2))**2 + (parts%x(2,i) - parts%x(2,j))**2)
+!4                       q = rr/hsml
+!4                       w = factor * ( (1-q/2)**4 *(1+2*q) )
+!4                       parts%dgu(2,k) = w * dx
+
+!5                       parts%dgu(2,k) = parts%w(k)*dx
+                       
+                     rr = sqrt((parts%x(1,i) - (parts%x(1,j) + dx))**2 + (parts%x(2,i) - parts%x(2,j))**2)
+                     q = rr/hsml
+                     w = factor * ( (1-q/2)**4 *(1+2*q) )
+                     parts%dgu(2,k) = (w + parts%w(k))/2 * dx
+                  else
+!1                       parts%dgu(1,k) = parts%w(k) * (parts%x(1,i) - parts%x(1,j))/2
+!1                       parts%dgu(2,k) = parts%w(k) * (parts%x(2,i) - parts%x(2,j))/2
+!2                       parts%dgu(1,k) = parts%w(k) * parts%hsml(i)/2
+!2                       parts%dgu(2,k) = parts%w(k) * parts%hsml(i)/2
+!3                       parts%dgu(1,k) = parts%dwdx(1,k) * (parts%x(1,i) - parts%x(1,j))
+!3                       parts%dgu(2,k) = parts%dwdx(2,k) * (parts%x(2,i) - parts%x(2,j))
+
+!4                       rr = sqrt((parts%x(1,i) - (parts%x(1,j) + dx/2))**2 + (parts%x(2,i) - parts%x(2,j))**2)
+!4                       q = rr/hsml
+!4                       w = factor * ( (1-q/2)**4 *(1+2*q) )
+!4                       parts%dgu(2,k) = w * dx
+
+!5                       parts%dgu(2,k) = parts%w(k)*dx
+!5                       parts%dgu(1,k) = parts%w(k)*dx
+
+                     rr = sqrt((parts%x(1,i) - (parts%x(1,j) + dx))**2 + (parts%x(2,i) - parts%x(2,j))**2)
+                     q = rr/hsml
+                     w = factor * ( (1-q/2)**4 *(1+2*q) )
+                     parts%dgu(2,k) = (w + parts%w(k))/2 * dx
+                  endif
+              elseif(parts%zone(j)==5)then
+                  if(j/=2053)then
+!1                       parts%dgu(1,k) = parts%w(k) * (parts%x(1,j) - parts%x(1,i))
+!2                       parts%dgu(1,k) = parts%w(k) * parts%hsml(i)
+!3                       parts%dgu(1,k) = parts%dwdx(1,k) * (parts%x(1,i) - parts%x(1,j))
+!3                       parts%dgu(2,k) = parts%dwdx(2,k) * (parts%x(2,i) - parts%x(2,j))
+
+!4                       rr = sqrt((parts%x(1,i) - parts%x(1,j))**2 + (parts%x(2,i) - (parts%x(2,j) + dx/2))**2)
+!4                       q = rr/hsml
+!4                       w = factor * ( (1-q/2)**4 *(1+2*q) )
+!4                       parts%dgu(1,k) = -w * dx
+                       
+!5                       parts%dgu(1,k) = -parts%w(k)*dx
+
+                     rr = sqrt((parts%x(1,i) - parts%x(1,j))**2 + (parts%x(2,i) - (parts%x(2,j)+dx))**2)
+                     q = rr/hsml
+                     w = factor * ( (1-q/2)**4 *(1+2*q) )
+                     parts%dgu(1,k) = -(w + parts%w(k))/2 * dx
+                  else
+!1                       parts%dgu(1,k) = parts%w(k) * (parts%x(1,j) - parts%x(1,i))/2
+!1                       parts%dgu(2,k) = parts%w(k) * (parts%x(2,j) - parts%x(2,i))/2
+!2                       parts%dgu(1,k) = parts%w(k) * parts%hsml(i)/2
+!2                       parts%dgu(2,k) = parts%w(k) * parts%hsml(i)/2 
+
+!3                       parts%dgu(1,k) = parts%dwdx(1,k) * (parts%x(1,i) - parts%x(1,j))
+!3                       parts%dgu(2,k) = parts%dwdx(2,k) * (parts%x(2,i) - parts%x(2,j))
+
+!4                       rr = sqrt((parts%x(1,i) - parts%x(1,j))**2 + (parts%x(2,i) - (parts%x(2,j) + dx/2)**2))
+!4                       q = rr/hsml
+!4                       w = factor * ( (1-q/2)**4 *(1+2*q) )
+!4                       parts%dgu(1,k) = -w * dx
+!5                       parts%dgu(1,k) = -parts%w(k)*dx/2
+!5                       parts%dgu(2,k) = -parts%w(k)*dx/2
+
+                     rr = sqrt((parts%x(1,i) - parts%x(1,j))**2 + (parts%x(2,i) - (parts%x(2,j)+dx))**2)
+                     q = rr/hsml
+                     w = factor * ( (1-q/2)**4 *(1+2*q) )
+                     parts%dgu(1,k) = -(w + parts%w(k))/2 * dx
+                  endif
+              endif
+          else
+              if(parts%zone(i)==3)then
+!1                       parts%dgu(1,k) = parts%w(k) * (parts%x(1,j) - parts%x(1,i))
+!2                       parts%dgu(1,k) = parts%w(k) * parts%hsml(i)
+!3                       parts%dgu(1,k) = parts%dwdx(1,k) * (parts%x(1,i) - parts%x(1,j))
+!3                       parts%dgu(2,k) = parts%dwdx(2,k) * (parts%x(2,i) - parts%x(2,j))
+
+!4                       rr = sqrt((parts%x(1,j) - parts%x(1,i))**2 +(parts%x(2,j) - (parts%x(2,i) - dx/2))**2)
+!4                       q = rr/hsml
+!4                       w = factor * ( (1-q/2)**4 *(1+2*q) )
+!4                       parts%dgu(1,k) = w * dx
+!5                        parts%dgu(1,k) = parts%w(k)*dx
+                       rr = sqrt((parts%x(1,j) - parts%x(1,i))**2 + (parts%x(2,j) - (parts%x(2,i) - dx))**2)
+                       q = rr/hsml
+                       w = factor * ( (1-q/2)**4 *(1+2*q) )
+                       parts%dgu(1,k) = (w + parts%w(k))/2 * dx 
+
+              elseif(parts%zone(i)==4)then
+                  if(i/=1891)then
+!1                      parts%dgu(2,k) = parts%w(k) * (parts%x(2,j) - parts%x(2,i))
+!2                      parts%dgu(2,k) = parts%w(k) * parts%hsml(i)
+!3                       parts%dgu(1,k) = parts%dwdx(1,k) * (parts%x(1,i) - parts%x(1,j))
+!3                       parts%dgu(2,k) = parts%dwdx(2,k) * (parts%x(2,i) - parts%x(2,j))
+
+!4                       rr = sqrt((parts%x(1,j) - (parts%x(1,i) + dx/2))**2 +(parts%x(2,j) - parts%x(2,i))**2)
+!4                       q = rr/hsml
+!4                       w = factor * ( (1-q/2)**4 *(1+2*q) )
+!4                       parts%dgu(2,k) = w * dx
+!5                         parts%dgu(2,k) = parts%w(k)*dx
+                       rr = sqrt((parts%x(1,j) - (parts%x(1,i) + dx))**2 + (parts%x(2,j) - parts%x(2,i))**2)  
+                       q = rr/hsml
+                       w = factor * ( (1-q/2)**4 *(1+2*q) )
+                       parts%dgu(2,k) = (w + parts%w(k))/2 * dx 
+                       
+                   else
+
+!1                      parts%dgu(1,k) = parts%w(k) * (parts%x(1,j) - parts%x(1,i))/2
+!1                      parts%dgu(2,k) = parts%w(k) * (parts%x(2,j) - parts%x(2,i))/2
+!2                       parts%dgu(1,k) = parts%w(k) * parts%hsml(i)/2
+!2                       parts%dgu(2,k) = parts%w(k) * parts%hsml(i)/2 
+!3                      parts%dgu(1,k) = parts%dwdx(1,k) * (parts%x(1,i) - parts%x(1,j))
+!3                      parts%dgu(2,k) = parts%dwdx(2,k) * (parts%x(2,i) - parts%x(2,j))
+
+!4                       rr = sqrt((parts%x(1,j) - (parts%x(1,i) + dx/2))**2 +(parts%x(2,j) - parts%x(2,i))**2)
+!4                       q = rr/hsml
+!4                       w = factor * ( (1-q/2)**4 *(1+2*q) )
+!4                       parts%dgu(2,k) = w * dx
+!5                         parts%dgu(2,k) = parts%w(k)*dx/2
+!5                         parts%dgu(1,k) = parts%w(k)*dx/2
+                       rr = sqrt((parts%x(1,j) - (parts%x(1,i) + dx))**2 + (parts%x(2,j) - parts%x(2,i))**2)
+                       q = rr/hsml
+                       w = factor * ( (1-q/2)**4 *(1+2*q) )
+                       parts%dgu(2,k) = (w + parts%w(k))/2 * dx 
+
+                  endif
+              elseif(parts%zone(i)==5)then
+                  if(i/=2053)then
+!1                      parts%dgu(1,k) = parts%w(k) * (parts%x(1,i) - parts%x(1,j))
+!2                       parts%dgu(1,k) = parts%w(k) * parts%hsml(i)
+!3                       parts%dgu(1,k) = parts%dwdx(1,k) * (parts%x(1,i) - parts%x(1,j))
+!3                       parts%dgu(2,k) = parts%dwdx(2,k) * (parts%x(2,i) - parts%x(2,j))
+
+!4                       rr = sqrt((parts%x(1,j) - parts%x(1,i))**2 +(parts%x(2,j) - (parts%x(2,i) + dx/2))**2)
+!4                       q = rr/hsml
+!4                       w = factor * ( (1-q/2)**4 *(1+2*q) )
+!4                       parts%dgu(1,k) = -w * dx      
+!5                         parts%dgu(1,k) = -parts%w(k) * dx
+
+                       rr = sqrt((parts%x(1,j) - parts%x(1,i))**2 + (parts%x(2,j) - (parts%x(2,i) + dx))**2)
+                       q = rr/hsml
+                       w = factor * ( (1-q/2)**4 *(1+2*q) )
+                       parts%dgu(1,k) = -(w + parts%w(k))/2 * dx 
+                       
+                  else
+!1                      parts%dgu(1,k) = parts%w(k) * (parts%x(1,i) - parts%x(1,j))
+!1                      parts%dgu(2,k) = parts%w(k) * (parts%x(2,i) - parts%x(2,j))
+!2                       parts%dgu(1,k) = parts%w(k) * parts%hsml(i)/2
+!2                       parts%dgu(2,k) = parts%w(k) * parts%hsml(i)/2 
+!3                      parts%dgu(1,k) = parts%dwdx(1,k) * (parts%x(1,i) - parts%x(1,j))
+!3                       parts%dgu(2,k) = parts%dwdx(2,k) * (parts%x(2,i) - parts%x(2,j))
+
+!4                       rr = sqrt((parts%x(1,j) - parts%x(1,i))**2 +(parts%x(2,j) - (parts%x(2,i) + dx/2))**2)
+!4                       q = rr/hsml
+!4                       w = factor * ( (1-q/2)**4 *(1+2*q) )
+!4                       parts%dgu(1,k) = -w * dx        
+!5                         parts%dgu(1,k) = -parts%w(k) * dx/2
+!5                         parts%dgu(2,k) = -parts%w(k) * dx/2
+
+                       rr = sqrt((parts%x(1,j) - parts%x(1,i))**2 + (parts%x(2,j) - (parts%x(2,i) + dx))**2)
+                       q = rr/hsml
+                       w = factor * ( (1-q/2)**4 *(1+2*q) )
+                       parts%dgu(1,k) = -(w + parts%w(k))/2 * dx 
+                       
+                  endif
+              endif
+          endif
+      enddo
+      
+      end subroutine
       
 !Subroutine to calculate the density with SPH summation algorithm by MLS.
 !----------------------------------------------------------------------
