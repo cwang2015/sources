@@ -52,6 +52,8 @@ do i = 1, tank%m*tank%n
    if(tank%zone(i)==1.and.tank%x(i)<0.02.and.tank%y(i)>0.02) tank%zone(i)=3
    if(tank%zone(i)==1.and.tank%x(i)>0.01.and.tank%x(i)<3.24) tank%zone(i)=4
    if(tank%zone(i)==1.and.tank%x(i)>3.24) tank%zone(i)=5
+!   if(tank%zone(i)==3.and.tank%y(i)<0.08) tank%zone(i)=6
+!   if(tank%zone(i)==4.and.tank%x(i)<0.08) tank%zone(i)=6
 
 
    !   if(tank%zone(i)==1.and.tank%y(i)>0.66)tank%zone(i)=3
@@ -71,10 +73,14 @@ enddo
 
 call parts%take_real(tank,2)
 !call parts%take_virtual(tank,1)
-call parts%take_virtual(tank,3)
+!call parts%take_virtual(tank,3)
+!call parts%take_virtual(tank,4)
+!call parts%take_virtual(tank,5)
+!call parts%take_virtual(tank,6)
+
+call parts%take_boundary(tank,3)
 call parts%take_virtual(tank,4)
 call parts%take_virtual(tank,5)
-!call parts%take_virtual(tank,6)
 
 call parts%setup_ndim1
 

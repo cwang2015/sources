@@ -291,6 +291,7 @@ integer :: skf = 4
        procedure :: minimum_time_step
        procedure :: take_real => take_real_points1
        procedure :: take_virtual => take_virtual_points1
+       procedure :: take_boundary
        procedure :: setup_itype
        procedure :: setup_ndim1
        procedure :: get_scale_k
@@ -782,7 +783,7 @@ integer i,j,k
 
 k = this%ntotal
 
-   do i = 1, tank%m*tank%n
+1   do i = 1, tank%m*tank%n
       if(tank%zone(i)== zone)then             
          k = k + 1
          this%x(1,k) = tank%x(i)
@@ -855,6 +856,34 @@ this%nvirt = k-this%ntotal
 return
 end subroutine
 
+!-----------------------------------------------------
+      subroutine take_boundary(this,tank,zone)
+!-----------------------------------------------------
+implicit none
+
+class(particles) this
+type(block) tank
+integer zone
+
+integer i,j,k
+
+! Take virtual particles in tank
+
+k = this%ntotal+this%nvirt
+   do i = 1, tank%m*tank%n
+      if(tank%zone(i) == 3)then         
+         k = k + 1
+         this%x(1,k) = tank%x(i)
+         this%x(2,k) = 1.81 - tank%dy * (k - this%ntotal - 1)
+         this%zone(k) = tank%zone(i)
+      endif
+   enddo
+   
+this%nvirt = k-this%ntotal
+
+return
+end subroutine
+      
 !----------------------------------------
       subroutine setup_itype(parts)
 !----------------------------------------
@@ -3221,9 +3250,7 @@ end subroutine
           parts%drho%r(i)= -parts%rho%r(i)*parts%divvx%r(i)
       enddo
       
-      if(parts%itimestep==111)then
-          write(*,*)'sd'
-      endif
+
       
       
  !     do i=parts%ntotal+1,parts%ntotal+parts%nvirt
@@ -3600,8 +3627,9 @@ end subroutine
           if(parts%itype(i)*parts%itype(j)>0)cycle
           if(parts%itype(i)>0)then
               if(parts%zone(j)==3)then
+!                 if(j/=1801)then
 !1                  parts%dgu(1,k) = parts%w(k) * (parts%x(1,i) - parts%x(1,j))
-!2                  parts%dgu(1,k) = parts%w(k) * parts%hsml(i)
+!2                  parts%dgu(1,k) = parts%w(k) * dx
 
 !3                   parts%dgu(1,k) = parts%dwdx(1,k) * (parts%x(1,i) - parts%x(1,j))
 !3                   parts%dgu(2,k) = parts%dwdx(2,k) * (parts%x(2,i) - parts%x(2,j))
@@ -3617,10 +3645,12 @@ end subroutine
                      q = rr/hsml
                      w = factor * ( (1-q/2)**4 *(1+2*q) )
                      parts%dgu(1,k) = (w + parts%w(k))/2 * dx
+!                  endif
+                  
               elseif(parts%zone(j)==4)then 
-                  if(j/=1891)then
+!7                  if(j/=1891)then
 !1                      parts%dgu(2,k) = parts%w(k) * (parts%x(2,i) - parts%x(2,j))
-!2                      parts%dgu(2,k) = parts%w(k) * parts%hsml(i)
+!2                      parts%dgu(2,k) = parts%w(k) * dx
 
 !3                       parts%dgu(1,k) = parts%dwdx(1,k) * (parts%x(1,i) - parts%x(1,j))
 !3                       parts%dgu(2,k) = parts%dwdx(2,k) * (parts%x(2,i) - parts%x(2,j))
@@ -3636,11 +3666,11 @@ end subroutine
                      q = rr/hsml
                      w = factor * ( (1-q/2)**4 *(1+2*q) )
                      parts%dgu(2,k) = (w + parts%w(k))/2 * dx
-                  else
+!7                  else
 !1                       parts%dgu(1,k) = parts%w(k) * (parts%x(1,i) - parts%x(1,j))/2
 !1                       parts%dgu(2,k) = parts%w(k) * (parts%x(2,i) - parts%x(2,j))/2
-!2                       parts%dgu(1,k) = parts%w(k) * parts%hsml(i)/2
-!2                       parts%dgu(2,k) = parts%w(k) * parts%hsml(i)/2
+!2                       parts%dgu(1,k) = parts%w(k) * dx/2
+!2                       parts%dgu(2,k) = parts%w(k) * dx/2
 !3                       parts%dgu(1,k) = parts%dwdx(1,k) * (parts%x(1,i) - parts%x(1,j))
 !3                       parts%dgu(2,k) = parts%dwdx(2,k) * (parts%x(2,i) - parts%x(2,j))
 
@@ -3652,15 +3682,15 @@ end subroutine
 !5                       parts%dgu(2,k) = parts%w(k)*dx
 !5                       parts%dgu(1,k) = parts%w(k)*dx
 
-                     rr = sqrt((parts%x(1,i) - (parts%x(1,j) + dx))**2 + (parts%x(2,i) - parts%x(2,j))**2)
-                     q = rr/hsml
-                     w = factor * ( (1-q/2)**4 *(1+2*q) )
-                     parts%dgu(2,k) = (w + parts%w(k))/2 * dx
-                  endif
+!7                     rr = sqrt((parts%x(1,i) - (parts%x(1,j) + dx))**2 + (parts%x(2,i) - parts%x(2,j))**2)
+!7                     q = rr/hsml
+!7                     w = factor * ( (1-q/2)**4 *(1+2*q) )
+!7                     parts%dgu(2,k) = (w + parts%w(k))/2 * dx
+!7                  endif
               elseif(parts%zone(j)==5)then
-                  if(j/=2053)then
+!                  if(j/=2053)then
 !1                       parts%dgu(1,k) = parts%w(k) * (parts%x(1,j) - parts%x(1,i))
-!2                       parts%dgu(1,k) = parts%w(k) * parts%hsml(i)
+!2                       parts%dgu(1,k) = -parts%w(k) * dx
 !3                       parts%dgu(1,k) = parts%dwdx(1,k) * (parts%x(1,i) - parts%x(1,j))
 !3                       parts%dgu(2,k) = parts%dwdx(2,k) * (parts%x(2,i) - parts%x(2,j))
 
@@ -3675,11 +3705,11 @@ end subroutine
                      q = rr/hsml
                      w = factor * ( (1-q/2)**4 *(1+2*q) )
                      parts%dgu(1,k) = -(w + parts%w(k))/2 * dx
-                  else
+ !                 else
 !1                       parts%dgu(1,k) = parts%w(k) * (parts%x(1,j) - parts%x(1,i))/2
 !1                       parts%dgu(2,k) = parts%w(k) * (parts%x(2,j) - parts%x(2,i))/2
-!2                       parts%dgu(1,k) = parts%w(k) * parts%hsml(i)/2
-!2                       parts%dgu(2,k) = parts%w(k) * parts%hsml(i)/2 
+!2                       parts%dgu(1,k) = -parts%w(k) * dx/2
+!2                       parts%dgu(2,k) = -parts%w(k) * dx/2 
 
 !3                       parts%dgu(1,k) = parts%dwdx(1,k) * (parts%x(1,i) - parts%x(1,j))
 !3                       parts%dgu(2,k) = parts%dwdx(2,k) * (parts%x(2,i) - parts%x(2,j))
@@ -3691,16 +3721,17 @@ end subroutine
 !5                       parts%dgu(1,k) = -parts%w(k)*dx/2
 !5                       parts%dgu(2,k) = -parts%w(k)*dx/2
 
-                     rr = sqrt((parts%x(1,i) - parts%x(1,j))**2 + (parts%x(2,i) - (parts%x(2,j)+dx))**2)
-                     q = rr/hsml
-                     w = factor * ( (1-q/2)**4 *(1+2*q) )
-                     parts%dgu(1,k) = -(w + parts%w(k))/2 * dx
-                  endif
+!                     rr = sqrt((parts%x(1,i) - parts%x(1,j))**2 + (parts%x(2,i) - (parts%x(2,j)+dx))**2)
+!                     q = rr/hsml
+!                     w = factor * ( (1-q/2)**4 *(1+2*q) )
+!                     parts%dgu(1,k) = -(w + parts%w(k))/2 * dx
+!                  endif
               endif
           else
               if(parts%zone(i)==3)then
+!                  if(i/=1801)then
 !1                       parts%dgu(1,k) = parts%w(k) * (parts%x(1,j) - parts%x(1,i))
-!2                       parts%dgu(1,k) = parts%w(k) * parts%hsml(i)
+!2                       parts%dgu(1,k) = parts%w(k) * dx
 !3                       parts%dgu(1,k) = parts%dwdx(1,k) * (parts%x(1,i) - parts%x(1,j))
 !3                       parts%dgu(2,k) = parts%dwdx(2,k) * (parts%x(2,i) - parts%x(2,j))
 
@@ -3713,11 +3744,11 @@ end subroutine
                        q = rr/hsml
                        w = factor * ( (1-q/2)**4 *(1+2*q) )
                        parts%dgu(1,k) = (w + parts%w(k))/2 * dx 
-
+!                      endif
               elseif(parts%zone(i)==4)then
-                  if(i/=1891)then
+!                  if(i/=1891)then
 !1                      parts%dgu(2,k) = parts%w(k) * (parts%x(2,j) - parts%x(2,i))
-!2                      parts%dgu(2,k) = parts%w(k) * parts%hsml(i)
+!2                      parts%dgu(2,k) = parts%w(k) * dx
 !3                       parts%dgu(1,k) = parts%dwdx(1,k) * (parts%x(1,i) - parts%x(1,j))
 !3                       parts%dgu(2,k) = parts%dwdx(2,k) * (parts%x(2,i) - parts%x(2,j))
 
@@ -3731,12 +3762,12 @@ end subroutine
                        w = factor * ( (1-q/2)**4 *(1+2*q) )
                        parts%dgu(2,k) = (w + parts%w(k))/2 * dx 
                        
-                   else
+ !                  else
 
 !1                      parts%dgu(1,k) = parts%w(k) * (parts%x(1,j) - parts%x(1,i))/2
 !1                      parts%dgu(2,k) = parts%w(k) * (parts%x(2,j) - parts%x(2,i))/2
-!2                       parts%dgu(1,k) = parts%w(k) * parts%hsml(i)/2
-!2                       parts%dgu(2,k) = parts%w(k) * parts%hsml(i)/2 
+!2                       parts%dgu(1,k) = parts%w(k) * dx/2
+!2                       parts%dgu(2,k) = parts%w(k) * dx/2 
 !3                      parts%dgu(1,k) = parts%dwdx(1,k) * (parts%x(1,i) - parts%x(1,j))
 !3                      parts%dgu(2,k) = parts%dwdx(2,k) * (parts%x(2,i) - parts%x(2,j))
 
@@ -3746,16 +3777,16 @@ end subroutine
 !4                       parts%dgu(2,k) = w * dx
 !5                         parts%dgu(2,k) = parts%w(k)*dx/2
 !5                         parts%dgu(1,k) = parts%w(k)*dx/2
-                       rr = sqrt((parts%x(1,j) - (parts%x(1,i) + dx))**2 + (parts%x(2,j) - parts%x(2,i))**2)
-                       q = rr/hsml
-                       w = factor * ( (1-q/2)**4 *(1+2*q) )
-                       parts%dgu(2,k) = (w + parts%w(k))/2 * dx 
+!                       rr = sqrt((parts%x(1,j) - (parts%x(1,i) + dx))**2 + (parts%x(2,j) - parts%x(2,i))**2)
+!                       q = rr/hsml
+ !                      w = factor * ( (1-q/2)**4 *(1+2*q) )
+ !                      parts%dgu(2,k) = (w + parts%w(k))/2 * dx 
 
-                  endif
+!                  endif
               elseif(parts%zone(i)==5)then
-                  if(i/=2053)then
+!                  if(i/=2053)then
 !1                      parts%dgu(1,k) = parts%w(k) * (parts%x(1,i) - parts%x(1,j))
-!2                       parts%dgu(1,k) = parts%w(k) * parts%hsml(i)
+!2                       parts%dgu(1,k) = -parts%w(k) * dx
 !3                       parts%dgu(1,k) = parts%dwdx(1,k) * (parts%x(1,i) - parts%x(1,j))
 !3                       parts%dgu(2,k) = parts%dwdx(2,k) * (parts%x(2,i) - parts%x(2,j))
 
@@ -3770,11 +3801,11 @@ end subroutine
                        w = factor * ( (1-q/2)**4 *(1+2*q) )
                        parts%dgu(1,k) = -(w + parts%w(k))/2 * dx 
                        
-                  else
+!                  else
 !1                      parts%dgu(1,k) = parts%w(k) * (parts%x(1,i) - parts%x(1,j))
 !1                      parts%dgu(2,k) = parts%w(k) * (parts%x(2,i) - parts%x(2,j))
-!2                       parts%dgu(1,k) = parts%w(k) * parts%hsml(i)/2
-!2                       parts%dgu(2,k) = parts%w(k) * parts%hsml(i)/2 
+!2                       parts%dgu(1,k) = -parts%w(k) * dx/2
+!2                       parts%dgu(2,k) = -parts%w(k) * dx/2 
 !3                      parts%dgu(1,k) = parts%dwdx(1,k) * (parts%x(1,i) - parts%x(1,j))
 !3                       parts%dgu(2,k) = parts%dwdx(2,k) * (parts%x(2,i) - parts%x(2,j))
 
@@ -3785,12 +3816,12 @@ end subroutine
 !5                         parts%dgu(1,k) = -parts%w(k) * dx/2
 !5                         parts%dgu(2,k) = -parts%w(k) * dx/2
 
-                       rr = sqrt((parts%x(1,j) - parts%x(1,i))**2 + (parts%x(2,j) - (parts%x(2,i) + dx))**2)
-                       q = rr/hsml
-                       w = factor * ( (1-q/2)**4 *(1+2*q) )
-                       parts%dgu(1,k) = -(w + parts%w(k))/2 * dx 
+!                       rr = sqrt((parts%x(1,j) - parts%x(1,i))**2 + (parts%x(2,j) - (parts%x(2,i) + dx))**2)
+!                       q = rr/hsml
+!                       w = factor * ( (1-q/2)**4 *(1+2*q) )
+!                       parts%dgu(1,k) = -(w + parts%w(k))/2 * dx 
                        
-                  endif
+!                  endif
               endif
           endif
       enddo
@@ -4035,19 +4066,19 @@ end subroutine
 !------get rhos
         do i=parts%ntotal +1,parts%ntotal + parts%nvirt
 !           write(*,*)'i=',i
-           if(i==1801)then
-               parts%rhos%r(i) = (parts%rho%r(i)+parts%rho%r(1891))/2.0d0
-               parts%mons%x%r(i) = (parts%mone%x%r(i) + parts%mone%x%r(1891))/2.0d0
-               parts%mons%y%r(i) = (parts%mone%y%r(i) + parts%mone%y%r(1891))/2.0d0
-           elseif(1802<=i<=1890)then
-               parts%rhos%r(i) = (parts%rho%r(i) + parts%rho%r(i-1))/2.0d0
-               parts%mons%x%r(i) = (parts%mone%x%r(i) + parts%mone%x%r(i-1))/2.0d0
-               parts%mons%y%r(i) = (parts%mone%y%r(i) + parts%mone%y%r(i-1))/2.0d0
-           elseif(i>=1891)then
+!           if(i==1801)then
+!               parts%rhos%r(i) = (parts%rho%r(i)+parts%rho%r(1891))/2.0d0
+!               parts%mons%x%r(i) = (parts%mone%x%r(i) + parts%mone%x%r(1891))/2.0d0
+!               parts%mons%y%r(i) = (parts%mone%y%r(i) + parts%mone%y%r(1891))/2.0d0
+!           elseif(1802<=i<=1890)then
+!               parts%rhos%r(i) = (parts%rho%r(i) + parts%rho%r(i-1))/2.0d0
+!               parts%mons%x%r(i) = (parts%mone%x%r(i) + parts%mone%x%r(i-1))/2.0d0
+!               parts%mons%y%r(i) = (parts%mone%y%r(i) + parts%mone%y%r(i-1))/2.0d0
+!           elseif(i>=1891)then
                parts%rhos%r(i) = (parts%rho%r(i) + parts%rho%r(i+1))/2.0d0
                parts%mons%x%r(i) = (parts%mone%x%r(i) + parts%mone%x%r(i+1))/2.0d0
                parts%mons%y%r(i) = (parts%mone%y%r(i) + parts%mone%y%r(i+1))/2.0d0
-           endif
+!           endif
         enddo
 
         do i=parts%ntotal +1,parts%ntotal + parts%nvirt
@@ -4089,9 +4120,10 @@ end subroutine
         
         
         do i=parts%ntotal +1,parts%ntotal + parts%nvirt
-          if(i==1801) parts%ps%r(i) = (parts%p%r(i)+parts%p%r(1891))/2.0d0*parts%rhos%r(i)
-          if(1802<=i<=1890) parts%ps%r(i) = (parts%p%r(i) + parts%p%r(i-1))/2.0d0*parts%rhos%r(i)
-          if(i>=1891) parts%ps%r(i) = (parts%p%r(i) + parts%p%r(i+1))/2.0d0*parts%rhos%r(i)
+!          if(i==1801) parts%ps%r(i) = (parts%p%r(i)+parts%p%r(1891))/2.0d0*parts%rhos%r(i)
+!          if(1802<=i<=1890) parts%ps%r(i) = (parts%p%r(i) + parts%p%r(i-1))/2.0d0*parts%rhos%r(i)                          
+!          if(i>=1891)
+          parts%ps%r(i) = (parts%p%r(i) + parts%p%r(i+1))/2.0d0*parts%rhos%r(i)             !这个地方也是需要注意的。
         enddo
         
         do i=parts%ntotal +1,parts%ntotal + parts%nvirt
