@@ -1,6 +1,47 @@
+!----------------------------
+    module m_dao
+!----------------------------
+implicit none
+
+type dao
+  contains
+    procedure :: get_size=>get_total_particles_number     
+    procedure :: get_maxn=>get_maximum_particles_number
+    procedure :: get_dim=>get_dimension
+endtype
+private :: get_total_particles_number, get_maximum_particles_number, &
+           get_dimension
+contains
+!-----------------------------------------------------------        
+   function get_total_particles_number(this) result(ntotal)
+!-----------------------------------------------------------           
+   implicit none
+   class(dao) this
+   integer ntotal
+   ntotal = 0
+   end function
+!-----------------------------------------------------------        
+   function get_maximum_particles_number(this) result(maxn)
+!-----------------------------------------------------------           
+   implicit none
+   class(dao) this
+   integer maxn
+   maxn = 0
+   end function
+!-----------------------------------------------------------        
+   function get_dimension(this) result(dim)
+!-----------------------------------------------------------           
+   implicit none
+   class(dao) this
+   integer dim
+   dim = 0
+   end function   
+end module
+
 !---------------------------
     module m_array
 !---------------------------
+use m_dao
 implicit none
 integer, parameter :: dp = kind(0.d0)
 
@@ -9,13 +50,22 @@ type p2r
 end type 
 
 type array
+   character(len=16) :: name = ''
    integer :: ndim1
+   integer :: rank = 0
    real(dp), pointer, dimension(:) :: r  => null()
    type(array), pointer :: x => null(), y => null(), z => null()
    type(array), pointer :: xy => null(), xz => null(), yz => null()
    type(array), pointer, dimension(:) :: v => null()
+   class(dao), pointer :: parts => null()
    contains
        procedure :: cmpt
+       procedure :: get_dim
+       procedure :: get_size
+       procedure :: get_maxn
+       procedure :: max_alloc
+       procedure :: alloc
+       procedure :: set
        !procedure :: p2cmpt
        final :: array_final
 end type
@@ -63,6 +113,115 @@ contains
 !=======
 
 !--------------------------------------------
+    function get_dim(a) result(dim)
+!--------------------------------------------            
+implicit none
+class(array) a
+integer dim
+dim = a%parts%get_dim()
+return
+end function
+
+!--------------------------------------------
+    function get_size(a) result(size)
+!--------------------------------------------            
+implicit none
+class(array) a
+integer size
+if(.not.associated(a%parts))then
+    write(*,*) a%name,  ' :parts not associated!'
+endif    
+size = a%parts%get_size()
+return
+end function
+
+!--------------------------------------------
+    function get_maxn(a) result(maxn)
+!--------------------------------------------            
+implicit none
+class(array) a
+integer maxn
+maxn = a%parts%get_maxn()
+return
+end function
+
+!--------------------------------------------
+    subroutine set(this,name,rank,parts)
+!--------------------------------------------
+implicit none
+class(array) this
+class(dao), target, optional :: parts
+integer, optional :: rank
+character(len=*), optional :: name
+
+if(present(rank)) this%rank = rank
+if(present(parts)) this%parts => parts
+if(present(name)) this%name = name
+end subroutine
+
+!--------------------------------------------
+     subroutine max_alloc(this)
+!--------------------------------------------
+implicit none
+class(array) this
+integer dimrank, maxn
+dimrank = this%get_dim()**this%rank
+maxn = this%get_maxn()
+
+if(dimrank==1)then
+  allocate(this%r(maxn))
+elseif(dimrank==2)then
+  allocate(this%x,this%y)
+  allocate(this%x%r(maxn),this%y%r(maxn))
+  this%x%parts=>this%parts
+  this%y%parts=>this%parts
+  this%x%name = trim(this%name)//'.x'
+  this%y%name = trim(this%name)//'.y'
+elseif(dimrank==4)then
+  allocate(this%x,this%y,this%xy)
+  allocate(this%x%r(maxn),this%y%r(maxn),this%xy%r(maxn))
+  this%x%parts=>this%parts
+  this%y%parts=>this%parts
+  this%xy%parts=>this%parts  
+  this%x%name = trim(this%name)//'.x'
+  this%y%name = trim(this%name)//'.y'
+  this%xy%name = trim(this%name)//'.xy'
+endif  
+
+end subroutine
+
+!--------------------------------------------
+     subroutine alloc(this)
+!--------------------------------------------
+implicit none
+class(array) this
+integer dimrank, size
+dimrank = this%get_dim()**this%rank
+size = this%get_size()
+
+if(dimrank==1)then
+  allocate(this%r(size))
+elseif(dimrank==2)then
+  allocate(this%x,this%y)
+  allocate(this%x%r(size),this%y%r(size))
+  this%x%parts=>this%parts
+  this%y%parts=>this%parts
+  this%x%name = trim(this%name)//'.x'
+  this%y%name = trim(this%name)//'.y'  
+elseif(dimrank==4)then
+  allocate(this%x,this%y,this%xy)
+  allocate(this%x%r(size),this%y%r(size),this%xy%r(size))
+  this%x%parts=>this%parts
+  this%y%parts=>this%parts
+  this%xy%parts=>this%parts    
+  this%x%name = trim(this%name)//'.x'
+  this%y%name = trim(this%name)//'.y'
+  this%xy%name = trim(this%name)//'.xy'  
+endif  
+
+end subroutine
+
+!--------------------------------------------
     subroutine array_equal_array(a,b)
 !--------------------------------------------        
 implicit none
@@ -70,9 +229,11 @@ type(array),intent(INOUT) :: a
 type(array),intent(IN)    :: b
 integer ndim1,i
 
-if(a%ndim1/=b%ndim1)stop 'Error: inequal length arrays!'
+!if(a%ndim1/=b%ndim1)stop 'Error: inequal length arrays!'
+if(.not.associated(a%parts,b%parts))stop 'Error: inequal length arrays!'
 
-ndim1 = a%ndim1
+!ndim1 = a%ndim1
+ndim1 = a%get_size()
 
 !$omp parallel do
 do i = 1, ndim1
@@ -91,8 +252,9 @@ type(array),intent(INOUT) :: a
 real(dp),intent(IN)    :: b
 integer ndim1,i
 
-ndim1 = a%ndim1
+!ndim1 = a%ndim1
 !if(ndim1==0) stop 'array_equal_real: ndim1=0'  !!!
+ndim1 = a%get_size()
 
 !$omp parallel do
 do i = 1, ndim1
@@ -111,8 +273,9 @@ type(array),intent(INOUT) :: a
 real,intent(IN)    :: b
 integer ndim1,i
 
-ndim1 = a%ndim1
+!ndim1 = a%ndim1
 !if(ndim1==0) stop 'array_equal_real: ndim1=0' !!!
+ndim1 = a%get_size()
 
 !$omp parallel do
 do i = 1, ndim1
@@ -169,9 +332,11 @@ type(array), intent(in) :: a, b
 type(array), allocatable :: c
 integer ndim1,i
 
-if(a%ndim1/=b%ndim1)stop 'Cannot add arrays!'
+!if(a%ndim1/=b%ndim1)stop 'Cannot add arrays!'
+if(.not.associated(a%parts,b%parts)) stop 'Cannot add arrays!'
 
-ndim1 = a%ndim1
+!ndim1 = a%ndim1
+ndim1 = a%get_size()
 allocate(c)
 allocate(c%r(ndim1))
 c%ndim1 = ndim1
@@ -181,7 +346,7 @@ do i = 1, ndim1
    c%r(i) = a%r(i) + b%r(i)
 enddo
 !$omp end parallel do
-
+c%parts => a%parts
 end function
 
 !--------------------------------------------
@@ -193,9 +358,11 @@ real(dp), intent(in) :: b
 type(array), allocatable :: c
 integer ndim1,i
 
-if(a%ndim1==0)stop 'array_add_double_real: ndim1=0!'
+!if(a%ndim1==0)stop 'array_add_double_real: ndim1=0!'
+if(.not.associated(a%parts)) stop 'array_add_double_real: parts not associated!'
 
-ndim1 = a%ndim1
+!ndim1 = a%ndim1
+ndim1 = a%get_size()
 allocate(c)
 allocate(c%r(ndim1))
 c%ndim1 = ndim1
@@ -205,7 +372,7 @@ do i = 1, ndim1
    c%r(i) = a%r(i) + b
 enddo
 !$omp end parallel do
-
+c%parts => a%parts
 end function
     
 !--------------------------------------------
@@ -217,9 +384,10 @@ real(dp), intent(in) :: b
 type(array), allocatable :: c
 integer ndim1,i
 
-if(a%ndim1==0)stop 'double_real_add_array: ndim1=0!'
+!if(a%ndim1==0)stop 'double_real_add_array: ndim1=0!'
 
-ndim1 = a%ndim1
+!ndim1 = a%ndim1
+ndim1 = a%get_size()
 allocate(c)
 allocate(c%r(ndim1))
 c%ndim1 = ndim1
@@ -229,7 +397,7 @@ do i = 1, ndim1
    c%r(i) = a%r(i) + b
 enddo
 !$omp end parallel do
-
+c%parts => a%parts
 end function    
     
 !--------------------------------------------
@@ -240,9 +408,11 @@ type(array), intent(in) :: a, b
 type(array), allocatable:: c
 integer ndim1,i
 
-if(a%ndim1/=b%ndim1)stop 'Cannot substract arrays!'
+!if(a%ndim1/=b%ndim1)stop 'Cannot substract arrays!'
+if(.not.associated(a%parts,b%parts))stop 'Cannot substract arrays!'
 
-ndim1 = a%ndim1
+!ndim1 = a%ndim1
+ndim1 = a%get_size()
 allocate(c)
 allocate(c%r(ndim1))
 c%ndim1 = ndim1
@@ -252,7 +422,7 @@ do i = 1, ndim1
    c%r(i) = a%r(i) - b%r(i)
 enddo
 !$omp end parallel do
-
+c%parts => a%parts
 end function
 
 !--------------------------------------------
@@ -266,7 +436,8 @@ integer ndim1,i
 
 !if(a%ndim1/=b%ndim1)stop 'Cannot substract arrays!'
 
-ndim1 = a%ndim1
+!ndim1 = a%ndim1
+ndim1 = a%get_size()
 allocate(c)
 allocate(c%r(ndim1))
 c%ndim1 = ndim1
@@ -276,7 +447,7 @@ do i = 1, ndim1
    c%r(i) = a%r(i) - b
 enddo
 !$omp end parallel do
-
+c%parts => a%parts
 end function
 
 !--------------------------------------------
@@ -290,7 +461,8 @@ integer ndim1,i
 
 !if(a%ndim1/=b%ndim1)stop 'Cannot substract arrays!'
 
-ndim1 = a%ndim1
+!ndim1 = a%ndim1
+ndim1 = a%get_size()
 allocate(c)
 allocate(c%r(ndim1))
 c%ndim1 = ndim1
@@ -300,7 +472,7 @@ do i = 1, ndim1
    c%r(i) = a%r(i) - b
 enddo
 !$omp end parallel do
-
+c%parts => a%parts
 end function
 
 !--------------------------------------------
@@ -311,9 +483,10 @@ type(array), intent(in) :: a
 type(array), allocatable:: c
 integer ndim1,i
 
-if(a%ndim1==0)stop 'array_minus: ndim1=0!'
+!if(a%ndim1==0)stop 'array_minus: ndim1=0!'
 
-ndim1 = a%ndim1
+!ndim1 = a%ndim1
+ndim1 = a%get_size()
 allocate(c)
 allocate(c%r(ndim1))
 c%ndim1 = ndim1
@@ -323,7 +496,7 @@ do i = 1, ndim1
    c%r(i) = -a%r(i)
 enddo
 !$omp end parallel do
-
+c%parts => a%parts
 end function
 
 !--------------------------------------------
@@ -334,9 +507,11 @@ type(array), intent(in) :: a,b
 type(array), allocatable:: c
 integer ndim1,i
 
-if(a%ndim1/=b%ndim1)stop 'Cannot multiply arrays!'
+!if(a%ndim1/=b%ndim1)stop 'Cannot multiply arrays!'
+if(.not.associated(a%parts,b%parts))stop 'Cannot multiply arrays!'
 
-ndim1 = a%ndim1
+!ndim1 = a%ndim1
+ndim1 = a%get_size()
 allocate(c)
 allocate(c%r(ndim1))
 c%ndim1 = ndim1
@@ -346,7 +521,7 @@ do i = 1, ndim1
    c%r(i) = a%r(i)*b%r(i)
 enddo
 !$omp end parallel do
-
+c%parts => a%parts
 end function
 
 !--------------------------------------------
@@ -358,9 +533,10 @@ real, intent(in) :: r
 type(array), allocatable:: c
 integer ndim1,i
 
-if(a%ndim1==0)stop 'array_mul_real: ndim1=0!'
+!if(a%ndim1==0)stop 'array_mul_real: ndim1=0!'
 
-ndim1 = a%ndim1
+!ndim1 = a%ndim1
+ndim1 = a%get_size()
 allocate(c)
 allocate(c%r(ndim1))
 c%ndim1 = ndim1
@@ -370,7 +546,7 @@ do i = 1, ndim1
    c%r(i) = r*a%r(i)
 enddo
 !$omp end parallel do
-
+c%parts => a%parts
 end function
 
 !--------------------------------------------------
@@ -382,8 +558,9 @@ real(dp), intent(in) :: r
 type(array), allocatable :: c
 integer ndim1,i
 
-if(a%ndim1==0)stop 'array_mul_double_real: ndim1=0!'
-ndim1 = a%ndim1
+!if(a%ndim1==0)stop 'array_mul_double_real: ndim1=0!'
+!ndim1 = a%ndim1
+ndim1 = a%get_size()
 allocate(c)
 allocate(c%r(ndim1))
 c%ndim1 = ndim1
@@ -393,7 +570,7 @@ do i = 1, ndim1
    c%r(i) = r*a%r(i)
 enddo
 !$omp end parallel do
-
+c%parts => a%parts
 end function
 
 !--------------------------------------------------
@@ -405,8 +582,9 @@ real(dp), intent(in) :: r
 type(array), allocatable :: c
 integer ndim1,i
 
-if(a%ndim1==0)stop 'double_real_mul_array: ndim1=0!'
-ndim1 = a%ndim1
+!if(a%ndim1==0)stop 'double_real_mul_array: ndim1=0!'
+!ndim1 = a%ndim1
+ndim1 = a%get_size()
 allocate(c)
 allocate(c%r(ndim1))
 c%ndim1 = ndim1
@@ -416,7 +594,7 @@ do i = 1, ndim1
    c%r(i) = r*a%r(i)
 enddo
 !$omp end parallel do
-
+c%parts => a%parts
 end function    
 
 !--------------------------------------------------
@@ -428,8 +606,9 @@ real, intent(in) :: r
 type(array), allocatable :: c
 integer ndim1,i
 
-if(a%ndim1==0)stop 'real_mul_array: ndim1=0!'
-ndim1 = a%ndim1
+!if(a%ndim1==0)stop 'real_mul_array: ndim1=0!'
+!ndim1 = a%ndim1
+ndim1 = a%get_size()
 allocate(c)
 allocate(c%r(ndim1))
 c%ndim1 = ndim1
@@ -439,7 +618,7 @@ do i = 1, ndim1
    c%r(i) = r*a%r(i)
 enddo
 !$omp end parallel do
-
+c%parts => a%parts
 end function    
     
 !--------------------------------------------
@@ -450,9 +629,11 @@ type(array), intent(in) :: a,b
 type(array), allocatable:: c
 integer ndim1,i
 
-if(a%ndim1/=b%ndim1)stop 'Cannot divide arrays!'
+!if(a%ndim1/=b%ndim1)stop 'Cannot divide arrays!'
+if(.not.associated(a%parts,b%parts))stop 'Cannot divide arrays!'
 
-ndim1 = a%ndim1
+!ndim1 = a%ndim1
+ndim1 = a%get_size()
 allocate(c)
 allocate(c%r(ndim1))
 c%ndim1 = ndim1
@@ -462,7 +643,7 @@ do i = 1, ndim1
    c%r(i) = a%r(i)/b%r(i)
 enddo
 !$omp end parallel do
-
+c%parts => a%parts
 end function
 
 
@@ -477,7 +658,8 @@ integer ndim1,i
 
 if(b==0)stop 'Cannot divide arrays! b=0'
 
-ndim1 = a%ndim1
+!ndim1 = a%ndim1
+ndim1 = a%get_size()
 allocate(c)
 allocate(c%r(ndim1))
 c%ndim1 = ndim1
@@ -487,7 +669,7 @@ do i = 1, ndim1
    c%r(i) = a%r(i)/b
 enddo
 !$omp end parallel do
-
+c%parts => a%parts
 end function
 
 !--------------------------------------------
@@ -501,7 +683,8 @@ integer ndim1,i
 
 if(b==0)stop 'Cannot divide arrays! b=0'
 
-ndim1 = a%ndim1
+!ndim1 = a%ndim1
+ndim1 = a%get_size()
 allocate(c)
 allocate(c%r(ndim1))
 c%ndim1 = ndim1
@@ -511,7 +694,7 @@ do i = 1, ndim1
    c%r(i) = a%r(i)/b
 enddo
 !$omp end parallel do
-
+c%parts => a%parts
 end function
 
 !--------------------------------------------
@@ -523,7 +706,8 @@ real, intent(in) :: b
 type(array), allocatable:: c
 integer ndim1,i
 
-ndim1 = a%ndim1
+!ndim1 = a%ndim1
+ndim1 = a%get_size()
 allocate(c)
 allocate(c%r(ndim1))
 c%ndim1 = ndim1
@@ -533,7 +717,7 @@ do i = 1, ndim1
    c%r(i) = a%r(i)**b
 enddo
 !$omp end parallel do
-
+c%parts => a%parts
 end function
 
 !--------------------------------------------
@@ -545,7 +729,8 @@ real(dp), intent(in) :: b
 type(array), allocatable:: c
 integer ndim1,i
 
-ndim1 = a%ndim1
+!ndim1 = a%ndim1
+ndim1 = a%get_size()
 allocate(c)
 allocate(c%r(ndim1))
 c%ndim1 = ndim1
@@ -555,7 +740,7 @@ do i = 1, ndim1
    c%r(i) = a%r(i)**b
 enddo
 !$omp end parallel do
-
+c%parts => a%parts
 end function
 
 end module

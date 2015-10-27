@@ -391,8 +391,6 @@ max_interaction = parts%max_interaction
 call allocate_particles(parts)
 
 allocate(parts%zone(maxn)); parts%zone = 0
-!allocate(parts%real_zone(parts%max_zone)); parts%real_zone = 0
-!allocate(parts%virtual_zone(parts%max_zone)); parts%virtual_zone = 0
 
 allocate(parts%w(max_interaction));             parts%w   = 0.d0
 allocate(parts%dwdx(dim,max_interaction));      parts%dwdx= 0.d0
@@ -408,19 +406,21 @@ allocate(parts%celldata(maxn)); parts%celldata = 0
 call allocate_particles_fields(parts)
 
 ! Working arrays outside particles type
-allocate(parts%tab)
-allocate(parts%tab%x, parts%tab%y, parts%tab%xy)
-allocate(parts%tab%x%r(maxn),parts%tab%y%r(maxn),parts%tab%xy%r(maxn))
-parts%tab%x = 0.d0; parts%tab%y = 0.d0; parts%tab%xy = 0.d0
+allocate(parts%tab); call parts%tab%set(rank=2,parts=parts,name = 'tab')
+!allocate(parts%tab%x, parts%tab%y, parts%tab%xy)
+!allocate(parts%tab%x%r(maxn),parts%tab%y%r(maxn),parts%tab%xy%r(maxn))
+call parts%tab%max_alloc
+parts%tab%x%r = 0.d0; parts%tab%y%r = 0.d0; parts%tab%xy%r = 0.d0
 
 !parts%tab => tab
 
 if(trim(parts%imaterial)=='water')then
 !   allocate(parts%sxx,parts%sxy,parts%syy)
-    allocate(parts%str);allocate(parts%str%x,parts%str%xy,parts%str%y)
-    parts%str%x%r => parts%tab%x%r
-    parts%str%y%r => parts%tab%y%r
-    parts%str%xy%r => parts%tab%xy%r
+!    allocate(parts%str);allocate(parts%str%x,parts%str%xy,parts%str%y)
+!    parts%str%x%r => parts%tab%x%r
+!    parts%str%y%r => parts%tab%y%r
+!    parts%str%xy%r => parts%tab%xy%r
+   parts%str => parts%tab
 elseif(trim(parts%imaterial)=='soil')then
    parts%wxy => parts%tab%xy
 endif   
@@ -435,6 +435,7 @@ if(trim(parts%imaterial)=='soil')  parts%material => SiO2
 if(.not.associated(parts%numeric))allocate(parts%numeric)
 
 call parts%get_num_threads
+allocate(parts%niac_start(parts%nthreads),parts%niac_end(parts%nthreads))
 
 !--------------- Soil particles --------------------------------
 
@@ -447,8 +448,6 @@ soil%max_interaction = max_interaction
 call allocate_particles(soil)
 
 allocate(soil%zone(maxn)); soil%zone = 0
-!allocate(soil%real_zone(soil%max_zone)); soil%real_zone = 0
-!allocate(soil%virtual_zone(soil%max_zone)); soil%virtual_zone = 0
 
 soil%w      => parts%w
 soil%dwdx   => parts%dwdx
@@ -464,8 +463,12 @@ allocate(soil%celldata(maxn)); soil%celldata = 0
 ! Fields variables
 call allocate_particles_fields(soil)
 
-soil%tab => parts%tab
-soil%wxy => parts%tab%xy
+!soil%tab => parts%tab
+allocate(soil%tab); call soil%tab%set(rank=2, parts=soil, name='tab')
+call soil%tab%max_alloc
+soil%tab%x%r = 0.d0; soil%tab%y%r = 0.d0; soil%tab%xy%r = 0.d0
+
+soil%wxy => soil%tab%xy
 
 soil%material => SiO2
 soil%numeric => parts%numeric
@@ -474,6 +477,7 @@ soil%x_maxgeom = parts%x_maxgeom; soil%x_mingeom = parts%x_mingeom
 soil%y_maxgeom = parts%y_maxgeom; soil%y_mingeom = parts%y_mingeom
 
 call soil%get_num_threads
+allocate(soil%niac_start(soil%nthreads),soil%niac_end(soil%nthreads))
 
 return
 end subroutine
@@ -494,10 +498,15 @@ if(.not.associated(parts%itype)) allocate(parts%itype(maxn))
 if(.not.associated(parts%x))     allocate(parts%x(dim,maxn))
 !if(.not.associated(parts%vol))   allocate(parts%vol(maxn))
 if(.not.associated(parts%vol))then
-    allocate(parts%vol); allocate(parts%vol%r(maxn))
+    allocate(parts%vol); 
+    !allocate(parts%vol%r(maxn))
+    call parts%vol%set(rank=0,parts=parts,name='vol')
+    call parts%vol%max_alloc
 endif
 if(.not.associated(parts%mass)) then
-    allocate(parts%mass); allocate(parts%mass%r(maxn))
+    allocate(parts%mass); call parts%mass%set(rank=0,parts=parts,name='mass')
+    !allocate(parts%mass%r(maxn))
+    call parts%mass%max_alloc
 endif
 if(.not.associated(parts%hsml))  allocate(parts%hsml(maxn))
 
@@ -517,79 +526,110 @@ integer dim,maxn
 dim  = parts%dim
 maxn = parts%maxn
 
-!allocate(parts%vx(dim,maxn));  parts%vx  = 0.d0
-allocate(parts%vx); allocate(parts%vx%x,parts%vx%y)
-allocate(parts%vx%x%r(maxn), parts%vx%y%r(maxn))
+allocate(parts%vx); call parts%vx%set(rank=1,parts=parts,name='vx')
+call parts%vx%max_alloc
 parts%vx%x%r = 0.d0; parts%vx%y%r = 0.d0
-allocate(parts%rho); allocate(parts%rho%r(maxn)); parts%rho%r = 0.d0
-allocate(parts%p); allocate(parts%p%r(maxn)); parts%p%r = 0.d0
-!allocate(parts%u(maxn));       parts%u   = 0.d0
-allocate(parts%c); allocate(parts%c%r(maxn))
-parts%c   = 0.d0
-!allocate(parts%eta(maxn));     parts%eta = 0.d0 
+allocate(parts%rho); call parts%rho%set(rank=0,parts=parts,name='rho')
+call parts%rho%max_alloc
+parts%rho%r = 0.d0
+allocate(parts%p); call parts%p%set(rank=0,parts=parts,name='p')
+call parts%p%max_alloc
+parts%p%r = 0.d0
+allocate(parts%c); call parts%c%set(rank=0,parts=parts,name='c')
+call parts%c%max_alloc
+parts%c%r = 0.d0
 
 ! Old value
-allocate(parts%v_min,parts%v_min%x,parts%v_min%y)
-allocate(parts%v_min%x%r(maxn),parts%v_min%y%r(maxn))
-parts%v_min%x = 0.d0; parts%v_min%y = 0.d0
-allocate(parts%rho_min); allocate(parts%rho_min%r(maxn));  parts%rho_min = 0.d0
-!allocate(parts%u_min); allocate(parts%u_min%r(maxn));  parts%u_min   = 0.d0
+allocate(parts%v_min); call parts%v_min%set(rank=1,parts=parts,name='v_min')
+call parts%v_min%max_alloc
+parts%v_min%x%r = 0.d0; parts%v_min%y%r = 0.d0
+
+allocate(parts%rho_min); call parts%rho_min%set(rank=0,parts=parts,name='rho_min')
+call parts%rho_min%max_alloc
+parts%rho_min%r = 0.d0
 
 ! Accelerations
-allocate(parts%drho);allocate(parts%drho%r(maxn));    parts%drho= 0.d0
-allocate(parts%dvx); allocate(parts%dvx%x,parts%dvx%y)
-allocate(parts%dvx%x%r(maxn)); parts%dvx%x = 0.d0  
-allocate(parts%dvx%y%r(maxn)); parts%dvx%y = 0.d0  
-!allocate(parts%du(maxn));      parts%du  = 0.d0 
-allocate(parts%av); allocate(parts%av%x,parts%av%y)
-allocate(parts%av%x%r(maxn)); parts%av%x  = 0.d0
-allocate(parts%av%y%r(maxn)); parts%av%y  = 0.d0
+allocate(parts%drho);call parts%drho%set(rank=0,parts=parts,name='drho')
+call parts%drho%max_alloc; parts%drho%r = 0.d0
+allocate(parts%dvx); call parts%dvx%set(rank=1,parts=parts,name='dvx')
+call parts%dvx%max_alloc
+parts%dvx%x%r = 0.d0; parts%dvx%y%r = 0.d0  
+allocate(parts%av); call parts%av%set(rank=1,parts=parts,name='av')
+call parts%av%max_alloc
+parts%av%x%r  = 0.d0; parts%av%y%r  = 0.d0
 
 
 ! Volume Fraction
-allocate(parts%vof); allocate(parts%vof%r(maxn))
-parts%vof%r = 0.d0
+allocate(parts%vof); call parts%vof%set(rank=0,parts=parts,name='vof')
+call parts%vof%max_alloc; parts%vof%r = 0.d0
 
 if(trim(parts%imaterial)=='water')then
-   allocate(parts%vof2); allocate(parts%vof2%r(maxn))          ! phi_f = 1- phi_s
-   parts%vof2 = 0.d0
-   allocate(parts%dvof); allocate(parts%dvof%r(maxn))
-   parts%dvof = 0.d0
-   allocate(parts%vof_min); allocate(parts%vof_min%r(maxn))
-   parts%vof_min = 0.d0
+   ! phi_f = 1- phi_s
+   allocate(parts%vof2); call parts%vof2%set(rank=0,parts=parts,name='vof2')
+   call parts%vof2%max_alloc; parts%vof2%r = 0.d0
+   allocate(parts%dvof); call parts%dvof%set(rank=0,parts=parts,name='dvof')
+   call parts%dvof%max_alloc; parts%dvof%r = 0.d0   
+   allocate(parts%vof_min)
+   call parts%vof_min%set(rank=0,parts=parts,name='vof_min')
+   call parts%vof_min%max_alloc; parts%vof_min%r = 0.d0   
 endif
 
 if(trim(parts%imaterial)=='soil')then
     allocate(parts%str)
-    allocate(parts%str%x,parts%str%xy,parts%str%y)
+!    allocate(parts%str%x,parts%str%xy,parts%str%y)
 !   allocate(parts%sxx,parts%sxy,parts%syy)
-   allocate(parts%str%x%r(maxn), parts%str%y%r(maxn), parts%str%xy%r(maxn))
-   parts%str%x = 0.d0; parts%str%xy = 0.d0; parts%str%y = 0.d0
+!   allocate(parts%str%x%r(maxn), parts%str%y%r(maxn), parts%str%xy%r(maxn))
+   call parts%str%set(rank=2,parts=parts,name='str'); call parts%str%max_alloc
+   parts%str%x%r = 0.d0; parts%str%xy%r = 0.d0; parts%str%y%r = 0.d0   !!! %r
+
    allocate(parts%str_min)
-   allocate(parts%str_min%x,parts%str_min%y,parts%str_min%xy)
-   allocate(parts%str_min%x%r(maxn),parts%str_min%y%r(maxn),parts%str_min%xy%r(maxn))
-   allocate(parts%p_min); allocate(parts%p_min%r(maxn))
-   allocate(parts%vcc); allocate(parts%vcc%r(maxn))    
+   !allocate(parts%str_min%x,parts%str_min%y,parts%str_min%xy)
+   !allocate(parts%str_min%x%r(maxn),parts%str_min%y%r(maxn),parts%str_min%xy%r(maxn))
+   call parts%str_min%set(rank=2,parts=parts,name='str_min')
+   call parts%str_min%max_alloc
+   parts%str_min%x%r = 0.d0; parts%str_min%xy%r = 0.d0; parts%str_min%y%r = 0.d0 !!!%r
+
+   allocate(parts%p_min); call parts%p_min%set(rank=0,parts=parts,name='p_min')
+   call parts%p_min%max_alloc
+
+   allocate(parts%vcc); call parts%vcc%set(rank=0,parts=parts,name='vcc')
+   call parts%vcc%max_alloc  
    !allocate(parts%szz(maxn))    !!! Intel Fortran Compiler is shit!!!
-   parts%str_min%x = 0.d0; parts%str_min%xy = 0.d0; parts%str_min%y = 0.d0
-   parts%p_min = 0.d0
-   parts%vcc = 0.d0
-   allocate(parts%dstr); allocate(parts%dstr%x, parts%dstr%y, parts%dstr%xy)
-   allocate(parts%dstr%x%r(maxn),parts%dstr%y%r(maxn),parts%dstr%xy%r(maxn))
-   parts%dstr%x = 0.d0; parts%dstr%xy = 0.d0; parts%dstr%y = 0.d0
-   allocate(parts%dp); allocate(parts%dp%r(maxn))
-   parts%dp%r(maxn) = 0.d0
+
+   parts%p_min%r = 0.d0
+   parts%vcc%r = 0.d0
+
+   allocate(parts%dstr)
+   !allocate(parts%dstr%x, parts%dstr%y, parts%dstr%xy)
+   !allocate(parts%dstr%x%r(maxn),parts%dstr%y%r(maxn),parts%dstr%xy%r(maxn))
+   call parts%dstr%set(rank=2,parts=parts,name='dstr'); call parts%dstr%max_alloc
+   parts%dstr%x%r = 0.d0; parts%dstr%xy%r = 0.d0; parts%dstr%y%r = 0.d0  !!!%r
+
+   allocate(parts%dp); call parts%dp%set(rank=0,parts=parts,name='dp')
+   call parts%dp%max_alloc; parts%dp%r = 0.d0 !!!%r
+
 ! For return mapping algorithm
-   allocate(parts%dstr2,parts%dstr2%x,parts%dstr2%y,parts%dstr2%xy)
-   allocate(parts%dstr2%x%r(maxn),parts%dstr2%y%r(maxn),parts%dstr2%xy%r(maxn))
-   parts%dstr2%x = 0.d0; parts%dstr2%xy = 0.d0; parts%dstr2%y = 0.d0
-   allocate(parts%dp2); allocate(parts%dp2%r(maxn))
-   parts%dp2%r(maxn) = 0.d0
+   allocate(parts%dstr2)
+   call parts%dstr2%set(rank=2,parts=parts,name='dstr2'); call parts%dstr2%max_alloc
+   !,parts%dstr2%x,parts%dstr2%y,parts%dstr2%xy)
+   !allocate(parts%dstr2%x%r(maxn),parts%dstr2%y%r(maxn),parts%dstr2%xy%r(maxn))
+   parts%dstr2%x%r = 0.d0; parts%dstr2%xy%r = 0.d0; parts%dstr2%y%r = 0.d0 !!!%r
+   allocate(parts%dp2); call parts%dp2%set(rank=0,parts=parts,name='dp2')
+   !allocate(parts%dp2%r(maxn))
+   call parts%dp2%max_alloc
+   parts%dp2%r = 0.d0
 
    allocate(parts%fail(maxn)); parts%fail = 0
 
-   allocate(parts%epsilon_p); allocate(parts%epsilon_p%r(maxn))
-   parts%epsilon_p = 0.d0
+   allocate(parts%epsilon_p)
+   call parts%epsilon_p%set(rank=0,parts=parts,name='ep')
+   !allocate(parts%epsilon_p%r(maxn))
+   call parts%epsilon_p%max_alloc
+   parts%epsilon_p%r = 0.d0  !!!%r
+   
+   allocate(parts%spp)   !!! VOF
+   call parts%spp%set(rank=0,parts=parts,name='spp'); call parts%spp%max_alloc
+   parts%spp%r = 0.d0
 endif
 
 !allocate(parts%drhodx); allocate(parts%drhodx%r(maxn))
@@ -608,7 +648,7 @@ end subroutine
       integer :: i, j, k, d, ntotal, it
       type(particles), pointer :: pl
       
-      call parts%setup_ndim1; call soil%setup_ndim1
+      !call parts%setup_ndim1; call soil%setup_ndim1
 
       do it = 1, parts%maxtimestep   
   
@@ -623,7 +663,8 @@ end subroutine
                    parts%itimestep,'     current time=', real(parts%time+parts%dt)
          write(*,*)'______________________________________________'
         endif  
-  
+        
+
 !     If not first time step, then update thermal energy, density and 
 !     velocity half a time step  
 
@@ -644,6 +685,7 @@ end subroutine
 
 !---  Definition of variables out of the function vector:    
 
+!        call single_step_VOF
         call single_step
 
 !****************************************************************        
@@ -705,7 +747,9 @@ end subroutine
 
 !--------------------Velocity Inlet-----------------------
 
-
+!        call vof_sph
+!        cycle
+  
         parts%time = parts%time + parts%dt
 
 !	if (itimestep>=save_step_from.and.mod(itimestep,save_step).eq.0) then
@@ -1329,7 +1373,9 @@ do it = 1, parts%maxtimestep
 
       do i=1,pl%ntotal +pl%nvirt  ! origionally pl%ntotal            
          if(pl%itype(i)<0)cycle
-         vxi = pl%vx%cmpt(i); dvxi = pl%dvx%cmpt(i); v_mini = pl%vx%cmpt(i)
+         vxi = pl%vx%cmpt(i); dvxi = pl%dvx%cmpt(i)
+         !v_mini = pl%vx%cmpt(i)
+         v_mini = pl%v_min%cmpt(i)
          avi = pl%av%cmpt(i)
          do d = 1, pl%dim                   
             vxi(d)%p = v_mini(d)%p + pl%dt * dvxi(d)%p   &
@@ -1385,6 +1431,7 @@ implicit none
 
 integer  nphase, iphase
 type(particles), pointer :: pl
+type(material), pointer :: mat
 logical :: dbg = .false.
 integer i, ntotal
                  
@@ -1457,8 +1504,8 @@ endif
 !---  Internal forces:
 
 !call shear_strain_rate(pl)
-pl%tab%x%ndim1 = pl%ntotal+pl%nvirt
-pl%tab%xy%ndim1 = pl%tab%x%ndim1; pl%tab%y%ndim1 = pl%tab%x%ndim1
+!pl%tab%x%ndim1 = pl%ntotal+pl%nvirt
+!pl%tab%xy%ndim1 = pl%tab%x%ndim1; pl%tab%y%ndim1 = pl%tab%x%ndim1
 !write(*,*) pl%tab%x%ndim1,pl%vx%x%ndim1
 pl%tab%x = 2.d0/3.d0*(2.d0*pl%df4(pl%vx%x,'x')-pl%df4(pl%vx%y,'y'))
 pl%tab%xy = pl%df4(pl%vx%x,'y')+pl%df4(pl%vx%y,'x')
@@ -1488,8 +1535,14 @@ if(pl%imaterial=='water')then
    !if(pl%nthreads==1)then
 !   pl%dvx%x%r = -pl%vof%r*pl%df(pl%p%r,'x') + pl%df(pl%vof%r*pl%str%x%r,'x') + pl%df(pl%vof%r*pl%str%xy%r,'y')
 !   pl%dvx%y%r = -pl%vof%r*pl%df(pl%p%r,'y') + pl%df(pl%vof%r*pl%str%xy%r,'x') + pl%df(pl%vof%r*pl%str%y%r,'y')
-   pl%dvx%x = -pl%vof*pl%df(pl%p,'x') + pl%df(pl%vof*pl%str%x,'x') + pl%df(pl%vof*pl%str%xy,'y')
-   pl%dvx%y = -pl%vof*pl%df(pl%p,'y') + pl%df(pl%vof*pl%str%xy,'x') + pl%df(pl%vof*pl%str%y,'y')   
+
+!!! Replaced by Laplace
+!   pl%dvx%x = -pl%vof*pl%df(pl%p,'x') + pl%df(pl%vof*pl%str%x,'x') + pl%df(pl%vof*pl%str%xy,'y')
+!   pl%dvx%y = -pl%vof*pl%df(pl%p,'y') + pl%df(pl%vof*pl%str%xy,'x') + pl%df(pl%vof*pl%str%y,'y')   
+   mat => pl%material
+   pl%dvx%x = -pl%vof*pl%df(pl%p,'x') + pl%lap_omp(mat%viscosity,pl%vof*pl%vx%x)
+   pl%dvx%y = -pl%vof*pl%df(pl%p,'y') + pl%lap_omp(mat%viscosity,pl%vof*pl%vx%y)      
+
    !else
    !pl%dvx%x = -pl%vof*pl%df_omp(pl%p,'x') + pl%df_omp(pl%vof*pl%str%x,'x') + pl%df_omp(pl%vof*pl%str%xy,'y')
    !pl%dvx%y = -pl%vof*pl%df_omp(pl%p,'y') + pl%df_omp(pl%vof*pl%str%xy,'x') + pl%df_omp(pl%vof*pl%str%y,'y')  
@@ -1556,7 +1609,7 @@ if(trim(pl%imaterial)=='water'.and.pl%water_artificial_volume)  &
 !      if (ex_force)then
 !          if(self_gravity) call gravity_force(pl)
 !          call repulsive_force(pl)
-          call pl%repulsive_force_omp
+          call pl%repulsive_force_omp           !!!!!!!#########
 !      endif
 
 pl%dvx%y = pl%dvx%y + pl%gravity
@@ -1567,7 +1620,7 @@ pl%dvx%y = pl%dvx%y + pl%gravity
 
 !     Calculating average velocity of each partile for avoiding penetration
 
-if (pl%average_velocity) call av_vel_omp(pl) 
+if (pl%average_velocity) call av_vel_omp(pl) !!!!!!!##########
 
 !---  Convert velocity, force, and energy to f and dfdt  
       
@@ -1631,7 +1684,7 @@ endif
 
 return
 end subroutine
-
+                   
 
 !-------------------------------------------------
       subroutine single_step_for_water
@@ -2185,3 +2238,306 @@ end subroutine
    end subroutine
 
 end module
+    
+    
+!DEC$IF(.FALSE.)
+!----------------------------------------------------------------------      
+                   subroutine single_step_VOF
+!----------------------------------------------------------------------
+!   Subroutine to determine the right hand side of a differential 
+!   equation in a single step for performing time integration 
+!----------------------------------------------------------------------
+
+                  
+!use param 
+use declarations_sph
+!use m_sph_fo
+!implicit none
+PARAMETER (IBAR2=400,JBAR2=320,NPRTS=1,MESHX=1,MESHY=1,NVOR=10)
+      common /two_fluid/ phif(ibar2,jbar2), phifn(ibar2,jbar2)
+      COMMON /FV/ ACOM(1), UN(IBAR2,JBAR2), VN(IBAR2,JBAR2),   &
+       PN(IBAR2,JBAR2),                                      &
+       FN(IBAR2,JBAR2), U(IBAR2,JBAR2), V(IBAR2,JBAR2),      &
+       P(IBAR2,JBAR2),                                       &
+       F(IBAR2,JBAR2), PETA(IBAR2,JBAR2), BETA(IBAR2,JBAR2), &
+       NF(IBAR2,JBAR2), TANTH(IBAR2,JBAR2), PS(IBAR2,JBAR2)  
+target :: P, phif
+integer  nphase, iphase
+type(particles), pointer :: pl
+logical :: dbg = .false.
+integer i, ntotal
+type(array) spp  ! soil particle pressure
+!real(dp) p(:,:) !,phif(:,:)
+type(material), pointer :: property
+type(realarray) pre,phiff
+                 
+if(dbg) write(*,*) 'In single_step...'
+
+                                      nphase = 2
+                                      if(parts%single_phase) nphase=1
+
+                                      do iphase = 1, nphase
+                                         if(iphase==1)then
+                                             pl => parts  !!!
+                                             cycle 
+                                         endif    
+                                         if(iphase==2) pl => soil   !!!
+
+pl%dvx%x = 0.d0; pl%dvx%y = 0.d0; pl%drho = 0.d0
+if(trim(pl%imaterial)=='water')pl%dvof = 0.d0
+if(trim(pl%imaterial)=='soil')then
+   pl%dstr%x = 0.d0; pl%dstr%xy = 0.d0; pl%dstr%y = 0.d0; pl%dp = 0.d0
+endif
+
+!if(trim(pl%imaterial)=='water') call inlet_boundary2
+
+!---  Interaction parameters, calculating neighboring particles
+!     and optimzing smoothing length
+  
+if (pl%nnps.eq.1) then 
+   call direct_find(pl)
+else if (pl%nnps.eq.2) then
+   call link_list(pl)     
+!        call link_list(itimestep, ntotal+nvirt,hsml(1),x,niac,pair_i,
+!     &       pair_j,w,dwdx,ns)
+!        call link_list(itimestep, parts%ntotal+parts%nvirt,
+!     &       parts%hsml(1),parts%x,parts%niac,parts%pair_i,
+!     &       parts%pair_j,parts%w,parts%dwdx,parts%countiac)
+else if (pl%nnps.eq.3) then 
+!        call tree_search(itimestep, ntotal+nvirt,hsml,x,niac,pair_i,
+!     &       pair_j,w,dwdx,ns)
+endif         
+
+if(mod(pl%itimestep,pl%print_step).eq.0.and.pl%int_stat) then
+   call pl%interaction_statistics
+endif   
+
+! GET water-pore-pressure for each soil particles (For VOF method)
+!call spp%set(name='spp',parts=soil)
+
+!call spp%max_alloc
+pre%r=>p
+phiff%r=>phif
+!write(*,*) pre%r
+call cell2parts(soil,pre,soil%spp)
+!write(*,*) 'aa',soil%spp%r(1:10)
+phif = 0.0
+call parts2cell(soil,soil%vof,phiff)
+phif = 1.0-phif
+!write(*,*) 'bb', phif(8,2),phifn(8,2)
+
+!--- Added by Wang
+!if(nor_density) call norm_density(pl)
+
+!---  Density approximation or change rate
+     
+!if(summation_density)then      
+!if(mod(itimestep,30)==0) call sum_density(pl)
+!else             
+    !call con_density(pl)         
+    pl%drho = -pl.rho*pl.div2(pl.vx)
+!endif
+      
+if(pl%artificial_density)then
+   !if(trim(pl%imaterial)=='water')then
+      !!call renormalize_density_gradient(pl)
+      !call art_density(pl)
+      call delta_sph_omp(pl,pl%rho,pl%drho)
+   !endif
+endif
+
+!---  Dynamic viscosity:
+
+if(trim(pl%imaterial)=='water')then
+   !if (visc) call viscosity(pl)
+elseif(trim(pl%imaterial)=='soil')then
+   !call shear_modulus(pl)
+endif
+       
+!---  Internal forces:
+
+!call shear_strain_rate(pl)
+!pl%tab%x%ndim1 = pl%ntotal+pl%nvirt
+!pl%tab%xy%ndim1 = pl%tab%x%ndim1; pl%tab%y%ndim1 = pl%tab%x%ndim1
+!write(*,*) pl%tab%x%ndim1,pl%vx%x%ndim1
+pl%tab%x = 2.d0/3.d0*(2.d0*pl%df4(pl%vx%x,'x')-pl%df4(pl%vx%y,'y'))
+pl%tab%xy = pl%df4(pl%vx%x,'y')+pl%df4(pl%vx%y,'x')
+pl%tab%y = 2.d0/3.d0*(2.d0*pl%df4(pl%vx%y,'y')-pl%df4(pl%vx%x,'x'))
+
+if(trim(pl%imaterial)=='soil') pl%vcc = pl%div_omp(pl%vx)
+!call velocity_divergence(pl)
+
+call pressure(pl)
+
+if(trim(pl%imaterial)=='water')then
+   call newtonian_fluid(pl)
+elseif(trim(pl%imaterial)=='soil')then
+
+   if(pl%yield_criterion == 1)then
+      call mohr_coulomb_failure_criterion(pl)
+   elseif(pl%yield_criterion == 2)then
+      call drucker_prager_failure_criterion(pl)
+   endif
+
+   if(mod(pl%itimestep,pl%print_step).eq.0)    &
+            write(*,*) 'Failured points: ', pl%nfail
+endif
+
+!Calculate internal force for water phase !! -phi_f Grad(p)
+if(pl%imaterial=='water')then
+   !if(pl%nthreads==1)then
+!   pl%dvx%x%r = -pl%vof%r*pl%df(pl%p%r,'x') + pl%df(pl%vof%r*pl%str%x%r,'x') + pl%df(pl%vof%r*pl%str%xy%r,'y')
+!   pl%dvx%y%r = -pl%vof%r*pl%df(pl%p%r,'y') + pl%df(pl%vof%r*pl%str%xy%r,'x') + pl%df(pl%vof%r*pl%str%y%r,'y')
+   pl%dvx%x = -pl%vof*pl%df(pl%p,'x') + pl%df(pl%vof*pl%str%x,'x') + pl%df(pl%vof*pl%str%xy,'y')
+   pl%dvx%y = -pl%vof*pl%df(pl%p,'y') + pl%df(pl%vof*pl%str%xy,'x') + pl%df(pl%vof*pl%str%y,'y')   
+   !else
+   !pl%dvx%x = -pl%vof*pl%df_omp(pl%p,'x') + pl%df_omp(pl%vof*pl%str%x,'x') + pl%df_omp(pl%vof*pl%str%xy,'y')
+   !pl%dvx%y = -pl%vof*pl%df_omp(pl%p,'y') + pl%df_omp(pl%vof*pl%str%xy,'x') + pl%df_omp(pl%vof*pl%str%y,'y')  
+   !endif        
+   !write(*,*) pl%dvx%x%r(1:50),pl%dvx%y%r(1:50)
+   !where (pl%rho%r.gt.0.0) pl%dvx%x%r = pl%dvx%x%r/pl%rho%r
+   !where (pl%rho%r.gt.0.0) pl%dvx%y%r = pl%dvx%y%r/pl%rho%r
+   pl%dvx%x = pl%dvx%x/pl%rho
+   pl%dvx%y = pl%dvx%y/pl%rho
+   !write(*,*) pl%dvx%x%r(1:50),pl%dvx%y%r(1:50)
+else      
+   !call int_force(pl)
+   pl%dvx%x = -pl%df3_omp(pl%vof*pl%p,'x') + pl%df3_omp(pl%vof*pl%str%x,'x') + pl%df3_omp(pl%vof*pl%str%xy,'y')
+   pl%dvx%y = -pl%df3_omp(pl%vof*pl%p,'y') + pl%df3_omp(pl%vof*pl%str%xy,'x') + pl%df3_omp(pl%vof*pl%str%y,'y')
+   !where (pl%rho%r.gt.0.0) pl%dvx%x%r = pl%dvx%x%r/pl%rho%r
+   !where (pl%rho%r.gt.0.0) pl%dvx%y%r = pl%dvx%y%r/pl%rho%r 
+   pl%dvx%x = pl%dvx%x/pl%rho
+   pl%dvx%y = pl%dvx%y/pl%rho 
+
+endif      
+
+!if(trim(pl%imaterial)=='water'.and.water_tension_instability==2) &
+!   call tension_instability(pl) 
+
+! --- Plasticity flow rule   ! This was done before Jaummann_rate, because we 
+!     we need txx,tyy,tzz, which was destroyed in Jaumann_rate!
+
+if(trim(pl%imaterial)=='soil')then   
+   if(pl%plasticity==1)then 
+      call plastic_flow_rule(pl)
+   elseif(pl%plasticity==2)then     
+      call plastic_flow_rule2(pl)
+   elseif(pl%plasticity==3)then
+      call plastic_or_not(pl)
+      call plastic_flow_rule3(pl)
+   endif
+endif
+
+! --- Jaumann rate  !When???
+
+if(trim(pl%imaterial)=='soil')call Jaumann_rate(pl)
+
+!---  Artificial viscosity:
+
+if (pl%visc_artificial) call pl%art_visc_omp
+!write(*,*) '0002',soil%itimestep, soil%dvx%x%r(7),soil%dvx%y%r(7)
+if(trim(pl%imaterial)=='soil'.and.pl%soil_artificial_stress)then
+        !call art_stress(pl)
+   call pl%delta_sph_omp(pl%p,pl%dp)
+   call pl%delta_sph_omp(pl%str%x,pl%dstr%x)
+   call pl%delta_sph_omp(pl%str%xy,pl%dstr%xy)
+   call pl%delta_sph_omp(pl%str%y,pl%dstr%y)
+endif        
+if(trim(pl%imaterial)=='water'.and.pl%water_artificial_volume)  &
+        !call art_volume_fraction_water2(pl)
+        call pl%delta_sph_omp(pl%vof,pl%dvof)
+
+!--- Damping
+!       if(trim(pl%imaterial)=='soil') call damping_stress(pl)
+    
+!---  External forces:
+
+      !if (ex_force) call ext_force(pl)
+!      if (ex_force)then
+!          if(self_gravity) call gravity_force(pl)
+!          call repulsive_force(pl)
+          call pl%repulsive_force_omp           !!!!!!!#########
+!      endif
+
+pl%dvx%y = pl%dvx%y + pl%gravity
+
+!     Calculating the neighboring particles and undating HSML
+      
+!if (sle.ne.0) call h_upgrade(pl)
+
+!     Calculating average velocity of each partile for avoiding penetration
+
+if (pl%average_velocity) call av_vel_omp(pl) !!!!!!!##########
+
+!---  Convert velocity, force, and energy to f and dfdt  
+      
+if(mod(pl%itimestep,pl%print_step).eq.0) then     
+!  call pl%particle_monitor
+   call pl%minimum_time_step  
+endif
+
+                                            enddo ! iphase
+
+!call drag_force(parts,soil)   !!! Porous media
+
+                if(.not.parts%single_phase)then
+
+!-------------------Water/soil interaction-------------------------------
+
+!---  Interaction parameters, calculating neighboring particles
+!     and optimzing smoothing length
+  
+      if (parts%nnps.eq.1) then 
+         !call direct_find_2(parts,soil)
+      else if (parts%nnps.eq.2) then
+          !call link_list2_omp(parts,soil)
+!        call link_list(itimestep, ntotal+nvirt,hsml(1),x,niac,pair_i,
+!     &       pair_j,w,dwdx,ns)
+      !else if (numeric%nnps.eq.3) then 
+!        call tree_search(itimestep, ntotal+nvirt,hsml,x,niac,pair_i,
+!     &       pair_j,w,dwdx,ns)
+      endif         
+
+      if(mod(parts%itimestep,parts%print_step).eq.0.and.parts%int_stat) then
+         call parts%interaction_statistics
+      endif    
+
+!      write(*,*) '0001',soil%itimestep, soil%dvx%x%r(7),soil%dvx%y%r(7)
+      !call darcy_law_omp(parts,soil)          
+      !call pore_water_pressure_omp(parts,soil)
+      property => soil%material
+      soil%dvx%x = soil%dvx%x - soil%df(soil%spp,'x')/property%rho0
+      soil%dvx%y = soil%dvx%y - soil%df(soil%spp,'y')/property%rho0
+!      write(*,*) '0000',soil%itimestep, soil%dvx%x%r(7),soil%dvx%y%r(7)
+      
+      
+
+      !if(parts%volume_fraction)then
+         call volume_fraction_soil_omp(soil)
+      !   call volume_fraction_water2_omp(parts,soil)
+      !   call volume_fraction_water_omp(parts,soil)  ! phi_f = 1- phi_s
+      !   if(parts%volume_fraction_renorm)then
+      !      if(mod(parts%itimestep,40).eq.0) then
+      !         ntotal = parts%ntotal+parts%nvirt
+      !         parts%rho = parts%rho/parts%vof 
+      !         parts%vof = parts%vof2
+      !         parts%rho = parts%rho*parts%vof 
+      !      endif
+      !   endif
+      !endif
+
+!      call direct_find(parts) 
+!      call art_volume_fraction_water2(parts)
+     
+             endif ! .not.single_phase
+
+      if(parts%itimestep>=parts%save_step_from.and.   &
+         mod(parts%itimestep,parts%save_step).eq.0)then
+         call output
+         endif 
+         
+         
+return
+end subroutine
+
+!DEC$ENDIF

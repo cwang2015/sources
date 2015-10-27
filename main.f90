@@ -14,6 +14,11 @@ double precision s1, s2
 !
 !call test
 !stop 'test'
+
+!call sola
+!call vof
+!stop
+
 call time_print
 call time_elapsed(s1)
 

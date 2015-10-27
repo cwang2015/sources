@@ -4,6 +4,12 @@
 use m_array
 implicit none
 
+
+type realarray
+    real, pointer, dimension(:,:) :: r
+endtype
+
+
 type block             
      real(dp) xl, yl
      integer  m,  n
@@ -49,7 +55,7 @@ end type
 
 ! Particles in SPH method
 !---------------
-type particles
+type, extends(dao) :: particles
 !---------------
 
 !Geometry parameters
@@ -179,7 +185,7 @@ class(numerical), pointer :: numeric => null()
 real(dp) :: gravity = -9.8
 
 !Time stepping
-real(dp) :: dt, time = 0.d0
+real(dp) :: dt = 0.d0, time = 0.d0
 integer :: maxtimestep = 0 , itimestep = 0
 
 ! Control parameters for output 
@@ -234,6 +240,8 @@ type(array), pointer :: vx   => null()  ! Velocity
 type(array), pointer :: p => null()     ! Pressure
 type(array), pointer :: c => null()     ! Sound speed
 
+type(array), pointer :: spp => null()   !!!! VOF pore pressure for soil particles
+
 ! Stress tensor 
 type(array), pointer :: str => null()
  
@@ -285,6 +293,9 @@ contains
        procedure :: take_virtual => take_virtual_points1
        procedure :: setup_itype
        procedure :: setup_ndim1
+       procedure :: get_size => get_total_particles_number
+       procedure :: get_maxn => get_maximum_particles_number
+       procedure :: get_dim => get_dimension
        procedure :: get_scale_k
        procedure :: direct_find
        procedure :: init_grid
@@ -319,6 +330,7 @@ contains
        procedure :: div
        procedure :: div_omp
        procedure :: div2
+       procedure :: lap_omp
        procedure :: velocity_divergence
 !       procedure :: time_integration_for_water
 !       procedure :: find_particle_nearest2_point
@@ -884,9 +896,11 @@ if(associated(parts%dstr2))then
    if(associated(parts%dstr2%xy))parts%dstr2%xy%ndim1 = ntotal
    if(associated(parts%dstr2%y))parts%dstr2%y%ndim1 = ntotal
 endif
-!if(associated(parts%tab%x))parts%tab%x%ndim1 = ntotal
-!if(associated(parts%tab%xy))parts%tab%xy%ndim1 = ntotal
-!if(associated(parts%tab%y))parts%tab%y%ndim1 = ntotal
+!!!!!!!!
+if(associated(parts%tab%x))parts%tab%x%ndim1 = ntotal
+if(associated(parts%tab%xy))parts%tab%xy%ndim1 = ntotal
+if(associated(parts%tab%y))parts%tab%y%ndim1 = ntotal
+!!!!!!!!
 if(associated(parts%vcc))parts%vcc%ndim1 = ntotal
 if(associated(parts%v_min%x))parts%v_min%x%ndim1 = ntotal
 if(associated(parts%v_min%y))parts%v_min%y%ndim1 = ntotal
@@ -913,6 +927,32 @@ if(associated(parts%c))parts%c%ndim1 = ntotal
 
 return
 end subroutine
+
+!-------------------------------------------------------------
+     function get_total_particles_number(this) result(ntotal)
+!-------------------------------------------------------------
+implicit none
+class(particles) this
+integer ntotal
+ntotal = this%ntotal + this%nvirt
+end function
+
+!-----------------------------------------------------------        
+   function get_maximum_particles_number(this) result(maxn)
+!-----------------------------------------------------------           
+   implicit none
+   class(particles) this
+   integer maxn
+   maxn = this%maxn
+   end function
+!-----------------------------------------------------------        
+   function get_dimension(this) result(dim)
+!-----------------------------------------------------------           
+   implicit none
+   class(particles) this
+   integer dim
+   dim = this%dim
+   end function   
 
 !-------------------------------------------------
      function get_scale_k(this) result(scale_k)
@@ -1106,6 +1146,8 @@ end function
         parts%ngridx(3) =  &
            min(int(parts%ngridx(1)*parts%dgeomx(3)/parts%dgeomx(1)) + 1,parts%maxngz)
       endif
+      
+!      parts%ngridx(1)=26; parts%ngridx(2)=13; parts%ngridx(3) = 1   !!!! VOF
 
 !     Smoothing Length measured in grid cells:
       do d=1,dim
@@ -1739,8 +1781,58 @@ do it = 1, nthreads
       do i = 1, last
          if(parts%pair_i(i)==0) stop 'adf'
       enddo   
+      end subroutine
+
+!--------------------------------------------
+      subroutine parts2cell(parts,fp,f)
+!--------------------------------------------
+implicit none
+class(particles) parts
+type(array) fp
+type(realarray) f
+integer i,j,k,zcell,ycell,xcell
+       !write(*,*) 'c', f%r(8,2)
+!        do zcell=1,1   !parts%ngridx(3)
+          do ycell=1,parts%ngridx(2)
+            do xcell=1,parts%ngridx(1)
+              j = parts%grid(xcell,ycell,1)
+              f%r(xcell,ycell) = 0.d0
+              k = 0
+1             if (j.gt.0) then
+                k = k + 1  
+                f%r(xcell,ycell) = f%r(xcell,ycell) +  fp%r(j)
+                j = parts%celldata(j)
+                goto 1
+              endif
+              if(k>0)then
+                f%r(xcell,ycell) = f%r(xcell,ycell)/k
+              endif
+            enddo !xcell
+          enddo !ycell
+!        enddo !zcell
+        !write(*,*) 'c', f%r(8,2)
+return
 end subroutine
 
+!--------------------------------------------
+      subroutine cell2parts(parts,f,fp)
+!--------------------------------------------
+implicit none
+class(particles) parts
+type(realarray) f
+type(array) fp
+integer i,j,k,zcell,ycell,xcell
+!write(*,*) fp%r(1:10)
+do i = 1, parts%ntotal + parts%nvirt
+   fp%r(i) = f%r(parts%xgcell(1,i),parts%xgcell(2,i))
+enddo
+!write(*,*) parts%xgcell(1:2,9),f%r(2,6)
+!write(*,*) fp%r(1:10)
+!write(*,*) ((f%r(i,j),i = 1,2),j=1,6)
+!write(*,*) 'ddd'
+return
+end subroutine      
+      
 !--------------------------------------------
      subroutine find_pairs(parts)
 !--------------------------------------------
@@ -1786,6 +1878,7 @@ end subroutine
 
       dim = this%dim; skf = this%skf
 
+      if(dabs(hsml)<1.0d-10) stop 'kernel: Too small hsml!'
       q = r/hsml 
       w = 0.e0
       do d=1,dim         
@@ -1906,11 +1999,12 @@ end subroutine
 implicit none
 
 class(particles) parts
-double precision dx(3), rr, f, rr0, dd, p1, p2     
+double precision dx(3), rr, f, rr0, dd, p1, p2,small     
 integer i, j, k, d, ii
            
 rr0 = parts%dspp; dd = parts%numeric%dd
 p1 = parts%numeric%p1; p2 = parts%numeric%p2
+small = 1.d-6
       
 do k=1,parts%niac
    i = parts%pair_i(k)
@@ -1922,7 +2016,7 @@ do k=1,parts%niac
          dx(d) =  parts%x(d,i) -  parts%x(d,j)
          rr = rr + dx(d)*dx(d)
       enddo  
-      rr = sqrt(rr)
+      rr = sqrt(rr) + small  !!!!!
       !if(rr.lt.rr0)then
       if(rr.gt.rr0)cycle
          f = ((rr0/rr)**p1-(rr0/rr)**p2)/rr**2
@@ -1952,7 +2046,7 @@ end subroutine
 implicit none
 
 class(particles) parts
-double precision dx(3), rr, f, rr0, dd, p1, p2     
+double precision dx(3), rr, f, rr0, dd, p1, p2,small
 real(dp),allocatable,dimension(:,:,:) :: local
 integer i, j, k, d, ii,ntotal,nthreads,it,dim
            
@@ -1960,6 +2054,7 @@ rr0 = parts%dspp; dd = parts%numeric%dd
 p1 = parts%numeric%p1; p2 = parts%numeric%p2
 ntotal = parts%ntotal+parts%nvirt; dim = parts%dim
 nthreads = parts%nthreads
+small = 1.d-6
 
 allocate(local(dim,ntotal,nthreads))
 call parts%get_niac_start_end
@@ -1980,7 +2075,7 @@ do k=parts%niac_start(it),parts%niac_end(it)
          dx(d) =  parts%x(d,i) -  parts%x(d,j)
          rr = rr + dx(d)*dx(d)
       enddo  
-      rr = sqrt(rr)
+      rr = sqrt(rr) + small !!!!!!
       !if(rr.lt.rr0)then
       if(rr.gt.rr0)cycle
          f = ((rr0/rr)**p1-(rr0/rr)**p2)/rr**2
@@ -2022,7 +2117,7 @@ implicit none
 
 type(array) :: f
 character(len=1) x
-class(particles) parts
+class(particles),target :: parts
 type(array) :: res
 real(dp), pointer, dimension(:) :: dwdx
 real(dp) fwx
@@ -2030,6 +2125,7 @@ integer i, j, k, ntotal
 ntotal = parts%ntotal +parts%nvirt
 
 allocate(res%r(ntotal))
+res%parts => parts
 res%ndim1 = ntotal; res = 0.d0
 
 if(x=='x')dwdx=>parts%dwdx(1,:)
@@ -2042,7 +2138,6 @@ do k=1,parts%niac
    res%r(i) = res%r(i) + parts%mass%r(j)/parts%rho%r(j)*fwx
    res%r(j) = res%r(j) - parts%mass%r(i)/parts%rho%r(i)*fwx
 enddo
-
 end function
 
 
@@ -2054,7 +2149,7 @@ implicit none
 
 type(array) f
 character(len=1) x
-class(particles) parts
+class(particles),target :: parts
 type(array) :: fun
 real(dp), allocatable, dimension(:,:) :: local
 real(dp), pointer, dimension(:) :: dwdx
@@ -2066,6 +2161,7 @@ integer i, j, k, ntotal, it, nthreads
 ntotal = parts%ntotal + parts%nvirt
 nthreads = parts%nthreads
 
+fun%parts => parts
 fun%ndim1 = ntotal
 allocate(fun%r(ntotal))
 if(nthreads>=1)then
@@ -2103,7 +2199,6 @@ do i = 1, ntotal
 enddo   
 !$omp end do
 !$omp end parallel
-
 end function
 
 ! Calculate partial derivatives of a field
@@ -2114,7 +2209,7 @@ implicit none
 
 type(array) :: f
 character(len=1) x
-class(particles) parts
+class(particles),target :: parts
 type(array) :: val
 !real(dp), allocatable, dimension(:,:) :: df_local
 real(dp), pointer, dimension(:) :: dwdx
@@ -2127,6 +2222,7 @@ ntotal = parts%ntotal + parts%nvirt
 nthreads = parts%nthreads
 !write(*,*) 'sadf', nthreads
 
+val%parts => parts
 allocate(val%r(ntotal*nthreads))
 !if(nthreads>=1)then
 !   allocate(df_local(ntotal,nthreads))
@@ -2172,7 +2268,6 @@ enddo
 !$omp end parallel
 
 val%ndim1 = ntotal !!!
-
 end function
 
 ! Calculate partial derivatives of a field
@@ -2183,13 +2278,14 @@ implicit none
 
 type(array) :: f
 character(len=1) x
-class(particles) parts
+class(particles), target :: parts
 type(array) :: df2
 real(dp), pointer, dimension(:) :: dwdx
 real(dp) fwx
 integer i, j, k, ntotal
 ntotal = parts%ntotal +parts%nvirt
 
+df2%parts => parts
 allocate(df2%r(ntotal))
 df2%ndim1 = ntotal; df2 = 0.d0
 
@@ -2207,7 +2303,6 @@ enddo
 do i = 1, parts%ntotal + parts%nvirt 
    df2%r(i) = df2%r(i)/parts%rho%r(i)
 enddo   
-
 end function
 
 
@@ -2219,13 +2314,14 @@ implicit none
 
 type(array) :: f
 character(len=1) x
-class(particles) parts
+class(particles),target :: parts
 type(array) :: df3
 real(dp), pointer, dimension(:) :: dwdx
 real(dp) fwx
 integer i,j,k,ntotal
 ntotal = parts%ntotal + parts%nvirt
 
+df3%parts => parts
 allocate(df3%r(ntotal))
 df3%ndim1 = ntotal; df3 = 0.d0
 
@@ -2243,7 +2339,6 @@ enddo
 do i = 1, parts%ntotal + parts%nvirt
    df3%r(i) = df3%r(i)*parts%rho%r(i)
 enddo
-
 end function
 
 !-------------------------------------------
@@ -2253,7 +2348,7 @@ implicit none
 
 type(array) f
 character(len=1) x
-class(particles) parts
+class(particles),target :: parts
 type(array) :: df3_omp
 real(dp), allocatable, dimension(:,:) :: local
 !real(dp) df3_local(parts%maxn,8)
@@ -2264,6 +2359,7 @@ integer i,j,k,it,ntotal,nthreads
 ntotal = parts%ntotal + parts%nvirt
 nthreads = parts%nthreads
 
+df3_omp%parts => parts
 df3_omp%ndim1 = ntotal
 allocate(df3_omp%r(ntotal))
 
@@ -2306,6 +2402,7 @@ enddo
 !$omp end do
 !$omp end parallel
 
+
 !do i = 1, ntotal    !moved up
 !   df3_omp%r(i) = df3_omp%r(i)*parts%rho%r(i)
 !enddo
@@ -2321,7 +2418,7 @@ implicit none
 
 type(array) :: f
 character(len=1) x
-class(particles) parts
+class(particles),target :: parts
 type(array),allocatable :: df4
 real(dp), pointer, dimension(:) :: dwdx
 real(dp) fwx
@@ -2329,7 +2426,8 @@ integer i, j, k, ntotal
 ntotal = parts%ntotal +parts%nvirt
 
 allocate(df4); allocate(df4%r(ntotal))
-df4%ndim1 = ntotal; ; df4 = 0.d0
+df4%parts => parts
+df4%ndim1 = ntotal; df4 = 0.d0
 
 if(x=='x')dwdx=>parts%dwdx(1,:)
 if(x=='y')dwdx=>parts%dwdx(2,:)
@@ -2341,7 +2439,6 @@ do k=1,parts%niac
    df4%r(i) = df4%r(i) + parts%mass%r(j)/parts%rho%r(j)*fwx
    df4%r(j) = df4%r(j) + parts%mass%r(i)/parts%rho%r(i)*fwx
 enddo
-
 end function
 
 !-------------------------------------------------
@@ -2351,7 +2448,7 @@ implicit none
 
 type(array) f
 character(len=1) x
-class(particles) parts
+class(particles),target :: parts
 type(array) :: fun
 real(dp), allocatable, dimension(:,:) :: local
 real(dp), pointer, dimension(:) :: dwdx
@@ -2363,6 +2460,7 @@ integer i, j, k, ntotal, it, nthreads
 ntotal = parts%ntotal + parts%nvirt
 nthreads = parts%nthreads
 
+fun%parts => parts
 fun%ndim1 = ntotal
 allocate(fun%r(ntotal))
 if(nthreads>=1)then
@@ -2400,7 +2498,6 @@ do i = 1, ntotal
 enddo   
 !$omp end do
 !$omp end parallel
-
 end function
 
 !-------------------------------------------
@@ -2409,7 +2506,7 @@ end function
 implicit none
 
 type(array) :: f
-class(particles) parts
+class(particles), target :: parts
 type(array),allocatable :: div
 real(dp) df(3)
 real(dp) :: hdiv
@@ -2423,6 +2520,7 @@ nthreads = parts%nthreads
 niac = parts%niac; dim = parts%dim
 dwdx =>parts%dwdx
 
+div%parts => parts
 allocate(div);allocate(div%r(ntotal))
 div%ndim1 = ntotal;div = 0.d0
 
@@ -2440,7 +2538,6 @@ do k = 1,niac
    div%r(i) = div%r(i) + parts%mass%r(j)*hdiv/parts%rho%r(j)
    div%r(j) = div%r(j) + parts%mass%r(i)*hdiv/parts%rho%r(i)
 enddo
-
 end function
 
 !--------------------------------------------------
@@ -2449,7 +2546,7 @@ end function
 implicit none
 
 type(array) :: f
-class(particles) parts
+class(particles),target :: parts
 type(array),allocatable :: fun
 real(dp) df(3)
 real(dp) :: hdiv
@@ -2466,6 +2563,7 @@ dwdx =>parts%dwdx
 
 allocate(fun);allocate(fun%r(ntotal))
 fun%ndim1 = ntotal
+fun%parts => parts
 
 if(nthreads>=1)then
    allocate(local(ntotal,nthreads))
@@ -2507,6 +2605,76 @@ enddo
 !$omp end parallel
 
 end function
+
+!--------------------------------------------------
+      function lap_omp(parts,miu,f) result(fun)
+!--------------------------------------------------
+implicit none
+
+type(array) :: f
+class(particles),target :: parts
+type(array),allocatable :: fun
+real(dp) miu
+real(dp) df,dx(3)
+real(dp) :: hdiv,rr,small = 1.0d-8
+real(dp),pointer,dimension(:,:) :: dwdx
+integer, pointer, dimension(:) :: pair_i, pair_j
+real(dp), allocatable, dimension(:,:) :: local
+integer i,j,k,ntotal,nthreads,niac,dim,d,it
+type(p2r) f_i(3),f_j(3)
+
+ntotal = parts%ntotal + parts%nvirt
+nthreads = parts%nthreads
+niac = parts%niac; dim = parts%dim
+dwdx =>parts%dwdx
+
+allocate(fun);allocate(fun%r(ntotal))
+fun%ndim1 = ntotal
+fun%parts => parts
+
+if(nthreads>=1)then
+   allocate(local(ntotal,nthreads))
+   call parts%get_niac_start_end
+endif   
+
+!$omp parallel
+!$omp do private(i,j,d,f_i,f_j,df,k,hdiv,rr,dx)
+do it = 1, nthreads
+   do i = 1, ntotal
+      local(i,it) = 0.d0
+   enddo   
+   do k = parts%niac_start(it), parts%niac_end(it)
+     i = parts%pair_i(k)
+     j = parts%pair_j(k)
+     df = f%r(i) - f%r(j)
+     hdiv = 0.d0
+     rr = 0.d0
+     do d = 1, dim
+        dx(d) = parts%x(d,i) - parts%x(d,j)
+        rr = rr + dx(d)*dx(d)
+        hdiv = hdiv + dx(d)*dwdx(d,k)
+     enddo
+     hdiv = 2.*miu*hdiv*df/(rr+small)/(parts%rho%r(i)*parts%rho%r(j))
+     local(i,it) = local(i,it) + parts%mass%r(j)*hdiv
+     local(j,it) = local(j,it) - parts%mass%r(i)*hdiv
+   enddo
+enddo
+!$omp end do
+!$omp barrier
+
+!$omp do private(it)
+do i = 1, ntotal
+    fun%r(i) = 0.d0
+    do it = 1,nthreads
+      fun%r(i) =  fun%r(i) + local(i,it) 
+    enddo
+    fun%r(i) = fun%r(i)*parts%rho%r(i)  
+enddo   
+!$omp end do
+!$omp end parallel
+
+end function
+
 
 
 !-----------------------------------------------------------------------
@@ -2562,7 +2730,7 @@ end function
 implicit none
 
 type(array) :: f
-class(particles) parts
+class(particles),target :: parts
 type(array),allocatable :: res
 real(dp) df(3)
 real(dp) :: temp
@@ -2579,6 +2747,7 @@ dwdx =>parts%dwdx
 
 allocate(res);allocate(res%r(ntotal))
 res%ndim1 = ntotal
+res%parts=>parts
 
 allocate(local(ntotal,nthreads))
 call parts%get_niac_start_end
@@ -2615,6 +2784,7 @@ do i = 1, ntotal
 enddo
 !$omp end do
 !$omp end parallel
+
 
 end function
 
@@ -2672,7 +2842,8 @@ end function
 !                              endif
 
          !parts%c(1:ntotal) = water%c         
-         parts%c = water%c*(parts%rho/(water%rho0*parts%vof))**3.0         
+         parts%c = water%c         
+         !parts%c = water%c*(parts%rho/(water%rho0*parts%vof))**3.0         
 
       elseif(parts%imaterial=='soil')then
 
@@ -2689,7 +2860,7 @@ end function
       end subroutine
 
 !--------------------------------------------------------------
-            subroutine pressure_water(parts)
+            subroutine pressure_water(parts)  !not used
 !--------------------------------------------------------------
 implicit none
 
@@ -2710,7 +2881,7 @@ return
 end subroutine
 
 !--------------------------------------------------------------
-         subroutine tension_instability_water(parts)
+         subroutine tension_instability_water(parts)   !not used
 !--------------------------------------------------------------
 implicit none
 
@@ -2733,7 +2904,7 @@ end subroutine
 
 
 !------------------------------------------------------------
-              subroutine pressure_soil(parts)
+              subroutine pressure_soil(parts) !not used
 !------------------------------------------------------------
 implicit none
 
@@ -2863,7 +3034,7 @@ end subroutine
 
       ntotal = parts%ntotal + parts%nvirt
       liquid => parts%material
-      parts%tab%x%ndim1 = ntotal; parts%tab%y%ndim1 = ntotal; parts%tab%xy%ndim1 = ntotal
+      !parts%tab%x%ndim1 = ntotal; parts%tab%y%ndim1 = ntotal; parts%tab%xy%ndim1 = ntotal
 
       parts%str%x = liquid%viscosity*parts%tab%x
       parts%str%y = liquid%viscosity*parts%tab%y
@@ -3020,6 +3191,7 @@ do it = 1, nthreads
   enddo !k
 enddo !it
 !$omp end do
+!$omp barrier
 
 !$omp do private(it)
 do i = 1, ntotal
@@ -3042,7 +3214,7 @@ end subroutine
       class(particles) parts
       real(dp), dimension(:) :: f,df
 
-      real(dp) dx(3),delta, muv, rr, h
+      real(dp) dx(3),delta, muv, rr, h, small
       integer i,j,k,d,ntotal,niac,dim
 
 !      write(*,*) 'In art_density...'
@@ -3050,6 +3222,7 @@ end subroutine
       ntotal   =  parts%ntotal + parts%nvirt
       niac     =  parts%niac; dim = parts%dim            
       delta    = parts%numeric%delta
+      small    = 1.d-8
           
       do k=1,niac
          i = parts%pair_i(k)
@@ -3059,7 +3232,7 @@ end subroutine
             dx(d)  =  parts%x(d,i) -  parts%x(d,j)
             rr     = rr + dx(d)*dx(d)
          enddo
-            
+         rr = rr + small   !!!!  
          muv = 2.0*(f(i)-f(j))/rr
 
          h = 0.d0
@@ -3086,7 +3259,7 @@ end subroutine
       type(array) f
       type(array) df
       real(dp), allocatable, dimension(:,:) :: local
-      real(dp) dx(3),delta, muv, rr, h
+      real(dp) dx(3),delta, muv, rr, h, small
       integer i,j,k,d,ntotal,niac,dim,it,nthreads
 
 !      write(*,*) 'In art_density...'
@@ -3094,6 +3267,7 @@ end subroutine
       ntotal   =  parts%ntotal + parts%nvirt
       niac     =  parts%niac; dim = parts%dim; nthreads = parts%nthreads            
       delta    = parts%numeric%delta
+      small    = 1.d-8
 
       if(nthreads>=1)then
          allocate(local(ntotal,nthreads))
@@ -3114,6 +3288,8 @@ end subroutine
               dx(d)  =  parts%x(d,i) -  parts%x(d,j)
               rr     = rr + dx(d)*dx(d)
            enddo
+
+           rr = rr + small    !!!!
            muv = 2.0*(f%r(i)-f%r(j))/rr
 
          h = 0.d0
@@ -3227,6 +3403,7 @@ do it = 1,nthreads
    enddo  
 enddo
 !$omp end do
+!$omp barrier
 !$omp do private(it)
 do i = 1, ntotal
     do it = 1,nthreads
@@ -3249,7 +3426,7 @@ enddo
 
       
 !----------------------------------------------------------------------
-      subroutine shear_strain_rate(parts)
+      subroutine shear_strain_rate(parts)  ! not used
 !----------------------------------------------------------------------
       implicit none
 
@@ -3783,8 +3960,8 @@ enddo
 
 ! For staturated soil
 !        if(volume_fraction) cf = water%vof(i)*water%rho(i)*(-gravity)/ks
-!        if(water%volume_fraction) cf = water%vof(i)*soil%vof(j)*water%rho(i)*(-gravity)/ks
-        cf = water%vof%r(i)*water%rho%r(i)*(-gravity)/ks
+        if(water%volume_fraction) cf = water%vof%r(i)*soil%vof%r(j)*water%rho%r(i)*(-gravity)/ks
+!        cf = water%vof%r(i)*water%rho%r(i)*(-gravity)/ks
 
           vx_i = water%vx%cmpt(i); vx_j = soil%vx%cmpt(j)
           dvx_i = water%dvx%cmpt(i); dvx_j = soil%dvx%cmpt(j)
@@ -3863,8 +4040,8 @@ do it = 1,nthreads
 
 ! For staturated soil
 !        if(volume_fraction) cf = water%vof(i)*water%rho(i)*(-gravity)/ks
-!        if(water%volume_fraction) cf = water%vof(i)*soil%vof(j)*water%rho(i)*(-gravity)/ks
-        cf = water%vof%r(i)*water%rho%r(i)*(-gravity)/ks
+        if(water%volume_fraction) cf = water%vof%r(i)*soil%vof%r(j)*water%rho%r(i)*(-gravity)/ks
+!        cf = water%vof%r(i)*water%rho%r(i)*(-gravity)/ks
 
           vx_i = water%vx%cmpt(i); vx_j = soil%vx%cmpt(j)
 !          dvx_i = water%dvx%cmpt(i); dvx_j = soil%dvx%cmpt(j)
@@ -3895,6 +4072,7 @@ do i = 1,wntotal
    enddo
 enddo
 !$omp end do
+!$omp barrier
 
 !$omp do private(it)
 do j = 1,sntotal
@@ -4078,6 +4256,7 @@ do it = 1, nthreads
      enddo
 enddo
 !$omp end do
+!$omp barrier
 
 !$omp do private(it)
       do k = 1, water%ntotal+water%nvirt
@@ -4169,6 +4348,7 @@ do it = 1, nthreads
       enddo
 enddo
 !$omp end do
+!$omp barrier
 
 !$omp do private(it)
 do i = 1, ntotal
@@ -4226,7 +4406,7 @@ enddo
       return
       end subroutine
 !--------------------------------------------------------------------------
-      subroutine drag_force(water,soil)
+      subroutine drag_force(water,soil)   !not used
 !--------------------------------------------------------------------------
 ! For fixed porous media, drag force to fluid  
 
@@ -4320,7 +4500,7 @@ integer, external :: OMP_GET_NUM_THREADS
 this%nthreads = OMP_GET_NUM_THREADS()
 !$omp end parallel
 
-allocate(this%niac_start(this%nthreads),this%niac_end(this%nthreads))
+!allocate(this%niac_start(this%nthreads),this%niac_end(this%nthreads))
 
 end subroutine
 

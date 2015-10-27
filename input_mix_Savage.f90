@@ -16,8 +16,8 @@ double precision element_size, soil_submerged_depth
 
 !call tank%set(xl=0.2d0,yl=0.1d0,m=80,n=40)
 !call tank%set(xl=0.25d0,yl=0.125d0,m=100,n=50)
-call tank%set(xl=0.26d0,yl=0.13d0,m=52,n=26)
-!call tank%set(xl=0.26d0,yl=0.13d0,m=104,n=52)
+!call tank%set(xl=0.26d0,yl=0.13d0,m=52,n=26)
+call tank%set(xl=0.26d0,yl=0.13d0,m=104,n=52)
 !call tank%set(xl=0.26d0,yl=0.13d0,m=208,n=104)
 !call tank%set(xl=0.26d0,yl=0.13d0,m=416,n=208)
 !call tank%set(xl=0.26d0,yl=0.13d0,m=832,n=416)
@@ -36,11 +36,11 @@ do i = 1, tank%m*tank%n
    if(tank%x(i)<0.d0.or.tank%x(i)>0.24.or.tank%y(i)<0.d0) tank%zone(i) = 1
 !   if(tank%x(i)<0.025.or.tank%x(i)>0.475.or.tank%y(i)<0.025) tank%zone(i) = 1
    if(tank%zone(i)==1.and.tank%x(i)>0.06)tank%zone(i)=3
-   if(tank%zone(i)==1.and.tank%y(i)>0.048)tank%zone(i)=5
+   if(tank%zone(i)==1.and.tank%y(i)>0.08)tank%zone(i)=5    !0.08
    if(tank%zone(i)==5.and.tank%y(i)>0.1)tank%zone(i)=6
    if(tank%zone(i)==3.and.tank%y(i)>0.1)tank%zone(i)=6
    if(tank%zone(i)==2.and.tank%x(i)>0.06)tank%zone(i)=4
-   if(tank%zone(i)==2.and.tank%y(i)>0.048)tank%zone(i)=4
+   if(tank%zone(i)==2.and.tank%y(i)>0.08)tank%zone(i)=4     !0.08
    if(tank%zone(i)==4.and.tank%y(i)>0.1)tank%zone(i)=7
 enddo
 !      write(*,*) tank%zone
@@ -58,8 +58,8 @@ call soil%take_virtual(tank,3)
 call soil%take_virtual(tank,5)
 call soil%take_virtual(tank,6)
 
-call parts%setup_ndim1
-call soil%setup_ndim1
+!call parts%setup_ndim1
+!call soil%setup_ndim1
 
 ! Basic settings for particles (vol,hsml,itype)
 ! vol means the volume of a cell. We calculate the mass of each particle according to mass = rho*vol
@@ -129,7 +129,8 @@ soil%vx%x = 0.d0
 soil%vx%y = 0.d0
 
 ! ...Stress. You must define the free surface first.
-soil_surface = 0.048
+!soil_surface = 0.048
+soil_surface = 0.08
 sand => soil%material
 do i = 1,soil%ntotal+soil%nvirt
    soil%p%r(i) = (sand%rho0-wass%rho0)*soil%gravity*(soil%x(2,i)-soil_surface)
