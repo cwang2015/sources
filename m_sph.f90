@@ -497,7 +497,10 @@ allocate(parts%zone(maxn)); parts%zone = 0
 !allocate(parts%virtual_zone(parts%max_zone)); parts%virtual_zone = 0
 
 allocate(parts%w(max_interaction));             parts%w   = 0.d0
+allocate(parts%ps(max_interaction));             parts%ps   = 0.d0
+allocate(parts%rhos(max_interaction));             parts%rhos   = 0.d0
 allocate(parts%dwdx(dim,max_interaction));      parts%dwdx= 0.d0
+allocate(parts%mons(dim,max_interaction));      parts%mons= 0.d0
 allocate(parts%dgu(dim,max_interaction));       parts%dgu= 0.d0
 allocate(parts%pair_i(max_interaction));        parts%pair_i = 0
 allocate(parts%pair_j(max_interaction));        parts%pair_j = 0
@@ -621,14 +624,14 @@ parts%vx%x%r = 0.d0; parts%vx%y%r = 0.d0
 allocate(parts%mone); allocate(parts%mone%x,parts%mone%y)
 allocate(parts%mone%x%r(maxn), parts%mone%y%r(maxn))
 parts%mone%x%r = 0.d0; parts%mone%y%r = 0.d0
-allocate(parts%mons); allocate(parts%mons%x,parts%mons%y)
-allocate(parts%mons%x%r(maxn), parts%mons%y%r(maxn))
-parts%mons%x%r = 0.d0; parts%mons%y%r = 0.d0
+!allocate(parts%mons); allocate(parts%mons%x,parts%mons%y)
+!allocate(parts%mons%x%r(maxn), parts%mons%y%r(maxn))
+!parts%mons%x%r = 0.d0; parts%mons%y%r = 0.d0
 allocate(parts%rho); allocate(parts%rho%r(maxn)); parts%rho%r = 0.d0
-allocate(parts%rhos); allocate(parts%rhos%r(maxn)); parts%rhos%r = 0.d0
-allocate(parts%divvx); allocate(parts%divvx%r(maxn)); parts%rhos%r = 0.d0
+!allocate(parts%rhos); allocate(parts%rhos%r(maxn)); parts%rhos%r = 0.d0
+allocate(parts%divvx); allocate(parts%divvx%r(maxn));! parts%rhos%r = 0.d0
 allocate(parts%p); allocate(parts%p%r(maxn)); parts%p%r = 0.d0
-allocate(parts%ps); allocate(parts%ps%r(maxn)); parts%ps%r = 0.d0
+!allocate(parts%ps); allocate(parts%ps%r(maxn)); parts%ps%r = 0.d0
 !allocate(parts%u(maxn));       parts%u   = 0.d0
 allocate(parts%c); allocate(parts%c%r(maxn))
 parts%c   = 0.d0
@@ -1908,11 +1911,11 @@ endif
 !--- Added by Wang
 !if(nor_density) call norm_density(pl)
 
-!______Analytical value of delta gamma
-call delta_gamma_unified2(pl)
-
 !------unified get rho of nvirt particles
 call nvirt_density_unified(pl)
+
+!______Analytical value of delta gamma
+call delta_gamma_unified3(pl)
 
 call real_density_unified(pl)
 

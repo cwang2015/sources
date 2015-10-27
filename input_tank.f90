@@ -52,9 +52,10 @@ do i = 1, tank%m*tank%n
    if(tank%zone(i)==1.and.tank%x(i)<0.02.and.tank%y(i)>0.02) tank%zone(i)=3
    if(tank%zone(i)==1.and.tank%x(i)>0.01.and.tank%x(i)<3.24) tank%zone(i)=4
    if(tank%zone(i)==1.and.tank%x(i)>3.24) tank%zone(i)=5
-!   if(tank%zone(i)==3.and.tank%y(i)<0.08) tank%zone(i)=6
-!   if(tank%zone(i)==4.and.tank%x(i)<0.08) tank%zone(i)=6
-
+   if(tank%zone(i)==3.and.tank%y(i)<0.08) tank%zone(i)=6
+   if(tank%zone(i)==4.and.tank%x(i)<0.08) tank%zone(i)=6
+   if(tank%zone(i)==4.and.tank%x(i)>3.18) tank%zone(i)=6
+   if(tank%zone(i)==5.and.tank%y(i)<0.08) tank%zone(i)=6
 
    !   if(tank%zone(i)==1.and.tank%y(i)>0.66)tank%zone(i)=3
 !   if(tank%x(i)<0.06) tank%zone(i) = 1
@@ -62,8 +63,8 @@ do i = 1, tank%m*tank%n
 !   if(tank%x(i)>3.28) tank%zone(i) = 6
 !   if(tank%x(i)<0.06.and.tank%y(i)<0.06) tank%zone(i) = 3
 !   if(tank%x(i)>3.28.and.tank%y(i)<0.06) tank%zone(i) = 5
-   if(tank%zone(i)==2.and.tank%x(i)>1.21)tank%zone(i)= 7
-   if(tank%zone(i)==2.and.tank%y(i)>0.61)tank%zone(i)= 7
+   if(tank%zone(i)==2.and.tank%x(i)>1.21)tank%zone(i)= 8
+   if(tank%zone(i)==2.and.tank%y(i)>0.61)tank%zone(i)= 8
 
 !   if(tank%zone(i)==2.and.tank%x(i)>1.26)tank%zone(i)=4
 !   if(tank%zone(i)==2.and.tank%y(i)>0.66)tank%zone(i)=4
@@ -78,9 +79,9 @@ call parts%take_real(tank,2)
 !call parts%take_virtual(tank,5)
 !call parts%take_virtual(tank,6)
 
-call parts%take_boundary(tank,3)
-call parts%take_virtual(tank,4)
-call parts%take_virtual(tank,5)
+call parts%take_boundary2(tank)
+!call parts%take_virtual(tank,4)
+!call parts%take_virtual(tank,5)
 
 call parts%setup_ndim1
 
@@ -90,7 +91,7 @@ call parts%setup_ndim1
 ! vol means the volume of a cell. We calculate the mass of each particle according to mass = rho*vol
 
 parts%vol = tank%dx*tank%dy
-parts%hsml = 1.2*tank%dx
+parts%hsml = 2*tank%dx
 parts%dspp = tank%dx
 
 ! itype is positive for real particles, negative for virtual particles.

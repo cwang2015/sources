@@ -160,8 +160,10 @@ integer :: skf = 4
 
 ! Kernel and its derivative
    real(dp), pointer, dimension(:)   :: w    => null()
+   real(dp), pointer, dimension(:)   :: ps    => null()
+   real(dp), pointer, dimension(:)   :: rhos => null()
    real(dp), pointer, dimension(:,:) :: dwdx => null()
-   
+   real(dp), pointer, dimension(:,:) :: mons => null()
    real(dp), pointer, dimension(:,:) :: dgu => null()
 ! Particle fundamental data
    integer,  pointer, dimension(:)   :: itype=> null()
@@ -180,15 +182,15 @@ integer :: skf = 4
 ! Field variables
    !real(dp), pointer, dimension(:)   :: rho  => null()
    type(array), pointer :: rho  => null()
-   type(array), pointer :: rhos  => null()
+!   type(array), pointer :: rhos  => null()
    type(array), pointer :: divvx  => null()
    !real(dp), pointer, dimension(:,:) :: vx   => null()   
    type(array), pointer :: vx   => null()   
    type(array), pointer :: mone   => null()   
-   type(array), pointer :: mons   => null()   
+!   type(array), pointer :: mons   => null()   
    !real(dp), pointer, dimension(:)   :: p    => null()
    type(array), pointer :: p => null()
-   type(array), pointer :: ps => null()
+!   type(array), pointer :: ps => null()
    !real(dp), pointer, dimension(:)   :: eta  => null()   
 !   real(dp), pointer, dimension(:)   :: c    => null()   
    type(array), pointer :: c => null()
@@ -292,6 +294,7 @@ integer :: skf = 4
        procedure :: take_real => take_real_points1
        procedure :: take_virtual => take_virtual_points1
        procedure :: take_boundary
+       procedure :: take_boundary2
        procedure :: setup_itype
        procedure :: setup_ndim1
        procedure :: get_scale_k
@@ -314,6 +317,8 @@ integer :: skf = 4
        procedure :: con_density
        procedure :: delta_gamma_unified
        procedure :: delta_gamma_unified2
+       procedure :: delta_gamma_unified3
+       procedure :: delta_gamma_unified4
        procedure :: real_density_unified
        procedure :: momentum_equation_unified       
        procedure :: freesurface
@@ -856,8 +861,38 @@ this%nvirt = k-this%ntotal
 return
 end subroutine
 
+
 !-----------------------------------------------------
       subroutine take_boundary(this,tank,zone)
+!-----------------------------------------------------
+implicit none
+
+class(particles) this
+type(block) tank
+integer zone
+
+integer i,j,k
+
+! Take virtual particles in tank
+
+k = this%ntotal+this%nvirt
+   do i = 1, tank%m*tank%n
+      if(tank%zone(i) == zone)then         
+         k = k + 1
+         this%x(1,k) = tank%x(i)
+         this%x(2,k) = 0.01 + tank%dy * (k - this%ntotal - 1)
+         this%zone(k) = tank%zone(i)
+      endif
+   enddo
+   
+this%nvirt = k-this%ntotal
+
+return
+end subroutine
+      
+      
+!-----------------------------------------------------
+      subroutine take_boundary2(this,tank)
 !-----------------------------------------------------
 implicit none
 
@@ -880,6 +915,89 @@ k = this%ntotal+this%nvirt
    enddo
    
 this%nvirt = k-this%ntotal
+
+k = this%ntotal+this%nvirt
+   do i = 1, tank%m*tank%n
+      if(tank%zone(i) == 6)then         
+         if(tank%x(i)<0.02)then
+         k = k + 1
+         this%x(1,k) = tank%x(i)    
+         this%x(2,k) = 0.07 - tank%dy * (k - this%ntotal - this%nvirt - 1)
+         this%zone(k) = tank%zone(i)
+         endif
+
+      endif
+   enddo
+   
+this%nvirt = k-this%ntotal
+
+k = this%ntotal+this%nvirt
+   do i = 1, tank%m*tank%n
+      if(tank%zone(i) == 6)then         
+         if(tank%x(i) > 0.02.and.tank%x(i)<0.08)then
+         k = k + 1
+         this%x(1,k) = 0.03 + tank%dx * (k - this%ntotal - this%nvirt - 1)   
+         this%x(2,k) = tank%y(i)
+         this%zone(k) = tank%zone(i)
+         endif
+      endif
+   enddo
+   
+this%nvirt = k-this%ntotal
+
+
+k = this%ntotal+this%nvirt
+   do i = 1, tank%m*tank%n
+      if(tank%zone(i) == 4)then         
+         k = k + 1
+         this%x(2,k) = tank%y(i)
+         this%x(1,k) = 0.09 + tank%dx * (k - this%ntotal - this%nvirt - 1)
+         this%zone(k) = tank%zone(i)
+      endif
+   enddo
+   
+this%nvirt = k-this%ntotal
+
+k = this%ntotal+this%nvirt
+   do i = 1, tank%m*tank%n
+      if(tank%zone(i) == 6)then         
+         if(tank%x(i)>3.and.tank%x(i)<3.24)then
+         k = k + 1
+         this%x(2,k) = tank%y(i)    
+         this%x(1,k) = 3.19 + tank%dx * (k - this%ntotal - this%nvirt - 1)
+         this%zone(k) = tank%zone(i)
+         endif
+      endif
+   enddo
+   
+this%nvirt = k-this%ntotal
+
+k = this%ntotal+this%nvirt
+   do i = 1, tank%m*tank%n
+      if(tank%zone(i) == 6)then         
+         if(tank%x(i)>3.24)then
+         k = k + 1
+         this%x(1,k) = tank%x(i)    
+         this%x(2,k) = 0.01 + tank%dy * (k - this%ntotal - this%nvirt - 1)
+         this%zone(k) = tank%zone(i)
+         endif
+      endif
+   enddo
+   
+this%nvirt = k-this%ntotal
+
+k = this%ntotal+this%nvirt
+   do i = 1, tank%m*tank%n
+      if(tank%zone(i) == 5)then         
+         k = k + 1
+         this%x(2,k) = 0.09 + tank%dy * (k - this%ntotal - this%nvirt - 1)
+         this%x(1,k) = tank%x(i)
+         this%zone(k) = tank%zone(i)
+      endif
+   enddo
+   
+this%nvirt = k-this%ntotal
+
 
 return
 end subroutine
@@ -914,12 +1032,12 @@ integer ntotal, bntotal
 ntotal = parts%ntotal + parts%nvirt
 
 if(associated(parts%rho))parts%rho%ndim1 = ntotal
-if(associated(parts%rhos))parts%rhos%ndim1 = ntotal
+!if(associated(parts%rhos))parts%rhos%ndim1 = ntotal
 if(associated(parts%divvx))parts%divvx%ndim1 = ntotal
 if(associated(parts%drho))parts%drho%ndim1 = ntotal
 if(associated(parts%mass))parts%mass%ndim1 = ntotal
 if(associated(parts%p))parts%p%ndim1 = ntotal
-if(associated(parts%ps))parts%p%ndim1 = ntotal
+!if(associated(parts%ps))parts%p%ndim1 = ntotal
 !if(associated(parts%wxy))parts%wxy%ndim1 = ntotal
 if(associated(parts%vof))parts%vof%ndim1 = ntotal
 if(associated(parts%vof2))parts%vof2%ndim1 = ntotal
@@ -949,8 +1067,8 @@ if(associated(parts%vx%x))parts%vx%x%ndim1 = ntotal
 if(associated(parts%vx%y))parts%vx%y%ndim1 = ntotal
 if(associated(parts%mone%x))parts%mone%x%ndim1 = ntotal
 if(associated(parts%mone%y))parts%mone%y%ndim1 = ntotal
-if(associated(parts%mons%x))parts%mons%x%ndim1 = ntotal
-if(associated(parts%mons%y))parts%mons%y%ndim1 = ntotal
+!if(associated(parts%mons%x))parts%mons%x%ndim1 = ntotal
+!if(associated(parts%mons%y))parts%mons%y%ndim1 = ntotal
 if(associated(parts%dvx%x))parts%dvx%x%ndim1 = ntotal
 if(associated(parts%dvx%y))parts%dvx%y%ndim1 = ntotal
 if(associated(parts%vol))parts%vol%ndim1 = ntotal
@@ -3211,11 +3329,13 @@ end subroutine
            parts%divvx%r(i) = parts%divvx%r(i) - parts%mass%r(j)*(dvx(1)*parts%dwdx(1,k)+dvx(2)*parts%dwdx(2,k))
            parts%divvx%r(j) = parts%divvx%r(j) - parts%mass%r(i)*(dvx(1)*parts%dwdx(1,k)+dvx(2)*parts%dwdx(2,k))
           if(parts%itype(i)>0.and.parts%itype(j)<0)then
+              if(parts%rhos(k)==0)cycle
 !              parts%drho%r(i) = parts%drho%r(i) - parts%rhos%r(j)*(parts%vx%x%r(i)*parts%dgu(1,k) + parts%vx%y%r(i)*parts%dgu(2,k))
-              parts%divvx%r(i) = parts%divvx%r(i) + parts%rhos%r(j)*(parts%vx%x%r(i)*parts%dgu(1,k) + parts%vx%y%r(i)*parts%dgu(2,k))
+              parts%divvx%r(i) = parts%divvx%r(i) + parts%rhos(k)*(parts%vx%x%r(i)*parts%dgu(1,k) + parts%vx%y%r(i)*parts%dgu(2,k))
           elseif(parts%itype(j)>0.and.parts%itype(i)<0)then
+              if(parts%rhos(k)==0)cycle
 !              parts%drho%r(j) = parts%drho%r(j) - parts%rhos%r(i)*(parts%vx%x%r(j)*parts%dgu(1,k) + parts%vx%y%r(j)*parts%dgu(2,k))
-              parts%divvx%r(j) = parts%divvx%r(j) + parts%rhos%r(i)*(parts%vx%x%r(j)*parts%dgu(1,k) + parts%vx%y%r(j)*parts%dgu(2,k))
+              parts%divvx%r(j) = parts%divvx%r(j) + parts%rhos(k)*(parts%vx%x%r(j)*parts%dgu(1,k) + parts%vx%y%r(j)*parts%dgu(2,k))
           endif    
       enddo
       
@@ -3313,17 +3433,20 @@ end subroutine
            dpre(d,j) = dpre(d,j) - parts%mass%r(i)*(parts%p%r(j)/parts%rho%r(j)**2+parts%p%r(i)/parts%rho%r(i)**2)*parts%dwdx(d,k) !!这里是用-号吧？???
           enddo
         if(parts%itype(i)>0.and.parts%itype(j)<0)then
+            if(parts%rhos(k)==0)cycle
           do d = 1,parts%dim
-           dpre(d,i) = dpre(d,i) - parts%rhos%r(j)*(parts%p%r(i)/parts%rho%r(i)**2+parts%ps%r(j)/parts%rhos%r(j)**2)*parts%dgu(d,k)
+           dpre(d,i) = dpre(d,i) - parts%rhos(k)*(parts%p%r(i)/parts%rho%r(i)**2+parts%ps(k)/parts%rhos(k)**2)*parts%dgu(d,k)
           enddo
         elseif(parts%itype(i)<0.and.parts%itype(j)>0)then
+            if(parts%rhos(k)==0)cycle
           do d = 1,parts%dim
-           dpre(d,j) = dpre(d,j) - parts%rhos%r(i)*(parts%p%r(j)/parts%rho%r(j)**2+parts%ps%r(i)/parts%rhos%r(i)**2)*parts%dgu(d,k)
+           dpre(d,j) = dpre(d,j) - parts%rhos(k)*(parts%p%r(j)/parts%rho%r(j)**2+parts%ps(k)/parts%rhos(k)**2)*parts%dgu(d,k)
           enddo
         endif
       enddo
       
       do i =1,parts%ntotal
+          if(wi(i)==0) wi(i)=1
           do d= 1,parts%dim
               dpre(d,i) = dpre(d,i)*parts%rho%r(i)/wi(i)  !文章中的（28)式，还需要进步到（8）
           enddo
@@ -3344,8 +3467,8 @@ end subroutine
            enddo  
            rr = sqrt(rr)
            do d = 1,parts%dim
-              lap(d,i) = lap(d,i) + parts%mass%r(j)*water%viscosity*2/(parts%rho%r(i)*parts%rho%r(j))/rr**2*(dvx(1)*dx(1)+dvx(2)*dx(2))*parts%dwdx(d,k)    !这里的dwdx是对i吧？？？(33)
-              lap(d,j) = lap(d,j) - parts%mass%r(i)*water%viscosity*2/(parts%rho%r(i)*parts%rho%r(j))/rr**2*(dvx(1)*dx(1)+dvx(2)*dx(2))*parts%dwdx(d,k)
+              lap(d,i) = lap(d,i) + parts%mass%r(j)*water%viscosity*2/(parts%rho%r(i)*parts%rho%r(j))/(rr**2)*(dvx(1)*dx(1)+dvx(2)*dx(2))*parts%dwdx(d,k)    !这里的dwdx是对i吧？？？(33)
+              lap(d,j) = lap(d,j) - parts%mass%r(i)*water%viscosity*2/(parts%rho%r(i)*parts%rho%r(j))/(rr**2)*(dvx(1)*dx(1)+dvx(2)*dx(2))*parts%dwdx(d,k)
            enddo
         if(parts%itype(i)>0.and.parts%itype(j)<0)then
             lapsx = sqrt(parts%dgu(1,k)**2+parts%dgu(2,k)**2)*parts%mone%x%r(j)/parts%rho%r(i)
@@ -3361,20 +3484,21 @@ end subroutine
               lap(1,i) = lap(1,i) + lapa - lapsx
               lap(2,i) = lap(2,i) - lapsy
             endif
-        elseif(parts%itype(i)<0.and.parts%itype(j)>0)then
-            lapsx = sqrt(parts%dgu(1,k)**2+parts%dgu(2,k)**2)*parts%mone%x%r(i)/parts%rho%r(j)
-            lapsy = sqrt(parts%dgu(1,k)**2+parts%dgu(2,k)**2)*parts%mone%y%r(i)/parts%rho%r(j)         
-            lapa = sqrt(parts%dgu(1,k)**2+parts%dgu(2,k)**2)*(water%viscosity*parts%divvx%r(j))/parts%rho%r(j)!这里用div2可以吧？？？
-            if(parts%zone(i)==3)then
-              lap(1,j) = lap(1,j) - lapa - lapsx
-              lap(2,j) = lap(2,j) - lapsy
-            elseif(parts%zone(i)==4)then
-              lap(1,j) = lap(1,j) - lapsx  
-              lap(2,j) = lap(2,j) - lapa - lapsy
-            elseif(parts%zone(i)==5)then
-              lap(1,j) = lap(1,j) + lapa - lapsx
-              lap(2,j) = lap(2,j) - lapsy
-            endif
+!        elseif(parts%itype(i)<0.and.parts%itype(j)>0)then
+!            if(parts%mons(1,k)==0.and.parts%mons(2,k)==0)cycle
+!            lapsx = sqrt(parts%dgu(1,k)**2+parts%dgu(2,k)**2)*parts%mons(1,k)/parts%rho%r(j)
+!            lapsy = sqrt(parts%dgu(1,k)**2+parts%dgu(2,k)**2)*parts%mons(1,k)/parts%rho%r(j)         
+!            lapa = sqrt(parts%dgu(1,k)**2+parts%dgu(2,k)**2)*(water%viscosity*parts%divvx%r(j))/parts%rho%r(j)!这里用div2可以吧？？？
+!            if(parts%zone(i)==3)then
+!              lap(1,j) = lap(1,j) - lapa - lapsx
+!              lap(2,j) = lap(2,j) - lapsy
+!            elseif(parts%zone(i)==4)then
+!              lap(1,j) = lap(1,j) - lapsx  
+!              lap(2,j) = lap(2,j) - lapa - lapsy
+!            elseif(parts%zone(i)==5)then
+!              lap(1,j) = lap(1,j) + lapa - lapsx
+!              lap(2,j) = lap(2,j) - lapsy
+!            endif
         endif
       enddo
  
@@ -3401,6 +3525,7 @@ end subroutine
 !      enddo
       
       do i=1, parts%ntotal
+          if(wi(i)==0)wi(i)=1
           do d=1, parts%dim
 !             lap(d,i)= (lap(d,i)-laps(d,i)/parts%rho%r(i))/wi(i)
              lap(d,i)= lap(d,i)/wi(i)!这里用的（27）其实就已经除以了密度，是作业里面的（14）中的第二项
@@ -3607,222 +3732,211 @@ end subroutine
       implicit none
   
       class(particles) parts      
-      integer k,i,j,d
-      real(dp) q0,q1,q2,q1c,q2c,Pq2,Pq1,factor,hsml,dx,rr,w,q
+       integer k,i,j,d,m,k0,i0,j0
+      real(dp) q0,q1,q2,q1c,q2c,Pq2,Pq1,factor,hsml,dx,rr,w,q,nx,ny
       real(dp) , parameter :: pi = 3.1415926535898
+      integer , dimension(10) :: a  
       hsml = parts%hsml(1)
       
       factor = 7.e0 / (4.e0*pi*hsml*hsml)
-      dx = parts%x(2,1802) - parts%x(2,1801)
+      dx = abs(parts%x(2,1802) - parts%x(2,1801))
 
-      
+      do m = 1,10
+         a(m) = 3000
+      enddo
+            
       do k = 1, parts%niac
           do d = 1,parts%dim
               parts%dgu(d,k)=0.d0
           enddo
           i = parts%pair_i(k)
           j = parts%pair_j(k)
-          
-          
+          m=0
           if(parts%itype(i)*parts%itype(j)>0)cycle
           if(parts%itype(i)>0)then
-              if(parts%zone(j)==3)then
-!                 if(j/=1801)then
-!1                  parts%dgu(1,k) = parts%w(k) * (parts%x(1,i) - parts%x(1,j))
-!2                  parts%dgu(1,k) = parts%w(k) * dx
-
-!3                   parts%dgu(1,k) = parts%dwdx(1,k) * (parts%x(1,i) - parts%x(1,j))
-!3                   parts%dgu(2,k) = parts%dwdx(2,k) * (parts%x(2,i) - parts%x(2,j))
-                   
-!4                   rr = sqrt((parts%x(1,i) - parts%x(1,j))**2 + (parts%x(2,i) - (parts%x(2,j) - dx/2))**2)
-!4                   q = rr/hsml
-!4                   w = factor * ( (1-q/2)**4 *(1+2*q) )
-!4                   parts%dgu(1,k) = w * dx
-    
-!5                     parts%dgu(1,k) = parts%w(k) * dx
-
-                     rr = sqrt((parts%x(1,i) - parts%x(1,j))**2 + (parts%x(2,i) - (parts%x(2,j) - dx))**2)
+              if(parts%zone(j) == 6)then
+                 do k0 = 1, parts%niac
+                     i0 = parts%pair_i(k0)
+                     j0 = parts%pair_j(k0)
+                     if(i0==i.and.j0>j)then
+                         m = m+1
+                         a(m) = j0
+!                         write(*,*) 'a(m)',a(m),'m=',m
+                     endif
+                 enddo
+!                 write(*,*) 'a(1)=',a(1),'a(2)=',a(2),'a(3)=',a(3),a(4),a(5),a(6),a(7),a(8),a(9),a(10)
+                 j0 = min(a(1),a(2),a(3),a(4),a(5),a(6),a(7),a(8),a(9),a(10))
+                 if(j0/=3000)then
+!                    write(*,*) 'j0=',j0
+                     rr = sqrt((parts%x(1,i) - parts%x(1,j0))**2 + (parts%x(2,i) - parts%x(2,j0))**2)
                      q = rr/hsml
                      w = factor * ( (1-q/2)**4 *(1+2*q) )
-                     parts%dgu(1,k) = (w + parts%w(k))/2 * dx
-!                  endif
-                  
-              elseif(parts%zone(j)==4)then 
-!7                  if(j/=1891)then
-!1                      parts%dgu(2,k) = parts%w(k) * (parts%x(2,i) - parts%x(2,j))
-!2                      parts%dgu(2,k) = parts%w(k) * dx
-
-!3                       parts%dgu(1,k) = parts%dwdx(1,k) * (parts%x(1,i) - parts%x(1,j))
-!3                       parts%dgu(2,k) = parts%dwdx(2,k) * (parts%x(2,i) - parts%x(2,j))
-                       
-!4                       rr = sqrt((parts%x(1,i) - (parts%x(1,j) + dx/2))**2 + (parts%x(2,i) - parts%x(2,j))**2)
-!4                       q = rr/hsml
-!4                       w = factor * ( (1-q/2)**4 *(1+2*q) )
-!4                       parts%dgu(2,k) = w * dx
-
-!5                       parts%dgu(2,k) = parts%w(k)*dx
-                       
-                     rr = sqrt((parts%x(1,i) - (parts%x(1,j) + dx))**2 + (parts%x(2,i) - parts%x(2,j))**2)
+                     nx = (parts%x(2,j) - parts%x(2,j0))/sqrt((parts%x(1,j) - parts%x(1,j0))**2 + (parts%x(2,j) - parts%x(2,j0))**2)
+                     ny = (parts%x(1,j0) - parts%x(1,j))/sqrt((parts%x(1,j) - parts%x(1,j0))**2 + (parts%x(2,j) - parts%x(2,j0))**2)
+                     parts%dgu(1,k) = (w + parts%w(k))/2 * dx * nx
+                     parts%dgu(2,k) = (w + parts%w(k))/2 * dx * ny
+                     parts%rhos(k) = (parts%rho%r(j) + parts%rho%r(j0))/2
+                     parts%mons(1,k) = (parts%mone%x%r(j) + parts%mone%x%r(j0))/2
+                     parts%mons(2,k) = (parts%mone%y%r(j) + parts%mone%y%r(j0))/2
+                     parts%ps(k) = (parts%p%r(j)/parts%rho%r(j) + parts%p%r(j0)/parts%rho%r(j0))/2*parts%rhos(k)
+                 endif
+                 a = 3000
+              else
+                     rr = sqrt((parts%x(1,i) - parts%x(1,j+1))**2 + (parts%x(2,i) - parts%x(2,j+1))**2)
                      q = rr/hsml
                      w = factor * ( (1-q/2)**4 *(1+2*q) )
-                     parts%dgu(2,k) = (w + parts%w(k))/2 * dx
-!7                  else
-!1                       parts%dgu(1,k) = parts%w(k) * (parts%x(1,i) - parts%x(1,j))/2
-!1                       parts%dgu(2,k) = parts%w(k) * (parts%x(2,i) - parts%x(2,j))/2
-!2                       parts%dgu(1,k) = parts%w(k) * dx/2
-!2                       parts%dgu(2,k) = parts%w(k) * dx/2
-!3                       parts%dgu(1,k) = parts%dwdx(1,k) * (parts%x(1,i) - parts%x(1,j))
-!3                       parts%dgu(2,k) = parts%dwdx(2,k) * (parts%x(2,i) - parts%x(2,j))
-
-!4                       rr = sqrt((parts%x(1,i) - (parts%x(1,j) + dx/2))**2 + (parts%x(2,i) - parts%x(2,j))**2)
-!4                       q = rr/hsml
-!4                       w = factor * ( (1-q/2)**4 *(1+2*q) )
-!4                       parts%dgu(2,k) = w * dx
-
-!5                       parts%dgu(2,k) = parts%w(k)*dx
-!5                       parts%dgu(1,k) = parts%w(k)*dx
-
-!7                     rr = sqrt((parts%x(1,i) - (parts%x(1,j) + dx))**2 + (parts%x(2,i) - parts%x(2,j))**2)
-!7                     q = rr/hsml
-!7                     w = factor * ( (1-q/2)**4 *(1+2*q) )
-!7                     parts%dgu(2,k) = (w + parts%w(k))/2 * dx
-!7                  endif
-              elseif(parts%zone(j)==5)then
-!                  if(j/=2053)then
-!1                       parts%dgu(1,k) = parts%w(k) * (parts%x(1,j) - parts%x(1,i))
-!2                       parts%dgu(1,k) = -parts%w(k) * dx
-!3                       parts%dgu(1,k) = parts%dwdx(1,k) * (parts%x(1,i) - parts%x(1,j))
-!3                       parts%dgu(2,k) = parts%dwdx(2,k) * (parts%x(2,i) - parts%x(2,j))
-
-!4                       rr = sqrt((parts%x(1,i) - parts%x(1,j))**2 + (parts%x(2,i) - (parts%x(2,j) + dx/2))**2)
-!4                       q = rr/hsml
-!4                       w = factor * ( (1-q/2)**4 *(1+2*q) )
-!4                       parts%dgu(1,k) = -w * dx
-                       
-!5                       parts%dgu(1,k) = -parts%w(k)*dx
-
-                     rr = sqrt((parts%x(1,i) - parts%x(1,j))**2 + (parts%x(2,i) - (parts%x(2,j)+dx))**2)
-                     q = rr/hsml
-                     w = factor * ( (1-q/2)**4 *(1+2*q) )
-                     parts%dgu(1,k) = -(w + parts%w(k))/2 * dx
- !                 else
-!1                       parts%dgu(1,k) = parts%w(k) * (parts%x(1,j) - parts%x(1,i))/2
-!1                       parts%dgu(2,k) = parts%w(k) * (parts%x(2,j) - parts%x(2,i))/2
-!2                       parts%dgu(1,k) = -parts%w(k) * dx/2
-!2                       parts%dgu(2,k) = -parts%w(k) * dx/2 
-
-!3                       parts%dgu(1,k) = parts%dwdx(1,k) * (parts%x(1,i) - parts%x(1,j))
-!3                       parts%dgu(2,k) = parts%dwdx(2,k) * (parts%x(2,i) - parts%x(2,j))
-
-!4                       rr = sqrt((parts%x(1,i) - parts%x(1,j))**2 + (parts%x(2,i) - (parts%x(2,j) + dx/2)**2))
-!4                       q = rr/hsml
-!4                       w = factor * ( (1-q/2)**4 *(1+2*q) )
-!4                       parts%dgu(1,k) = -w * dx
-!5                       parts%dgu(1,k) = -parts%w(k)*dx/2
-!5                       parts%dgu(2,k) = -parts%w(k)*dx/2
-
-!                     rr = sqrt((parts%x(1,i) - parts%x(1,j))**2 + (parts%x(2,i) - (parts%x(2,j)+dx))**2)
-!                     q = rr/hsml
-!                     w = factor * ( (1-q/2)**4 *(1+2*q) )
-!                     parts%dgu(1,k) = -(w + parts%w(k))/2 * dx
-!                  endif
+                     nx = (parts%x(2,j) - parts%x(2,j+1))/sqrt((parts%x(1,j) - parts%x(1,j+1))**2 + (parts%x(2,j) - parts%x(2,j+1))**2)
+                     ny = (parts%x(1,j+1) - parts%x(1,j))/sqrt((parts%x(1,j) - parts%x(1,j+1))**2 + (parts%x(2,j) - parts%x(2,j+1))**2)
+                     parts%dgu(1,k) = (w + parts%w(k))/2 * dx * nx
+                     parts%dgu(2,k) = (w + parts%w(k))/2 * dx * ny
+                     parts%rhos(k) = (parts%rho%r(j) + parts%rho%r(j+1))/2
+                     parts%mons(1,k) = (parts%mone%x%r(j) + parts%mone%x%r(j+1))/2
+                     parts%mons(2,k) = (parts%mone%y%r(j) + parts%mone%y%r(j+1))/2
+                     parts%ps(k) = (parts%p%r(j)/parts%rho%r(j) + parts%p%r(j+1)/parts%rho%r(j+1))/2*parts%rhos(k)
               endif
-          else
-              if(parts%zone(i)==3)then
-!                  if(i/=1801)then
-!1                       parts%dgu(1,k) = parts%w(k) * (parts%x(1,j) - parts%x(1,i))
-!2                       parts%dgu(1,k) = parts%w(k) * dx
-!3                       parts%dgu(1,k) = parts%dwdx(1,k) * (parts%x(1,i) - parts%x(1,j))
-!3                       parts%dgu(2,k) = parts%dwdx(2,k) * (parts%x(2,i) - parts%x(2,j))
+          endif
+      enddo
+      
+      end subroutine
+      
+! Subroutine to calculate the delta gamma of unified condition.
+!----------------------------------------------------------------------      
+      subroutine delta_gamma_unified3(parts)
+!----------------------------------------------------------------------
+      implicit none
+  
+      class(particles) parts      
+      integer k,i,j,d,k0,i0,j0,m
+      real(dp) q0,q1,q2,q1c,q2c,Pq2,Pq1,hsml,nx,ny,cos1,cos2
+      real(dp) , parameter :: pi = 3.1415926535898
+      integer , dimension(10) :: a  
+      hsml = parts%hsml(1)
+      
+      do m = 1,10
+         a(m) = 3000
+      enddo
+      do k = 1, parts%niac
+          do d = 1,parts%dim
+              parts%dgu(d,k)=0.d0
+          enddo
+          m=0
+          i = parts%pair_i(k)
+          j = parts%pair_j(k)
+          if(parts%itype(i)*parts%itype(j)>0)cycle
+!          if(parts%zone(j)==6)then
+              do k0 = 1, parts%niac
+                 i0 = parts%pair_i(k0)
+                 j0 = parts%pair_j(k0)
+                    if(i0==i.and.j0>j)then
+                       m = m+1
+                       a(m) = j0
+                    endif
+              enddo
+              j0 = min(a(1),a(2),a(3),a(4),a(5),a(6),a(7),a(8),a(9),a(10))
+              if(j0/=3000)then
+                nx = (parts%x(2,j) - parts%x(2,j0))/sqrt((parts%x(1,j) - parts%x(1,j0))**2 + (parts%x(2,j) - parts%x(2,j0))**2)
+                ny = (parts%x(1,j0) - parts%x(1,j))/sqrt((parts%x(1,j) - parts%x(1,j0))**2 + (parts%x(2,j) - parts%x(2,j0))**2)
+                q0 = sqrt(((parts%x(1,i) - parts%x(1,j))*nx)**2 + ((parts%x(2,i) - parts%x(2,j))*ny)**2)/hsml
+                q1 = sqrt((parts%x(1,i) - parts%x(1,j))**2 + (parts%x(2,i) - parts%x(2,j))**2)/hsml
+                q2 = sqrt((parts%x(1,i) - parts%x(1,j0))**2 + (parts%x(2,i) - parts%x(2,j0))**2)/hsml
+                cos1 = -((parts%x(1,i) - parts%x(1,j)) * (parts%x(1,j0) - parts%x(1,j)) + (parts%x(2,i) - parts%x(2,j)) * (parts%x(2,j0) - parts%x(2,j)))/   &
+                     (sqrt((parts%x(1,i) - parts%x(1,j))**2 + (parts%x(2,i) -parts%x(2,j))**2)*sqrt((parts%x(1,j0) - parts%x(1,j))**2 + (parts%x(2,j0) - parts%x(2,j))**2))
+                cos2 = -((parts%x(1,i) - parts%x(1,j0)) * (parts%x(1,j0) - parts%x(1,j)) + (parts%x(2,i) - parts%x(2,j0)) * (parts%x(2,j0) - parts%x(2,j)))/  &
+                     (sqrt((parts%x(1,i) - parts%x(1,j0))**2 + (parts%x(2,i) -parts%x(2,j0))**2)*sqrt((parts%x(1,j0) - parts%x(1,j))**2 + (parts%x(2,j0) - parts%x(2,j))**2))
+                q1c = q1*cos1
+                q2c = q2*cos2
+                Pq2 = 7./192.*q2**5-21./64.*q2**4+35./32.*q2**3-35./24.*q2**2+7./4.+q0**2*(35./768.*q2**3-7./16.*q2**2+105./64.*q2-35./12.)+q0**4*(35./512.*q2-7./8.)
+                Pq1 = 7./192.*q1**5-21./64.*q1**4+35./32.*q1**3-35./24.*q1**2+7./4.+q0**2*(35./768.*q1**3-7./16.*q1**2+105./64.*q1-35./12.)+q0**4*(35./512.*q1-7./8.)
+                parts%dgu(1,k) = nx*(q2c/pi*Pq2-q1c/pi*Pq1+q0**4/pi*(105./64.+35./512.*q0**2)*(sign(1.d0,q2c)*log((q2+abs(q2c))/abs(q0))-sign(1.d0,q1c)*log((q1+abs(q1c))/abs(q0))))/parts%hsml(j)
+                parts%dgu(2,k) = ny*(q2c/pi*Pq2-q1c/pi*Pq1+q0**4/pi*(105./64.+35./512.*q0**2)*(sign(1.d0,q2c)*log((q2+abs(q2c))/abs(q0))-sign(1.d0,q1c)*log((q1+abs(q1c))/abs(q0))))/parts%hsml(j)
+                parts%rhos(k) = (parts%rho%r(j) + parts%rho%r(j0))/2
+                parts%mons(1,k) = (parts%mone%x%r(j) + parts%mone%x%r(j0))/2
+                parts%mons(2,k) = (parts%mone%y%r(j) + parts%mone%y%r(j0))/2
+                parts%ps(k) = (parts%p%r(j)/parts%rho%r(j) + parts%p%r(j0)/parts%rho%r(j0))/2*parts%rhos(k)
+             endif
+                a = 3000  
+!          else 
+!              nx = (parts%x(2,j) - parts%x(2,j+1))/sqrt((parts%x(1,j) - parts%x(1,j+1))**2 + (parts%x(2,j) - parts%x(2,j+1))**2)
+!              ny = (parts%x(1,j+1) - parts%x(1,j))/sqrt((parts%x(1,j) - parts%x(1,j+1))**2 + (parts%x(2,j) - parts%x(2,j+1))**2)
+!              q0 = sqrt(((parts%x(1,i) - parts%x(1,j))*nx)**2 + ((parts%x(2,i) - parts%x(2,j))*ny)**2)/hsml
+!              q1 = sqrt((parts%x(1,i) - parts%x(1,j))**2 + (parts%x(2,i) - parts%x(2,j))**2)/hsml
+!              q2 = sqrt((parts%x(1,i) - parts%x(1,j+1))**2 + (parts%x(2,i) - parts%x(2,j+1))**2)/hsml
+!              cos1 = -((parts%x(1,i) - parts%x(1,j)) * (parts%x(1,j+1) - parts%x(1,j)) + (parts%x(2,i) - parts%x(2,j)) * (parts%x(2,j+1) - parts%x(2,j)))/   &
+!                 (sqrt((parts%x(1,i) - parts%x(1,j))**2 + (parts%x(2,i) -parts%x(2,j))**2)*sqrt((parts%x(1,j+1) - parts%x(1,j))**2 + (parts%x(2,j+1) - parts%x(2,j))**2))
+!              cos2 = -((parts%x(1,i) - parts%x(1,j+1)) * (parts%x(1,j+1) - parts%x(1,j)) + (parts%x(2,i) - parts%x(2,j+1)) * (parts%x(2,j+1) - parts%x(2,j)))/  &
+!                 (sqrt((parts%x(1,i) - parts%x(1,j+1))**2 + (parts%x(2,i) -parts%x(2,j+1))**2)*sqrt((parts%x(1,j+1) - parts%x(1,j))**2 + (parts%x(2,j+1) - parts%x(2,j))**2))
+!              q1c = q1*cos1
+!              q2c = q2*cos2
+!              Pq2 = 7./192.*q2**5-21./64.*q2**4+35./32.*q2**3-35./24.*q2**2+7./4.+q0**2*(35./768.*q2**3-7./16.*q2**2+105./64.*q2-35./12.)+q0**4*(35./512.*q2-7./8.)
+!              Pq1 = 7./192.*q1**5-21./64.*q1**4+35./32.*q1**3-35./24.*q1**2+7./4.+q0**2*(35./768.*q1**3-7./16.*q1**2+105./64.*q1-35./12.)+q0**4*(35./512.*q1-7./8.)
+!              parts%dgu(1,k) = nx*(q2c/pi*Pq2-q1c/pi*Pq1+q0**4/pi*(105./64.+35./512.*q0**2)*(sign(1.d0,q2c)*log((q2+abs(q2c))/abs(q0))-sign(1.d0,q1c)*log((q1+abs(q1c))/abs(q0))))/parts%hsml(j)
+!              parts%dgu(2,k) = ny*(q2c/pi*Pq2-q1c/pi*Pq1+q0**4/pi*(105./64.+35./512.*q0**2)*(sign(1.d0,q2c)*log((q2+abs(q2c))/abs(q0))-sign(1.d0,q1c)*log((q1+abs(q1c))/abs(q0))))/parts%hsml(j)
+!              parts%rhos(k) = (parts%rho%r(j) + parts%rho%r(j+1))/2
+!              parts%mons(1,k) = (parts%mone%x%r(j) + parts%mone%x%r(j+1))/2
+!              parts%mons(2,k) = (parts%mone%y%r(j) + parts%mone%y%r(j+1))/2
+!              parts%ps(k) = (parts%p%r(j)/parts%rho%r(j) + parts%p%r(j+1)/parts%rho%r(j+1))/2*parts%rhos(k)
+ !         endif
 
-!4                       rr = sqrt((parts%x(1,j) - parts%x(1,i))**2 +(parts%x(2,j) - (parts%x(2,i) - dx/2))**2)
-!4                       q = rr/hsml
-!4                       w = factor * ( (1-q/2)**4 *(1+2*q) )
-!4                       parts%dgu(1,k) = w * dx
-!5                        parts%dgu(1,k) = parts%w(k)*dx
-                       rr = sqrt((parts%x(1,j) - parts%x(1,i))**2 + (parts%x(2,j) - (parts%x(2,i) - dx))**2)
-                       q = rr/hsml
-                       w = factor * ( (1-q/2)**4 *(1+2*q) )
-                       parts%dgu(1,k) = (w + parts%w(k))/2 * dx 
-!                      endif
-              elseif(parts%zone(i)==4)then
-!                  if(i/=1891)then
-!1                      parts%dgu(2,k) = parts%w(k) * (parts%x(2,j) - parts%x(2,i))
-!2                      parts%dgu(2,k) = parts%w(k) * dx
-!3                       parts%dgu(1,k) = parts%dwdx(1,k) * (parts%x(1,i) - parts%x(1,j))
-!3                       parts%dgu(2,k) = parts%dwdx(2,k) * (parts%x(2,i) - parts%x(2,j))
+      enddo
+      
+      end subroutine
 
-!4                       rr = sqrt((parts%x(1,j) - (parts%x(1,i) + dx/2))**2 +(parts%x(2,j) - parts%x(2,i))**2)
-!4                       q = rr/hsml
-!4                       w = factor * ( (1-q/2)**4 *(1+2*q) )
-!4                       parts%dgu(2,k) = w * dx
-!5                         parts%dgu(2,k) = parts%w(k)*dx
-                       rr = sqrt((parts%x(1,j) - (parts%x(1,i) + dx))**2 + (parts%x(2,j) - parts%x(2,i))**2)  
-                       q = rr/hsml
-                       w = factor * ( (1-q/2)**4 *(1+2*q) )
-                       parts%dgu(2,k) = (w + parts%w(k))/2 * dx 
-                       
- !                  else
+ 
+! Subroutine to calculate the delta gamma of unified condition.
+!----------------------------------------------------------------------      
+      subroutine delta_gamma_unified4(parts)
+!----------------------------------------------------------------------
+      implicit none
+  
+      class(particles) parts      
+       integer k,i,j,d,m,k0,i0,j0
+      real(dp) q0,q1,q2,q1c,q2c,Pq2,Pq1,factor,hsml,dx,rr,w,q,nx,ny
+      real(dp) , parameter :: pi = 3.1415926535898
+      integer , dimension(10) :: a  
+      hsml = parts%hsml(1)
+      
+      factor = 7.e0 / (4.e0*pi*hsml*hsml)
+      dx = abs(parts%x(2,1802) - parts%x(2,1801))
 
-!1                      parts%dgu(1,k) = parts%w(k) * (parts%x(1,j) - parts%x(1,i))/2
-!1                      parts%dgu(2,k) = parts%w(k) * (parts%x(2,j) - parts%x(2,i))/2
-!2                       parts%dgu(1,k) = parts%w(k) * dx/2
-!2                       parts%dgu(2,k) = parts%w(k) * dx/2 
-!3                      parts%dgu(1,k) = parts%dwdx(1,k) * (parts%x(1,i) - parts%x(1,j))
-!3                      parts%dgu(2,k) = parts%dwdx(2,k) * (parts%x(2,i) - parts%x(2,j))
-
-!4                       rr = sqrt((parts%x(1,j) - (parts%x(1,i) + dx/2))**2 +(parts%x(2,j) - parts%x(2,i))**2)
-!4                       q = rr/hsml
-!4                       w = factor * ( (1-q/2)**4 *(1+2*q) )
-!4                       parts%dgu(2,k) = w * dx
-!5                         parts%dgu(2,k) = parts%w(k)*dx/2
-!5                         parts%dgu(1,k) = parts%w(k)*dx/2
-!                       rr = sqrt((parts%x(1,j) - (parts%x(1,i) + dx))**2 + (parts%x(2,j) - parts%x(2,i))**2)
-!                       q = rr/hsml
- !                      w = factor * ( (1-q/2)**4 *(1+2*q) )
- !                      parts%dgu(2,k) = (w + parts%w(k))/2 * dx 
-
-!                  endif
-              elseif(parts%zone(i)==5)then
-!                  if(i/=2053)then
-!1                      parts%dgu(1,k) = parts%w(k) * (parts%x(1,i) - parts%x(1,j))
-!2                       parts%dgu(1,k) = -parts%w(k) * dx
-!3                       parts%dgu(1,k) = parts%dwdx(1,k) * (parts%x(1,i) - parts%x(1,j))
-!3                       parts%dgu(2,k) = parts%dwdx(2,k) * (parts%x(2,i) - parts%x(2,j))
-
-!4                       rr = sqrt((parts%x(1,j) - parts%x(1,i))**2 +(parts%x(2,j) - (parts%x(2,i) + dx/2))**2)
-!4                       q = rr/hsml
-!4                       w = factor * ( (1-q/2)**4 *(1+2*q) )
-!4                       parts%dgu(1,k) = -w * dx      
-!5                         parts%dgu(1,k) = -parts%w(k) * dx
-
-                       rr = sqrt((parts%x(1,j) - parts%x(1,i))**2 + (parts%x(2,j) - (parts%x(2,i) + dx))**2)
-                       q = rr/hsml
-                       w = factor * ( (1-q/2)**4 *(1+2*q) )
-                       parts%dgu(1,k) = -(w + parts%w(k))/2 * dx 
-                       
-!                  else
-!1                      parts%dgu(1,k) = parts%w(k) * (parts%x(1,i) - parts%x(1,j))
-!1                      parts%dgu(2,k) = parts%w(k) * (parts%x(2,i) - parts%x(2,j))
-!2                       parts%dgu(1,k) = -parts%w(k) * dx/2
-!2                       parts%dgu(2,k) = -parts%w(k) * dx/2 
-!3                      parts%dgu(1,k) = parts%dwdx(1,k) * (parts%x(1,i) - parts%x(1,j))
-!3                       parts%dgu(2,k) = parts%dwdx(2,k) * (parts%x(2,i) - parts%x(2,j))
-
-!4                       rr = sqrt((parts%x(1,j) - parts%x(1,i))**2 +(parts%x(2,j) - (parts%x(2,i) + dx/2))**2)
-!4                       q = rr/hsml
-!4                       w = factor * ( (1-q/2)**4 *(1+2*q) )
-!4                       parts%dgu(1,k) = -w * dx        
-!5                         parts%dgu(1,k) = -parts%w(k) * dx/2
-!5                         parts%dgu(2,k) = -parts%w(k) * dx/2
-
-!                       rr = sqrt((parts%x(1,j) - parts%x(1,i))**2 + (parts%x(2,j) - (parts%x(2,i) + dx))**2)
-!                       q = rr/hsml
-!                       w = factor * ( (1-q/2)**4 *(1+2*q) )
-!                       parts%dgu(1,k) = -(w + parts%w(k))/2 * dx 
-                       
-!                  endif
-              endif
+      do m = 1,10
+         a(m) = 3000
+      enddo
+            
+      do k = 1, parts%niac
+          do d = 1,parts%dim
+              parts%dgu(d,k)=0.d0
+          enddo
+          i = parts%pair_i(k)
+          j = parts%pair_j(k)
+          m=0
+          if(parts%itype(i)*parts%itype(j)>0)cycle
+          if(parts%itype(i)>0)then
+                 do k0 = 1, parts%niac
+                     i0 = parts%pair_i(k0)
+                     j0 = parts%pair_j(k0)
+                     if(i0==i.and.j0>j)then
+                         m = m+1
+                         a(m) = j0
+!                         write(*,*) 'a(m)',a(m),'m=',m
+                     endif
+                 enddo
+!                 write(*,*) 'a(1)=',a(1),'a(2)=',a(2),'a(3)=',a(3),a(4),a(5),a(6),a(7),a(8),a(9),a(10)
+                 j0 = min(a(1),a(2),a(3),a(4),a(5),a(6),a(7),a(8),a(9),a(10))
+                 if(j0/=3000)then
+!                    write(*,*) 'j0=',j0
+                     rr = sqrt((parts%x(1,i) - parts%x(1,j0))**2 + (parts%x(2,i) - parts%x(2,j0))**2)
+                     q = rr/hsml
+                     w = factor * ( (1-q/2)**4 *(1+2*q) )
+                     nx = (parts%x(2,j) - parts%x(2,j0))/sqrt((parts%x(1,j) - parts%x(1,j0))**2 + (parts%x(2,j) - parts%x(2,j0))**2)
+                     ny = (parts%x(1,j0) - parts%x(1,j))/sqrt((parts%x(1,j) - parts%x(1,j0))**2 + (parts%x(2,j) - parts%x(2,j0))**2)
+                     parts%dgu(1,k) = (w + parts%w(k))/2 * dx * nx
+                     parts%dgu(2,k) = (w + parts%w(k))/2 * dx * ny
+                     parts%rhos(k) = (parts%rho%r(j) + parts%rho%r(j0))/2
+                     parts%mons(1,k) = (parts%mone%x%r(j) + parts%mone%x%r(j0))/2
+                     parts%mons(2,k) = (parts%mone%y%r(j) + parts%mone%y%r(j0))/2
+                     parts%ps(k) = (parts%p%r(j)/parts%rho%r(j) + parts%p%r(j0)/parts%rho%r(j0))/2*parts%rhos(k)
+                 endif
+                 a = 3000
           endif
       enddo
       
@@ -3985,6 +4099,7 @@ end subroutine
       real(dp) selfdens, hv(3), r, wi(parts%maxn),vxi,vxj,dx
       type(p2r) vx_i(3), vx_j(3) 
       type(material),pointer :: water
+      type(array),allocatable :: rho
       water => parts%material
       ntotal = parts%ntotal + parts%nvirt
 
@@ -3997,11 +4112,13 @@ end subroutine
 
       r=0.d0
       
+      allocate(rho);allocate(rho%r(ntotal))
+      rho%ndim1 = ntotal
 !     Firstly calculate the integration of the kernel over the space
 
       do i=parts%ntotal +1,parts%ntotal + parts%nvirt
         call parts%kernel(r,hv,parts%hsml(i),selfdens,hv)
-        wi(i)=selfdens*parts%mass%r(i)/parts%rho%r(i)  !由于rho不能要自加，这里也要自加
+        wi(i)=0!selfdens*parts%mass%r(i)/parts%rho%r(i)  !由于rho不能要自加，这里也要自加
       enddo
 
       do k=1,parts%niac
@@ -4014,11 +4131,14 @@ end subroutine
         endif
       enddo
 
+!      write(*,*) 'parts%itype(1801)=',parts%itype(1891)
+      
 !     Secondly calculate the rho integration over the space
 
       do i=parts%ntotal +1,parts%ntotal + parts%nvirt
         call parts%kernel(r,hv,parts%hsml(i),selfdens,hv)
-        parts%rho%r(i) = selfdens*parts%mass%r(i)   !rho不能为0
+!        parts%rho%r(i) = selfdens*parts%mass%r(i)   !rho不能为0
+        rho%r(i) = 0       
         parts%mone%x%r(i) = 0
         parts%mone%y%r(i) = 0
       enddo
@@ -4027,20 +4147,9 @@ end subroutine
       do k=1,parts%niac
         i = parts%pair_i(k)
         j = parts%pair_j(k)
-        if(parts%itype(i)<0.and.parts%itype(j)>0)then
-            parts%rho%r(i) = parts%rho%r(i) + parts%mass%r(j)*parts%w(k)
-            if(parts%zone(i) == 3)then
-                parts%mone%x%r(i) = parts%mone%x%r(i) + parts%mass%r(j)/parts%rho%r(j)*water%viscosity*parts%vx%x%r(j)/(parts%x(1,j)-parts%x(1,i))*parts%w(k)
-                parts%mone%y%r(i) = parts%mone%y%r(i) + parts%mass%r(j)/parts%rho%r(j)*water%viscosity*parts%vx%y%r(j)/(parts%x(1,j)-parts%x(1,i))*parts%w(k)
-            elseif(parts%zone(i) ==4)then
-                parts%mone%x%r(i) = parts%mone%x%r(i) + parts%mass%r(j)/parts%rho%r(j)*water%viscosity*parts%vx%x%r(j)/(parts%x(2,j)-parts%x(2,i))*parts%w(k)
-                parts%mone%y%r(i) = parts%mone%y%r(i) + parts%mass%r(j)/parts%rho%r(j)*water%viscosity*parts%vx%y%r(j)/(parts%x(2,j)-parts%x(2,i))*parts%w(k)
-            else
-                parts%mone%x%r(i) = parts%mone%x%r(i) + parts%mass%r(j)/parts%rho%r(j)*water%viscosity*parts%vx%x%r(j)/(parts%x(1,i)-parts%x(1,j))*parts%w(k)
-                parts%mone%y%r(i) = parts%mone%y%r(i) + parts%mass%r(j)/parts%rho%r(j)*water%viscosity*parts%vx%y%r(j)/(parts%x(1,i)-parts%x(1,j))*parts%w(k)
-            endif
-        elseif(parts%itype(i)>0.and.parts%itype(j)<0)then
-            parts%rho%r(j) = parts%rho%r(j) + parts%mass%r(i)*parts%w(k)
+        if(parts%itype(i)>0.and.parts%itype(j)<0)then
+!            parts%rho%r(j) = parts%rho%r(j) + parts%mass%r(i)*parts%w(k)
+            rho%r(i) = rho%r(i) + parts%mass%r(i) * parts%w(k)
             if(parts%zone(j) == 3)then
                 parts%mone%x%r(j) = parts%mone%x%r(j) + parts%mass%r(i)/parts%rho%r(i)*water%viscosity*parts%vx%x%r(i)/(parts%x(1,i)-parts%x(1,j))*parts%w(k)
                 parts%mone%y%r(j) = parts%mone%y%r(j) + parts%mass%r(i)/parts%rho%r(i)*water%viscosity*parts%vx%y%r(i)/(parts%x(1,i)-parts%x(1,j))*parts%w(k)
@@ -4058,13 +4167,15 @@ end subroutine
 
         do i=parts%ntotal +1,parts%ntotal + parts%nvirt
           if(wi(i)==0)wi(i)=1
-          parts%rho%r(i)=parts%rho%r(i)/wi(i)
+!          parts%rho%r(i)=parts%rho%r(i)/wi(i)
+          rho%r(i) = rho%r(i)/wi(i)
           parts%mone%x%r(i) = parts%mone%x%r(i)/wi(i)
           parts%mone%y%r(i) = parts%mone%y%r(i)/wi(i)
+          if(rho%r(i)/=0)parts%rho%r(i) = rho%r(i)
         enddo
 
 !------get rhos
-        do i=parts%ntotal +1,parts%ntotal + parts%nvirt
+!        do i=parts%ntotal +1,parts%ntotal + parts%nvirt
 !           write(*,*)'i=',i
 !           if(i==1801)then
 !               parts%rhos%r(i) = (parts%rho%r(i)+parts%rho%r(1891))/2.0d0
@@ -4075,11 +4186,11 @@ end subroutine
 !               parts%mons%x%r(i) = (parts%mone%x%r(i) + parts%mone%x%r(i-1))/2.0d0
 !               parts%mons%y%r(i) = (parts%mone%y%r(i) + parts%mone%y%r(i-1))/2.0d0
 !           elseif(i>=1891)then
-               parts%rhos%r(i) = (parts%rho%r(i) + parts%rho%r(i+1))/2.0d0
-               parts%mons%x%r(i) = (parts%mone%x%r(i) + parts%mone%x%r(i+1))/2.0d0
-               parts%mons%y%r(i) = (parts%mone%y%r(i) + parts%mone%y%r(i+1))/2.0d0
+!               parts%rhos%r(i) = (parts%rho%r(i) + parts%rho%r(i+1))/2.0d0
+!               parts%mons%x%r(i) = (parts%mone%x%r(i) + parts%mone%x%r(i+1))/2.0d0
+!               parts%mons%y%r(i) = (parts%mone%y%r(i) + parts%mone%y%r(i+1))/2.0d0
 !           endif
-        enddo
+!        enddo
 
         do i=parts%ntotal +1,parts%ntotal + parts%nvirt
             parts%p%r(i) =0.d0
@@ -4118,13 +4229,13 @@ end subroutine
           parts%p%r(i)=parts%p%r(i)/wi(i)
         enddo
         
-        
-        do i=parts%ntotal +1,parts%ntotal + parts%nvirt
+
+!        do i=parts%ntotal +1,parts%ntotal + parts%nvirt
 !          if(i==1801) parts%ps%r(i) = (parts%p%r(i)+parts%p%r(1891))/2.0d0*parts%rhos%r(i)
 !          if(1802<=i<=1890) parts%ps%r(i) = (parts%p%r(i) + parts%p%r(i-1))/2.0d0*parts%rhos%r(i)                          
-!          if(i>=1891)
-          parts%ps%r(i) = (parts%p%r(i) + parts%p%r(i+1))/2.0d0*parts%rhos%r(i)             !这个地方也是需要注意的。
-        enddo
+!          if(i>=1891)         
+!          parts%ps%r(i) = (parts%p%r(i) + parts%p%r(i+1))/2.0d0*parts%rhos%r(i)             !这个地方也是需要注意的。
+!        enddo
         
         do i=parts%ntotal +1,parts%ntotal + parts%nvirt
           parts%p%r(i)=parts%p%r(i)*parts%rho%r(i)
