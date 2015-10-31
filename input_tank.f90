@@ -79,7 +79,7 @@ call parts%take_real(tank,2)
 !call parts%take_virtual(tank,5)
 !call parts%take_virtual(tank,6)
 
-call parts%take_boundary2(tank)
+call parts%take_boundary_for_tank(tank)
 !call parts%take_virtual(tank,4)
 !call parts%take_virtual(tank,5)
 
@@ -126,7 +126,7 @@ call initial_density(parts)
 !enddo
 
 do i = 1,parts%ntotal + parts%nvirt 
-    if(parts%zone(i)==3.or.parts%zone(i)==4.or.parts%zone(i)==5)then 
+    if(parts%zone(i)/=2)then 
         parts%vol%r(i) = parts%vol%r(i)/2.0d0
         if(parts%x(1,i)<0.02.and.parts%x(2,i)<0.02) parts%vol%r(i)=parts%vol%r(i)/2.0d0
         if(parts%x(1,i)>3.24.and.parts%x(2,i)<0.02) parts%vol%r(i)=parts%vol%r(i)/2.0d0

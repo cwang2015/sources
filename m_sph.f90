@@ -624,6 +624,8 @@ parts%vx%x%r = 0.d0; parts%vx%y%r = 0.d0
 allocate(parts%mone); allocate(parts%mone%x,parts%mone%y)
 allocate(parts%mone%x%r(maxn), parts%mone%y%r(maxn))
 parts%mone%x%r = 0.d0; parts%mone%y%r = 0.d0
+allocate(parts%gammaa); allocate(parts%gammaa%r(maxn))
+parts%gammaa%r = 0.d0
 !allocate(parts%mons); allocate(parts%mons%x,parts%mons%y)
 !allocate(parts%mons%x%r(maxn), parts%mons%y%r(maxn))
 !parts%mons%x%r = 0.d0; parts%mons%y%r = 0.d0
@@ -1389,9 +1391,10 @@ return
 implicit none     
 
 integer :: i, j, k, d, ntotal, it 
+real(dp) dvx(3) 
 type(particles), pointer :: pl
 type(array) :: lastvx_x,lastvx_y,temp1_x,temp1_y,lastrho,temp2
-
+type(p2r) vx_i(3), vx_j(3) 
 
 
 
@@ -1408,8 +1411,21 @@ pl%x(1,i) = pl%x(1,i) + dt * pl%vx%x%r(i)
 pl%x(2,i) = pl%x(2,i) + dt * pl%vx%y%r(i)
 enddo
 
-do i = 1,pl%ntotal + pl%nvirt
-pl%rho%r(i) = pl%rho%r(i) + dt * pl%drho%r(i)
+do k=1,parts%niac
+    i = parts%pair_i(k)
+    j = parts%pair_j(k)
+    vx_i = parts%vx%cmpt(i); vx_j = parts%vx%cmpt(j)
+    do d=1,parts%dim
+      dvx(d) = vx_i(d)%p - vx_j(d)%p
+    enddo
+    parts%drho%r(i) = parts%drho%r(i) + parts%mass%r(j)*(dvx(1)*parts%dwdx(1,k)+dvx(2)*parts%dwdx(2,k))!ÊéÉÏµÄ£¨4.34£©
+    parts%drho%r(j) = parts%drho%r(j) + parts%mass%r(i)*(dvx(1)*parts%dwdx(1,k)+dvx(2)*parts%dwdx(2,k))
+    if(parts%itype(i)*parts%itype(j)>0)cycle
+    parts%drho%r(i) = parts%drho%r(i) - parts%rho%r(i)*(parts%dgu(1,k) * vx_i(1)%p + parts%dgu(2,k) *vx_i(2)%p)
+enddo
+
+do i = 1,pl%ntotal
+    pl%rho%r(i) = pl%rho%r(i) + dt * (pl%drho%r(i)/parts%gammaa%r(i)+10**-8)
 enddo
 
 
@@ -1911,9 +1927,11 @@ endif
 !--- Added by Wang
 !if(nor_density) call norm_density(pl)
 
+call get_gammaa(pl)
+
 !------unified get rho of nvirt particles
 call nvirt_density_unified(pl)
-
+!call pressure_nvirt(pl)
 !______Analytical value of delta gamma
 call delta_gamma_unified3(pl)
 
