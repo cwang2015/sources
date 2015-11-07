@@ -162,7 +162,9 @@ integer :: skf = 4
    real(dp), pointer, dimension(:)   :: w    => null()
    real(dp), pointer, dimension(:)   :: ps    => null()
    real(dp), pointer, dimension(:)   :: rhos => null()
+   real(dp), pointer, dimension(:)   :: gammaas => null()
    real(dp), pointer, dimension(:,:) :: dwdx => null()
+   real(dp), pointer, dimension(:,:) :: n => null()
    real(dp), pointer, dimension(:,:) :: mons => null()
    real(dp), pointer, dimension(:,:) :: dgu => null()
 ! Particle fundamental data
@@ -321,8 +323,11 @@ integer :: skf = 4
        procedure :: delta_gamma_unified2
        procedure :: delta_gamma_unified3
        procedure :: delta_gamma_unified4
+       procedure :: delta_gamma_unified5
        procedure :: real_density_unified
+       procedure :: real_density_unified2
        procedure :: momentum_equation_unified       
+       procedure :: momentum_equation_unified2       
        procedure :: freesurface
        procedure :: newtonian_fluid
        procedure :: art_visc
@@ -343,6 +348,7 @@ integer :: skf = 4
        procedure :: df3_omp
        procedure :: df4
        procedure :: df4_omp
+       procedure :: psi
        procedure :: div
        procedure :: div_omp
        procedure :: div2
@@ -2934,6 +2940,25 @@ end function
       return
       end subroutine
 
+!---------------------------------------------------------------------
+      subroutine get_norm(parts)
+!---------------------------------------------------------------------
+      implicit none
+
+      class(particles) parts
+
+      integer i
+      
+      do i = parts%ntotal +1 ,parts%ntotal + parts%nvirt-1
+      parts%n(1,i) = (parts%x(2,i) - parts%x(2,i+1))/sqrt((parts%x(1,i) - parts%x(1,i+1))**2 + (parts%x(2,i) - parts%x(2,i+1))**2)
+      parts%n(2,i) = (parts%x(1,i+1) - parts%x(1,i))/sqrt((parts%x(1,i) - parts%x(1,i+1))**2 + (parts%x(2,i) - parts%x(2,i+1))**2)
+      
+      !              nx = (parts%x(2,j) - parts%x(2,j+1))/sqrt((parts%x(1,j) - parts%x(1,j+1))**2 + (parts%x(2,j) - parts%x(2,j+1))**2)
+!              ny = (parts%x(1,j+1) - parts%x(1,j))/sqrt((parts%x(1,j) - parts%x(1,j+1))**2 + (parts%x(2,j) - parts%x(2,j+1))**2)
+      enddo
+
+      end subroutine
+              
 !----------------------------------------------------------------------
                       subroutine pressure(parts)
 !----------------------------------------------------------------------
@@ -3307,6 +3332,78 @@ end subroutine
       end subroutine
 
 
+!-------------------------------------------------
+          function psi(parts,q,zeta) result(val)
+!-------------------------------------------------
+implicit none
+
+class(particles) parts
+real(dp) zeta,q,val,a,b,c
+integer i, j, k
+
+!c = 4*zeta**2/q**4
+!a = acosh(2*zeta/q) 
+!b = atan(sqrt(4*zeta**2/q**2 -1))
+
+val = q * sqrt((zeta**2 - q**2./4.)) * (-4./3.*zeta**5 + 7.*zeta**4 - (5./12.* q**2 +14.)*zeta**3 + 7./3.*(q**2+5.)*zeta**2   &
+      - 1./4.*(5./8.*q**2 +21.)*q**2*zeta + 7./6.*q**4 +35./6.*q**2 - 7.) - (5./8.*q**2 + 21.)*q**5/16.*acosh(2*zeta/q)   &
+      + 2*atan(sqrt(4*zeta**2/q**2 -1))
+      
+end function
+
+
+!Subroutine to calculate the gammaa .
+!----------------------------------------------------------------------
+      subroutine get_gammaa2(parts) 
+!----------------------------------------------------------------------
+      implicit none
+
+      class(particles) parts
+      integer  i, j, k, d      
+      real(dp)  q0,r1,r2,y1,y2,q00,zeta(2),nx,ny,hsml,cos1,cos2
+      real(dp) , parameter :: pi = 3.1415926535898
+      
+      hsml = parts%hsml(1)
+      do i = 1, parts%ntotal
+          parts%gammaa%r(i) = 0.d0
+      enddo
+      
+      do k = 1,parts%niac
+          do d = 1,parts%dim
+              parts%dgu(d,k)=0.d0
+          enddo
+          i = parts%pair_i(k)
+          j = parts%pair_j(k)
+          if(parts%itype(i)*parts%itype(j)>0)cycle
+              nx = (parts%x(2,j) - parts%x(2,j+1))/sqrt((parts%x(1,j) - parts%x(1,j+1))**2 + (parts%x(2,j) - parts%x(2,j+1))**2)
+              ny = (parts%x(1,j+1) - parts%x(1,j))/sqrt((parts%x(1,j) - parts%x(1,j+1))**2 + (parts%x(2,j) - parts%x(2,j+1))**2)
+              q0 = sqrt(((parts%x(1,i) - parts%x(1,j))*nx)**2 + ((parts%x(2,i) - parts%x(2,j))*ny)**2)/hsml
+              r1 = sqrt((parts%x(1,i) - parts%x(1,j))**2 + (parts%x(2,i) - parts%x(2,j))**2)
+              r2 = sqrt((parts%x(1,i) - parts%x(1,j+1))**2 + (parts%x(2,i) - parts%x(2,j+1))**2)
+              cos1 = -((parts%x(1,i) - parts%x(1,j)) * (parts%x(1,j+1) - parts%x(1,j)) + (parts%x(2,i) - parts%x(2,j)) * (parts%x(2,j+1) - parts%x(2,j)))/   &
+                 (sqrt((parts%x(1,i) - parts%x(1,j))**2 + (parts%x(2,i) -parts%x(2,j))**2)*sqrt((parts%x(1,j+1) - parts%x(1,j))**2 + (parts%x(2,j+1) - parts%x(2,j))**2))
+              cos2 = -((parts%x(1,i) - parts%x(1,j+1)) * (parts%x(1,j+1) - parts%x(1,j)) + (parts%x(2,i) - parts%x(2,j+1)) * (parts%x(2,j+1) - parts%x(2,j)))/  &
+                 (sqrt((parts%x(1,i) - parts%x(1,j+1))**2 + (parts%x(2,i) -parts%x(2,j+1))**2)*sqrt((parts%x(1,j+1) - parts%x(1,j))**2 + (parts%x(2,j+1) - parts%x(2,j))**2))
+              y1 = r1*cos1
+              y2 = r2*cos2
+              q00 = min(q0,2.)
+              zeta(1) = min(sqrt(q00**2 + y1**2/hsml**2)/2,1.)
+              zeta(2) = min(sqrt(q00**2 + y2**2/hsml**2)/2,1.)
+              parts%gammaas(k) = -1./(4*pi)*(sign(1.,y2)*parts%psi(q0,zeta(2)) - sign(1.,y1)*parts%psi(q0,zeta(1)))
+              parts%gammaa%r(i) = parts%gammaa%r(i) + parts%gammaas(k)     !因为为负号的话，下面会>1、、、
+      enddo              
+      do i = 1, parts%ntotal
+          parts%gammaa%r(i) = parts%gammaa%r(i) + 1.
+          if(parts%gammaa%r(i)>1.1d0)write(*,*) 'gammaa2 has something wrong'
+      enddo
+      
+      
+      
+      end subroutine
+
+
+      
+      
 
 
 !     wi(maxn)---integration of the kernel itself
@@ -3366,40 +3463,64 @@ end subroutine
 !          if(parts%gammaa%r(i) == 0) parts%gammaa%r(i) = 1
           parts%divvx%r(i) = parts%divvx%r(i)/(parts%rho%r(i) * (parts%gammaa%r(i)+10**-8))
       enddo
-      
-          
-!      do i = 1,ntotal
-!          do d= 1,parts%dim
-!              dgua(d,i) = 0.d0
-!          enddo
-!      enddo
-     
-!      do k=1,parts%niac
-!          i = parts%pair_i(k)
-!          j = parts%pair_j(k)
-!          if(parts%itype(i)<0.and.parts%itype(j)>0)then
-!          do d =1, parts%dim
-!             dgua(d,j) = dgua(d,j) + parts%dgu(d,k) 
-!         enddo
-!          elseif(parts%itype(i)>0.and.parts%itype(j)<0)then
-!          do d =1, parts%dim
-!             dgua(d,i) = dgua(d,i) + parts%dgu(d,k)
-!          enddo
-!          endif
-!      enddo
-      
-!      do i=1,parts%ntotal
-!          parts%drho%r(i) = parts%drho%r(i) - parts%rho%r(i)*(dgua(1,i)*parts%vx%x%r(i)+dgua(2,i)*parts%vx%y%r(i))
-!          parts%drho%r(i)= -parts%rho%r(i)*parts%divvx%r(i)
-!      enddo
-      
 
+      end subroutine
       
+!Subroutine to calculate the density with real_density_unified.
+!----------------------------------------------------------------------
+      subroutine real_density_unified2(parts)   !确保能量守恒的方式
+!----------------------------------------------------------------------
+      implicit none
+
+      class(particles) parts
+      integer ntotal, i, j, k, d      
+      real(dp) selfdens, hv(3), r,dvx(3) 
+!      type(array),allocatable :: divvx
+      real(dp), allocatable, dimension(:,:) :: dgua
+      type(p2r) vx_i(3), vx_j(3) 
+
+      ntotal = parts%ntotal + parts%nvirt
+!      allocate(divvx);allocate(divvx%r(parts%maxn))
+      allocate(dgua(parts%dim,parts%maxn))
+!      divvx%ndim1 = ntotal
+
+!     wi(maxn)---integration of the kernel itself
+        
+      hv = 0.d0
+
+!     Self density of each particle: Wii (Kernel for distance 0)
+!     and take contribution of particle itself:
+
+      r=0.d0
       
- !     do i=parts%ntotal+1,parts%ntotal+parts%nvirt
- !         parts%drho%r(i) = 0.d0
- !     enddo
+!     Firstly calculate the integration of the kernel over the space
+
+      do i=1,parts%ntotal
+        parts%divvx%r(i)=0.d0 
+      enddo
+
+      do k=1,parts%niac
+          i = parts%pair_i(k)
+          j = parts%pair_j(k)
+          vx_i = parts%vx%cmpt(i); vx_j = parts%vx%cmpt(j)
+          do d=1,parts%dim
+          dvx(d) = vx_i(d)%p - vx_j(d)%p
+          enddo
+!          parts%drho%r(i) = parts%drho%r(i) + parts%mass%r(j)*(dvx(1)*parts%dwdx(1,k)+dvx(2)*parts%dwdx(2,k))!书上的（4.34）
+!          parts%drho%r(j) = parts%drho%r(j) + parts%mass%r(i)*(dvx(1)*parts%dwdx(1,k)+dvx(2)*parts%dwdx(2,k))
+           parts%divvx%r(i) = parts%divvx%r(i) - parts%mass%r(j)*parts%rho%r(i)*(dvx(1)*parts%dwdx(1,k)+dvx(2)*parts%dwdx(2,k))
+           parts%divvx%r(j) = parts%divvx%r(j) - parts%mass%r(i)*parts%rho%r(j)*(dvx(1)*parts%dwdx(1,k)+dvx(2)*parts%dwdx(2,k))
+          if(parts%itype(i)>0.and.parts%itype(j)<0)then
+              if(parts%rhos(k)==0)cycle
+!              parts%drho%r(i) = parts%drho%r(i) - parts%rhos%r(j)*(parts%vx%x%r(i)*parts%dgu(1,k) + parts%vx%y%r(i)*parts%dgu(2,k))
+              parts%divvx%r(i) = parts%divvx%r(i) + parts%rhos(k)*parts%rho%r(i)*(parts%vx%x%r(i)*parts%dgu(1,k) + parts%vx%y%r(i)*parts%dgu(2,k))
+          endif    
+      enddo
       
+      do i = 1, parts%ntotal
+!          if(parts%gammaa%r(i) == 0) parts%gammaa%r(i) = 1
+          parts%divvx%r(i) = parts%divvx%r(i)/(parts%rho%r(i)**2 * (parts%gammaa%r(i)+10**-8))
+      enddo
 
       end subroutine
       
@@ -3469,22 +3590,28 @@ end subroutine
            enddo  
            rr = sqrt(rr)
            do d = 1,parts%dim
-              lap(d,i) = lap(d,i) + parts%mass%r(j)*water%viscosity*2/(parts%rho%r(i)*parts%rho%r(j))/(rr**2)*(dvx(1)*dx(1)+dvx(2)*dx(2))*parts%dwdx(d,k)    !这里的dwdx是对i吧？？？(33)
-              lap(d,j) = lap(d,j) - parts%mass%r(i)*water%viscosity*2/(parts%rho%r(i)*parts%rho%r(j))/(rr**2)*(dvx(1)*dx(1)+dvx(2)*dx(2))*parts%dwdx(d,k)
+              lap(d,i) = lap(d,i) + parts%mass%r(j)*water%viscosity*2/(parts%rho%r(i)*parts%rho%r(j))/(rr**2+0.01*parts%hsml(1)**2)*(dvx(1)*dx(1)+dvx(2)*dx(2))*parts%dwdx(d,k)    !这里的dwdx是对i吧？？？(33)
+              lap(d,j) = lap(d,j) - parts%mass%r(i)*water%viscosity*2/(parts%rho%r(i)*parts%rho%r(j))/(rr**2+0.01*parts%hsml(1)**2)*(dvx(1)*dx(1)+dvx(2)*dx(2))*parts%dwdx(d,k)
            enddo
         if(parts%itype(i)>0.and.parts%itype(j)<0)then
-            lapsx = sqrt(parts%dgu(1,k)**2+parts%dgu(2,k)**2)*parts%mone%x%r(j)/parts%rho%r(i)
-            lapsy = sqrt(parts%dgu(1,k)**2+parts%dgu(2,k)**2)*parts%mone%y%r(j)/parts%rho%r(i)
+            lapsx = sqrt(parts%dgu(1,k)**2+parts%dgu(2,k)**2)*parts%mons(1,k)/parts%rho%r(i)
+            lapsy = sqrt(parts%dgu(1,k)**2+parts%dgu(2,k)**2)*parts%mons(2,k)/parts%rho%r(i)
             lapa = sqrt(parts%dgu(1,k)**2+parts%dgu(2,k)**2)*(water%viscosity*parts%divvx%r(i))/parts%rho%r(i)!这里用div2可以吧？？？(33)式的第二项
-            if(parts%zone(j)==3)then
+            if(parts%x(1,j)<0.02.and.parts%x(2,j)>0.02)then
               lap(1,i) = lap(1,i) - lapa - lapsx
               lap(2,i) = lap(2,i) - lapsy
-            elseif(parts%zone(j)==4)then
+            elseif(parts%x(1,j)>0.02.and.parts%x(1,j)<3.24.and.parts%x(2,j)<0.02)then
               lap(1,i) = lap(1,i) - lapsx  
               lap(2,i) = lap(2,i) - lapa - lapsy
-            elseif(parts%zone(j)==5)then  
+            elseif(parts%x(1,i)>3.24.and.parts%x(2,i)>0.02)then
               lap(1,i) = lap(1,i) + lapa - lapsx
               lap(2,i) = lap(2,i) - lapsy
+            elseif(parts%x(1,i)>3.24.and.parts%x(2,i)<0.02)then
+              lap(1,i) = lap(1,i) + lapa/sqrt(2.) - lapsx/sqrt(2.)
+              lap(2,i) = lap(2,i) + lapa/sqrt(2.) - lapsy/sqrt(2.)
+            elseif(parts%x(1,i)<0.02.and.parts%x(2,i)<0.02)then
+              lap(1,i) = lap(1,i) - lapa/sqrt(2.) - lapsx/sqrt(2.)
+              lap(2,i) = lap(2,i) - lapa/sqrt(2.) - lapsy/sqrt(2.)
             endif
         endif
       enddo
@@ -3503,6 +3630,118 @@ end subroutine
       enddo
       
       end subroutine
+      
+
+      
+!Subroutine to calculate momentum equation by MLS.
+!----------------------------------------------------------------------
+      subroutine momentum_equation_unified2(parts)
+!----------------------------------------------------------------------
+      implicit none
+
+      class(particles) parts
+      type(material), pointer :: water
+      integer ntotal, i, j, k, d    
+      real(dp), allocatable, dimension(:,:) :: dpre,lap
+!      type(array),allocatable :: divvx
+      real(dp) selfdens, hv(3), r ,rr,dx(3),dvx(3),lapa,lapsx,lapsy
+      
+      water => parts%material
+      ntotal = parts%ntotal + parts%nvirt
+ !     allocate(divvx);allocate(divvx%r(ntotal))
+ !     divvx%ndim1 = ntotal
+      allocate(dpre(parts%dim,parts%max_interaction))
+      allocate(lap(parts%dim,parts%max_interaction))
+!      allocate(laps(parts%dim,parts%max_interaction))
+      
+      do i = 1,parts%ntotal
+          do d = 1,parts%dim
+              dpre(d,i) = 0.d0
+              lap(d,i) = 0.d0
+!              laps(d,i) = 0.d0
+          enddo
+      enddo
+      
+      do k=1,parts%niac
+        i = parts%pair_i(k)
+        j = parts%pair_j(k)
+          do d = 1,parts%dim
+           dpre(d,i) = dpre(d,i) + parts%mass%r(j)/parts%rho%r(j)*(parts%rho%r(i)**2 * parts%p%r(j) + parts%rho%r(j)**2 * parts%p%r(i))  &
+                       /(parts%rho%r(i)*parts%rho%r(j))*parts%dwdx(d,k)   
+           dpre(d,j) = dpre(d,j) - parts%mass%r(i)/parts%rho%r(i)*(parts%rho%r(j)**2 * parts%p%r(i) + parts%rho%r(i)**2 * parts%p%r(j))  &
+                       /(parts%rho%r(i)*parts%rho%r(j))*parts%dwdx(d,k)
+          enddo
+        if(parts%itype(i)>0.and.parts%itype(j)<0)then
+            if(parts%rhos(k)==0)cycle
+          do d = 1,parts%dim
+           dpre(d,i) = dpre(d,i) - (parts%rho%r(i)**2 * parts%ps(k) + parts%rhos(k)**2 * parts%p%r(i))/(parts%rho%r(i)*parts%rhos(k))*parts%dgu(d,k)
+          enddo
+        endif
+      enddo
+      
+      do i =1,parts%ntotal
+!          if(parts%gammaa%r(i)==0) parts%gammaa%r(i) =1
+          do d= 1,parts%dim
+              dpre(d,i) = dpre(d,i)/(parts%gammaa%r(i)+10**-8)  !文章中的（28)式，还需要进步到（8）
+          enddo
+      enddo
+      
+!      divvx  =  parts.div2(parts%vx)
+      
+      do k=1,parts%niac
+        i = parts%pair_i(k)
+        j = parts%pair_j(k)
+!        if(parts%itype(i)>0.and.parts%itype(j)>0)then
+           rr = 0.      
+           do d=1,parts%dim
+              dx(d) =  parts%x(d,i) -  parts%x(d,j)
+              dvx(1) =parts%vx%x%r(i) - parts%vx%x%r(j)
+              dvx(2) =parts%vx%y%r(i) - parts%vx%y%r(j)
+              rr = rr + dx(d)*dx(d)
+           enddo  
+           rr = sqrt(rr)
+           do d = 1,parts%dim
+              lap(d,i) = lap(d,i) + parts%mass%r(j)*water%viscosity*2/(parts%rho%r(i)*parts%rho%r(j))/(rr**2+0.01*parts%hsml(1)**2)*(dvx(1)*dx(1)+dvx(2)*dx(2))*parts%dwdx(d,k)    !这里的dwdx是对i吧？？？(33)
+              lap(d,j) = lap(d,j) - parts%mass%r(i)*water%viscosity*2/(parts%rho%r(i)*parts%rho%r(j))/(rr**2+0.01*parts%hsml(1)**2)*(dvx(1)*dx(1)+dvx(2)*dx(2))*parts%dwdx(d,k)
+           enddo
+        if(parts%itype(i)>0.and.parts%itype(j)<0)then
+            lapsx = sqrt(parts%dgu(1,k)**2+parts%dgu(2,k)**2)*parts%mons(1,k)/parts%rho%r(i)
+            lapsy = sqrt(parts%dgu(1,k)**2+parts%dgu(2,k)**2)*parts%mons(2,k)/parts%rho%r(i)
+            lapa = sqrt(parts%dgu(1,k)**2+parts%dgu(2,k)**2)*(water%viscosity*parts%divvx%r(i))/parts%rho%r(i)!这里用div2可以吧？？？(33)式的第二项
+            if(parts%x(1,j)<0.02.and.parts%x(2,j)>0.02)then
+              lap(1,i) = lap(1,i) - lapa - lapsx
+              lap(2,i) = lap(2,i) - lapsy
+            elseif(parts%x(1,j)>0.02.and.parts%x(1,j)<3.24.and.parts%x(2,j)<0.02)then
+              lap(1,i) = lap(1,i) - lapsx  
+              lap(2,i) = lap(2,i) - lapa - lapsy
+            elseif(parts%x(1,i)>3.24.and.parts%x(2,i)>0.02)then
+              lap(1,i) = lap(1,i) + lapa - lapsx
+              lap(2,i) = lap(2,i) - lapsy
+            elseif(parts%x(1,i)>3.24.and.parts%x(2,i)<0.02)then
+              lap(1,i) = lap(1,i) + lapa/sqrt(2.) - lapsx/sqrt(2.)
+              lap(2,i) = lap(2,i) - lapa/sqrt(2.) - lapsy/sqrt(2.)
+            elseif(parts%x(1,i)<0.02.and.parts%x(2,i)<0.02)then
+              lap(1,i) = lap(1,i) - lapa/sqrt(2.) - lapsx/sqrt(2.)
+              lap(2,i) = lap(2,i) - lapa/sqrt(2.) - lapsy/sqrt(2.)
+            endif
+        endif
+      enddo
+      
+      do i=1, parts%ntotal
+!          if(parts%gammaa%r(i) == 0) parts%gammaa%r(i)=1
+          do d=1, parts%dim
+!             lap(d,i)= (lap(d,i)-laps(d,i)/parts%rho%r(i))/wi(i)
+             lap(d,i)= lap(d,i)/(parts%gammaa%r(i)+10**-8)!这里用的（27）其实就已经除以了密度，是作业里面的（14）中的第二项
+          enddo
+      enddo
+      
+      do i = 1,parts%ntotal
+         parts%dvx%x%r(i) = -dpre(1,i)/parts%rho%r(i) + lap(1,i)!这里的lap之前就除以rho了
+         parts%dvx%y%r(i) = -dpre(2,i)/parts%rho%r(i) + lap(2,i) + parts%numeric%gravity  !这个地方的重力不知道是加号还是减号。。。。。。。。。。，
+      enddo
+      
+      end subroutine
+      
       
       
 ! Subroutine to calculate the delta gamma of unified condition.
@@ -3821,9 +4060,9 @@ end subroutine
 !             endif
 !                a = 3000  
 !          else 
-              nx = (parts%x(2,j) - parts%x(2,j+1))/sqrt((parts%x(1,j) - parts%x(1,j+1))**2 + (parts%x(2,j) - parts%x(2,j+1))**2)
-              ny = (parts%x(1,j+1) - parts%x(1,j))/sqrt((parts%x(1,j) - parts%x(1,j+1))**2 + (parts%x(2,j) - parts%x(2,j+1))**2)
-              q0 = sqrt(((parts%x(1,i) - parts%x(1,j))*nx)**2 + ((parts%x(2,i) - parts%x(2,j))*ny)**2)/hsml
+!              nx = (parts%x(2,j) - parts%x(2,j+1))/sqrt((parts%x(1,j) - parts%x(1,j+1))**2 + (parts%x(2,j) - parts%x(2,j+1))**2)
+!              ny = (parts%x(1,j+1) - parts%x(1,j))/sqrt((parts%x(1,j) - parts%x(1,j+1))**2 + (parts%x(2,j) - parts%x(2,j+1))**2)
+              q0 = sqrt(((parts%x(1,i) - parts%x(1,j))*parts%n(1,j))**2 + ((parts%x(2,i) - parts%x(2,j))*parts%n(2,j))**2)/hsml
               q1 = sqrt((parts%x(1,i) - parts%x(1,j))**2 + (parts%x(2,i) - parts%x(2,j))**2)/hsml
               q2 = sqrt((parts%x(1,i) - parts%x(1,j+1))**2 + (parts%x(2,i) - parts%x(2,j+1))**2)/hsml
               cos1 = -((parts%x(1,i) - parts%x(1,j)) * (parts%x(1,j+1) - parts%x(1,j)) + (parts%x(2,i) - parts%x(2,j)) * (parts%x(2,j+1) - parts%x(2,j)))/   &
@@ -3834,8 +4073,8 @@ end subroutine
               q2c = q2*cos2
               Pq2 = 7./192.*q2**5-21./64.*q2**4+35./32.*q2**3-35./24.*q2**2+7./4.+q0**2*(35./768.*q2**3-7./16.*q2**2+105./64.*q2-35./12.)+q0**4*(35./512.*q2-7./8.)
               Pq1 = 7./192.*q1**5-21./64.*q1**4+35./32.*q1**3-35./24.*q1**2+7./4.+q0**2*(35./768.*q1**3-7./16.*q1**2+105./64.*q1-35./12.)+q0**4*(35./512.*q1-7./8.)
-              parts%dgu(1,k) = nx*(q2c/pi*Pq2-q1c/pi*Pq1+q0**4/pi*(105./64.+35./512.*q0**2)*(sign(1.d0,q2c)*log((q2+abs(q2c))/abs(q0))-sign(1.d0,q1c)*log((q1+abs(q1c))/abs(q0))))/parts%hsml(j)
-              parts%dgu(2,k) = ny*(q2c/pi*Pq2-q1c/pi*Pq1+q0**4/pi*(105./64.+35./512.*q0**2)*(sign(1.d0,q2c)*log((q2+abs(q2c))/abs(q0))-sign(1.d0,q1c)*log((q1+abs(q1c))/abs(q0))))/parts%hsml(j)
+              parts%dgu(1,k) = parts%n(1,j)*(q2c/pi*Pq2-q1c/pi*Pq1+q0**4/pi*(105./64.+35./512.*q0**2)*(sign(1.d0,q2c)*log((q2+abs(q2c))/abs(q0))-sign(1.d0,q1c)*log((q1+abs(q1c))/abs(q0))))/parts%hsml(j)
+              parts%dgu(2,k) = parts%n(2,j)*(q2c/pi*Pq2-q1c/pi*Pq1+q0**4/pi*(105./64.+35./512.*q0**2)*(sign(1.d0,q2c)*log((q2+abs(q2c))/abs(q0))-sign(1.d0,q1c)*log((q1+abs(q1c))/abs(q0))))/parts%hsml(j)
               parts%rhos(k) = (parts%rho%r(j) + parts%rho%r(j+1))/2
               parts%mons(1,k) = (parts%mone%x%r(j) + parts%mone%x%r(j+1))/2
               parts%mons(2,k) = (parts%mone%y%r(j) + parts%mone%y%r(j+1))/2
@@ -3906,6 +4145,65 @@ end subroutine
       enddo
       
       end subroutine
+      
+!----------------------------------------------------------------------      
+      subroutine delta_gamma_unified5(parts)
+!----------------------------------------------------------------------
+      implicit none
+  
+      class(particles) parts      
+      integer k,i,j,d,k0,i0,j0,m
+      real(dp) q0,q1,q2,q1c,q2c,Pq2,Pq1,hsml,nx,ny,cos1,cos2
+      real(dp) , parameter :: pi = 3.1415926535898
+      integer , dimension(10) :: a  
+      hsml = parts%hsml(1)
+      
+      do m = 1,10
+         a(m) = 3000
+      enddo
+      do k = 1, parts%niac
+          do d = 1,parts%dim
+              parts%dgu(d,k)=0.d0
+          enddo
+          m=0
+          i = parts%pair_i(k)
+          j = parts%pair_j(k)
+          if(parts%itype(i)*parts%itype(j)>0)cycle
+              do k0 = 1, parts%niac
+                 i0 = parts%pair_i(k0)
+                 j0 = parts%pair_j(k0)
+                    if(i0==i.and.j0>j)then
+                       m = m+1
+                       a(m) = j0
+                    endif
+              enddo
+              j0 = min(a(1),a(2),a(3),a(4),a(5),a(6),a(7),a(8),a(9),a(10))
+              if(j0/=3000)then
+                nx = (parts%x(2,j) - parts%x(2,j0))/sqrt((parts%x(1,j) - parts%x(1,j0))**2 + (parts%x(2,j) - parts%x(2,j0))**2)
+                ny = (parts%x(1,j0) - parts%x(1,j))/sqrt((parts%x(1,j) - parts%x(1,j0))**2 + (parts%x(2,j) - parts%x(2,j0))**2)
+                q0 = sqrt(((parts%x(1,i) - parts%x(1,j))*nx)**2 + ((parts%x(2,i) - parts%x(2,j))*ny)**2)/hsml
+                q1 = sqrt((parts%x(1,i) - parts%x(1,j))**2 + (parts%x(2,i) - parts%x(2,j))**2)/hsml
+                q2 = sqrt((parts%x(1,i) - parts%x(1,j0))**2 + (parts%x(2,i) - parts%x(2,j0))**2)/hsml
+                cos1 = -((parts%x(1,i) - parts%x(1,j)) * (parts%x(1,j0) - parts%x(1,j)) + (parts%x(2,i) - parts%x(2,j)) * (parts%x(2,j0) - parts%x(2,j)))/   &
+                     (sqrt((parts%x(1,i) - parts%x(1,j))**2 + (parts%x(2,i) -parts%x(2,j))**2)*sqrt((parts%x(1,j0) - parts%x(1,j))**2 + (parts%x(2,j0) - parts%x(2,j))**2))
+                cos2 = -((parts%x(1,i) - parts%x(1,j0)) * (parts%x(1,j0) - parts%x(1,j)) + (parts%x(2,i) - parts%x(2,j0)) * (parts%x(2,j0) - parts%x(2,j)))/  &
+                     (sqrt((parts%x(1,i) - parts%x(1,j0))**2 + (parts%x(2,i) -parts%x(2,j0))**2)*sqrt((parts%x(1,j0) - parts%x(1,j))**2 + (parts%x(2,j0) - parts%x(2,j))**2))
+                q1c = q1*cos1
+                q2c = q2*cos2
+                Pq2 = 7./192.*q2**5-21./64.*q2**4+35./32.*q2**3-35./24.*q2**2+7./4.+q0**2*(35./768.*q2**3-7./16.*q2**2+105./64.*q2-35./12.)+q0**4*(35./512.*q2-7./8.)
+                Pq1 = 7./192.*q1**5-21./64.*q1**4+35./32.*q1**3-35./24.*q1**2+7./4.+q0**2*(35./768.*q1**3-7./16.*q1**2+105./64.*q1-35./12.)+q0**4*(35./512.*q1-7./8.)
+                parts%dgu(1,k) = nx*(q2c/pi*Pq2-q1c/pi*Pq1+q0**4/pi*(105./64.+35./512.*q0**2)*(sign(1.d0,q2c)*log((q2+abs(q2c))/abs(q0))-sign(1.d0,q1c)*log((q1+abs(q1c))/abs(q0))))/parts%hsml(j)
+                parts%dgu(2,k) = ny*(q2c/pi*Pq2-q1c/pi*Pq1+q0**4/pi*(105./64.+35./512.*q0**2)*(sign(1.d0,q2c)*log((q2+abs(q2c))/abs(q0))-sign(1.d0,q1c)*log((q1+abs(q1c))/abs(q0))))/parts%hsml(j)
+                parts%rhos(k) = (parts%rho%r(j) + parts%rho%r(j0))/2
+                parts%mons(1,k) =(parts%mone%x%r(j) + parts%mone%x%r(j0))/2
+                parts%mons(2,k) =(parts%mone%y%r(j) + parts%mone%y%r(j0))/2
+                parts%ps(k) = (parts%p%r(j)/parts%rho%r(j) + parts%p%r(j0)/parts%rho%r(j0))/2*parts%rhos(k)
+             endif
+                a = 3000  
+      enddo
+      
+      end subroutine
+
       
 !Subroutine to calculate the density with SPH summation algorithm by MLS.
 !----------------------------------------------------------------------
@@ -4114,13 +4412,13 @@ end subroutine
         if(parts%itype(i)>0.and.parts%itype(j)<0)then
 !            parts%rho%r(j) = parts%rho%r(j) + parts%mass%r(i)*parts%w(k)
             rho%r(j) = rho%r(j) + parts%mass%r(i) * parts%w(k)
-            if(parts%x(1,j)<0.02)then
+            if(parts%x(1,j)<0.02.and.parts%x(2,j)>0.02)then
                 parts%mone%x%r(j) = parts%mone%x%r(j) + parts%mass%r(i)/parts%rho%r(i)*water%viscosity*parts%vx%x%r(i)/(parts%x(1,i)-parts%x(1,j))*parts%w(k)
                 parts%mone%y%r(j) = parts%mone%y%r(j) + parts%mass%r(i)/parts%rho%r(i)*water%viscosity*parts%vx%y%r(i)/(parts%x(1,i)-parts%x(1,j))*parts%w(k)
             elseif(parts%x(1,j)>0.02.and.parts%x(1,j)<3.24.and.parts%x(2,j)<0.02)then
                 parts%mone%x%r(j) = parts%mone%x%r(j) + parts%mass%r(i)/parts%rho%r(i)*water%viscosity*parts%vx%x%r(i)/(parts%x(2,i)-parts%x(2,j))*parts%w(k)
                 parts%mone%y%r(j) = parts%mone%y%r(j) + parts%mass%r(i)/parts%rho%r(i)*water%viscosity*parts%vx%y%r(i)/(parts%x(2,i)-parts%x(2,j))*parts%w(k)
-            elseif(parts%x(1,i)>3.24.and.parts%x(2,i)>0.01)then
+            elseif(parts%x(1,i)>3.24.and.parts%x(2,i)>0.02)then
                 parts%mone%x%r(j) = parts%mone%x%r(j) + parts%mass%r(i)/parts%rho%r(i)*water%viscosity*parts%vx%x%r(i)/(parts%x(1,j)-parts%x(1,i))*parts%w(k)
                 parts%mone%y%r(j) = parts%mone%y%r(j) + parts%mass%r(i)/parts%rho%r(i)*water%viscosity*parts%vx%y%r(i)/(parts%x(1,j)-parts%x(1,i))*parts%w(k)
             else
@@ -4207,6 +4505,217 @@ end subroutine
         
       end subroutine
       
+
+!Subroutine to calculate the density with SPH summation algorithm.
+!----------------------------------------------------------------------
+      subroutine nvirt_density_unified2(parts) !rho使用1阶修正
+!----------------------------------------------------------------------
+      implicit none
+
+      class(particles) parts
+      integer ntotal, i, j, k, d      
+      real(dp) selfdens, hv(3), r, wi(parts%maxn),vxi,vxj,dx,mu1,mu2
+      type(p2r) vx_i(3), vx_j(3) 
+      type(material),pointer :: water
+      type(array),allocatable :: rho
+      water => parts%material
+      ntotal = parts%ntotal + parts%nvirt
+      mu1 = 1
+      mu2 = 1
+      
+      allocate(rho);allocate(rho%r(ntotal))
+      rho%ndim1 = ntotal
+!     Firstly calculate the integration of the kernel over the space
+
+      do i=parts%ntotal +1,parts%ntotal + parts%nvirt
+!        call parts%kernel(r,hv,parts%hsml(i),selfdens,hv)
+        wi(i)=10**-8!selfdens*parts%mass%r(i)/parts%rho%r(i)  !由于rho不能要自加，这里也要自加
+      enddo
+
+      do k=1,parts%niac
+        i = parts%pair_i(k)
+        j = parts%pair_j(k)
+        if(parts%itype(i)>0.and.parts%itype(j)<0)then
+        wi(j) = wi(j) + (1 - mu1/mu2*((parts%x(1,i) - parts%x(1,j))*parts%n(1,j) + (parts%x(2,i) - parts%x(2,j))*parts%n(2,j))**2) * parts%mass%r(i)/parts%rho%r(i)*parts%w(k)
+        endif
+      enddo
+
+!      write(*,*) 'parts%itype(1801)=',parts%itype(1891)
+      
+!     Secondly calculate the rho integration over the space
+
+      do i=parts%ntotal +1,parts%ntotal + parts%nvirt
+!        call parts%kernel(r,hv,parts%hsml(i),selfdens,hv)
+!        parts%rho%r(i) = selfdens*parts%mass%r(i)   !rho不能为0
+        rho%r(i) = 0       
+        parts%mone%x%r(i) = 0
+        parts%mone%y%r(i) = 0
+      enddo
+
+!     Calculate SPH sum for rho:
+      do k=1,parts%niac
+        i = parts%pair_i(k)
+        j = parts%pair_j(k)
+        if(parts%itype(i)>0.and.parts%itype(j)<0)then
+!            parts%rho%r(j) = parts%rho%r(j) + parts%mass%r(i)*parts%w(k)
+            rho%r(j) = rho%r(j) + (1 - mu1/mu2*((parts%x(1,i) - parts%x(1,j))*parts%n(1,j) + (parts%x(2,i) - parts%x(2,j))*parts%n(2,j))**2) * parts%mass%r(i)*parts%w(k)
+            if(parts%x(1,j)<0.02.and.parts%x(2,j)>0.02)then
+                parts%mone%x%r(j) = parts%mone%x%r(j) + parts%mass%r(i)/parts%rho%r(i)*water%viscosity*parts%vx%x%r(i)/(parts%x(1,i)-parts%x(1,j))*parts%w(k)
+                parts%mone%y%r(j) = parts%mone%y%r(j) + parts%mass%r(i)/parts%rho%r(i)*water%viscosity*parts%vx%y%r(i)/(parts%x(1,i)-parts%x(1,j))*parts%w(k)
+            elseif(parts%x(1,j)>0.02.and.parts%x(1,j)<3.24.and.parts%x(2,j)<0.02)then
+                parts%mone%x%r(j) = parts%mone%x%r(j) + parts%mass%r(i)/parts%rho%r(i)*water%viscosity*parts%vx%x%r(i)/(parts%x(2,i)-parts%x(2,j))*parts%w(k)
+                parts%mone%y%r(j) = parts%mone%y%r(j) + parts%mass%r(i)/parts%rho%r(i)*water%viscosity*parts%vx%y%r(i)/(parts%x(2,i)-parts%x(2,j))*parts%w(k)
+            elseif(parts%x(1,i)>3.24.and.parts%x(2,i)>0.02)then
+                parts%mone%x%r(j) = parts%mone%x%r(j) + parts%mass%r(i)/parts%rho%r(i)*water%viscosity*parts%vx%x%r(i)/(parts%x(1,j)-parts%x(1,i))*parts%w(k)
+                parts%mone%y%r(j) = parts%mone%y%r(j) + parts%mass%r(i)/parts%rho%r(i)*water%viscosity*parts%vx%y%r(i)/(parts%x(1,j)-parts%x(1,i))*parts%w(k)
+            else
+                parts%mone%x%r(j) = parts%mone%x%r(j) + parts%mass%r(i)/parts%rho%r(i)*water%viscosity*parts%vx%x%r(i)/sqrt((parts%x(1,j)-parts%x(1,i))**2+(parts%x(2,j)-parts%x(2,i))**2)*parts%w(k)
+                parts%mone%y%r(j) = parts%mone%y%r(j) + parts%mass%r(i)/parts%rho%r(i)*water%viscosity*parts%vx%y%r(i)/sqrt((parts%x(1,j)-parts%x(1,i))**2+(parts%x(2,j)-parts%x(2,i))**2)*parts%w(k)
+            endif
+        endif
+      enddo
+
+!     Thirdly, calculate the normalized rho, rho=sum(rho)/sum(w)
+
+        do i=parts%ntotal +1,parts%ntotal + parts%nvirt
+          if(wi(i)==0)wi(i)=1
+!          parts%rho%r(i)=parts%rho%r(i)/wi(i)
+          rho%r(i) = rho%r(i)/wi(i)
+          parts%mone%x%r(i) = parts%mone%x%r(i)/wi(i)
+          parts%mone%y%r(i) = parts%mone%y%r(i)/wi(i)
+          if(rho%r(i)/=0)parts%rho%r(i) = rho%r(i)
+        enddo
+
+        do i=parts%ntotal +1,parts%ntotal + parts%nvirt
+            parts%p%r(i) =0.d0
+        enddo
+        
+        do k=1,parts%niac
+            i = parts%pair_i(k)
+            j = parts%pair_j(k)
+            if(parts%itype(i)>0.and.parts%itype(j)<0)then
+                vxi=0.d0
+                vxj=0.d0
+                vx_i = parts%vx%cmpt(i)
+                vx_j = parts%vx%cmpt(j)
+                do d=1, parts%dim
+                  vxi = vxi + vx_i(d)%p*vx_i(d)%p  
+                  vxj = vxj + vx_j(d)%p*vx_j(d)%p
+                enddo     
+                  dx = parts%x(2,i) - parts%x(2,j)
+                  parts%p%r(j) = parts%p%r(j) + (parts%p%r(i)/parts%rho%r(i) + parts%numeric%gravity*dx + (vxi - vxj)/2)*parts%w(k)*parts%mass%r(i)/parts%rho%r(i)
+            endif!上面把g*dx的符号从负号改成了正号改了一下
+        enddo
+        
+        do i=parts%ntotal +1,parts%ntotal + parts%nvirt
+          if(wi(i)==0)wi(i)=1
+          parts%p%r(i)=parts%p%r(i)/wi(i)
+        enddo
+        
+        do i=parts%ntotal +1,parts%ntotal + parts%nvirt
+          parts%p%r(i)=parts%p%r(i)*parts%rho%r(i)
+        enddo
+        
+
+        
+      end subroutine
+      
+      
+!Subroutine to calculate the density with SPH summation algorithm.
+!----------------------------------------------------------------------
+      subroutine nvirt_density_unified3(parts) !rho使用1阶修正，p也使用这种方法
+!----------------------------------------------------------------------
+      implicit none
+
+      class(particles) parts
+      integer ntotal, i, j, k, d      
+      real(dp) selfdens, hv(3), r, wi(parts%maxn),vxi,vxj,dx,mu1,mu2,rav1,rav2
+      type(p2r) vx_i(3), vx_j(3) 
+      type(material),pointer :: water
+      type(array),allocatable :: rho
+      water => parts%material
+      ntotal = parts%ntotal + parts%nvirt
+      mu1 = 0.5
+      mu2 = 1
+      
+      allocate(rho);allocate(rho%r(ntotal))
+      rho%ndim1 = ntotal
+!     Firstly calculate the integration of the kernel over the space
+
+      do i=parts%ntotal +1,parts%ntotal + parts%nvirt
+!        call parts%kernel(r,hv,parts%hsml(i),selfdens,hv)
+        wi(i)=10**-8!selfdens*parts%mass%r(i)/parts%rho%r(i)  !由于rho不能要自加，这里也要自加
+      enddo
+
+      do k=1,parts%niac
+        i = parts%pair_i(k)
+        j = parts%pair_j(k)
+        if(parts%itype(i)>0.and.parts%itype(j)<0)then
+        wi(j) = wi(j) + (1 - mu1/mu2*((parts%x(1,i) - parts%x(1,j))*parts%n(1,j) + (parts%x(2,i) - parts%x(2,j))*parts%n(2,j))**2) * parts%mass%r(i)/parts%rho%r(i)*parts%w(k)
+        endif
+      enddo
+
+!      write(*,*) 'parts%itype(1801)=',parts%itype(1891)
+      
+!     Secondly calculate the rho integration over the space
+
+      do i=parts%ntotal +1,parts%ntotal + parts%nvirt
+!        call parts%kernel(r,hv,parts%hsml(i),selfdens,hv)
+!        parts%rho%r(i) = selfdens*parts%mass%r(i)   !rho不能为0
+        rho%r(i) = 0       
+        parts%mone%x%r(i) = 0
+        parts%mone%y%r(i) = 0
+        parts%p%r(i) =0.d0
+      enddo
+
+!     Calculate SPH sum for rho:
+      do k=1,parts%niac
+        i = parts%pair_i(k)
+        j = parts%pair_j(k)
+        rav1 = parts%x(1,i) - parts%x(1,j)
+        rav2 = parts%x(2,i) - parts%x(2,j)
+        if(parts%itype(i)>0.and.parts%itype(j)<0)then
+!            parts%rho%r(j) = parts%rho%r(j) + parts%mass%r(i)*parts%w(k)
+            rho%r(j) = rho%r(j) + (1 - mu1/mu2*((parts%x(1,i) - parts%x(1,j))*parts%n(1,j) + (parts%x(2,i) - parts%x(2,j))*parts%n(2,j))**2) * parts%mass%r(i)*parts%w(k)
+            parts%p%r(j) = parts%p%r(j) + (1 - mu1/mu2*((parts%x(1,i) - parts%x(1,j))*parts%n(1,j) + (parts%x(2,i) - parts%x(2,j))*parts%n(2,j))**2)  &
+                           * parts%mass%r(i)/parts%rho%r(i)*parts%w(k) * (parts%p%r(i) - parts%rho%r(i)*(rav2 - (rav1 * parts%n(1,j) + rav2 * parts%n(2,j))*parts%n(2,j))*9.81)
+            
+            if(parts%x(1,j)<0.02.and.parts%x(2,j)>0.02)then
+                parts%mone%x%r(j) = parts%mone%x%r(j) + parts%mass%r(i)/parts%rho%r(i)*water%viscosity*parts%vx%x%r(i)/(parts%x(1,i)-parts%x(1,j))*parts%w(k)
+                parts%mone%y%r(j) = parts%mone%y%r(j) + parts%mass%r(i)/parts%rho%r(i)*water%viscosity*parts%vx%y%r(i)/(parts%x(1,i)-parts%x(1,j))*parts%w(k)
+            elseif(parts%x(1,j)>0.02.and.parts%x(1,j)<3.24.and.parts%x(2,j)<0.02)then
+                parts%mone%x%r(j) = parts%mone%x%r(j) + parts%mass%r(i)/parts%rho%r(i)*water%viscosity*parts%vx%x%r(i)/(parts%x(2,i)-parts%x(2,j))*parts%w(k)
+                parts%mone%y%r(j) = parts%mone%y%r(j) + parts%mass%r(i)/parts%rho%r(i)*water%viscosity*parts%vx%y%r(i)/(parts%x(2,i)-parts%x(2,j))*parts%w(k)
+            elseif(parts%x(1,i)>3.24.and.parts%x(2,i)>0.02)then
+                parts%mone%x%r(j) = parts%mone%x%r(j) + parts%mass%r(i)/parts%rho%r(i)*water%viscosity*parts%vx%x%r(i)/(parts%x(1,j)-parts%x(1,i))*parts%w(k)
+                parts%mone%y%r(j) = parts%mone%y%r(j) + parts%mass%r(i)/parts%rho%r(i)*water%viscosity*parts%vx%y%r(i)/(parts%x(1,j)-parts%x(1,i))*parts%w(k)
+            else
+                parts%mone%x%r(j) = parts%mone%x%r(j) + parts%mass%r(i)/parts%rho%r(i)*water%viscosity*parts%vx%x%r(i)/sqrt((parts%x(1,j)-parts%x(1,i))**2+(parts%x(2,j)-parts%x(2,i))**2)*parts%w(k)
+                parts%mone%y%r(j) = parts%mone%y%r(j) + parts%mass%r(i)/parts%rho%r(i)*water%viscosity*parts%vx%y%r(i)/sqrt((parts%x(1,j)-parts%x(1,i))**2+(parts%x(2,j)-parts%x(2,i))**2)*parts%w(k)
+            endif
+        endif
+      enddo
+
+!     Thirdly, calculate the normalized rho, rho=sum(rho)/sum(w)
+
+        do i=parts%ntotal +1,parts%ntotal + parts%nvirt
+          if(wi(i)==0)wi(i)=1
+!          parts%rho%r(i)=parts%rho%r(i)/wi(i)
+          rho%r(i) = rho%r(i)/wi(i) 
+          parts%mone%x%r(i) = parts%mone%x%r(i)/wi(i)
+          parts%mone%y%r(i) = parts%mone%y%r(i)/wi(i)
+          if(rho%r(i)/=0)parts%rho%r(i) = rho%r(i)
+        enddo
+        
+        do i=parts%ntotal +1,parts%ntotal + parts%nvirt
+          if(wi(i)==0)wi(i)=1
+          parts%p%r(i)=parts%p%r(i)/wi(i)
+        enddo
+        
+      end subroutine
+      
+      
+      
 ! Subroutine to calculate the density with SPH continuiity approach.
 !----------------------------------------------------------------------      
       subroutine con_density(parts)
@@ -4283,6 +4792,7 @@ end subroutine
       enddo      
       
       end subroutine
+      
       
 !----------------------------------------------------------------------
       subroutine newtonian_fluid(parts)

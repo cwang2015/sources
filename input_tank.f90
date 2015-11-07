@@ -135,6 +135,8 @@ enddo
 
 parts%mass = parts%vol * parts%rho
 
+call get_norm(parts)
+
 return
 end subroutine
 
