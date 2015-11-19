@@ -1516,6 +1516,74 @@ end subroutine
 
 
 !----------------------------------------------------------------------      
+      subroutine time_integration_for_water_by_unified2s  !也在这里把连续性方程求解改成能量守恒的形式
+!----------------------------------------------------------------------
+!use param
+!use declarations_sph
+implicit none     
+
+integer :: i, j, k, d, ntotal, it 
+real(dp) dvx(3),dx(3) ,rr,ca,cb,cab,c0,rhoab
+type(particles), pointer :: pl
+type(p2r) vx_i(3), vx_j(3) 
+
+    pl => parts
+    call parts%setup_ndim1
+do it = 1, maxtimestep 
+    itimestep = itimestep+1
+    parts%itimestep = itimestep
+   call single_step_for_water2
+do i = 1,pl%ntotal
+pl%vx%x%r(i) = pl%vx%x%r(i) + dt * pl%dvx%x%r(i)
+pl%vx%y%r(i) = pl%vx%y%r(i) + dt * pl%dvx%y%r(i)
+pl%x(1,i) = pl%x(1,i) + dt * pl%vx%x%r(i)
+pl%x(2,i) = pl%x(2,i) + dt * pl%vx%y%r(i)
+enddo
+
+do k=1,parts%niac
+    i = parts%pair_i(k)
+    j = parts%pair_j(k)
+    rr = 0.
+    c0 = 10.* sqrt(9.81*0.6)
+    ca = c0 * (parts%rho%r(i)/1000.)**3
+    cb = c0 * (parts%rho%r(j)/1000.)**3
+    cab = max(ca,cb)
+    rhoab = parts%rho%r(i) - parts%rho%r(j) - 9.81*1000/c0**2*(parts%x(2,j)-parts%x(2,i))!这里很有可能是加号.
+    vx_i = parts%vx%cmpt(i); vx_j = parts%vx%cmpt(j)
+    do d=1,parts%dim
+      dvx(d) = vx_i(d)%p - vx_j(d)%p
+      dx(d) = parts%x(d,i) - parts%x(d,j)
+      rr = rr + dx(d)**2
+    enddo
+    parts%drho%r(i) = parts%drho%r(i) + parts%mass%r(j)*((dvx(1) + cab*dx(1)/sqrt(rr)*rhoab/parts%rho%r(i))  &
+                     * parts%dwdx(1,k)+ (dvx(2) + cab*dx(2)/sqrt(rr)*rhoab/parts%rho%r(i))*parts%dwdx(2,k))
+    parts%drho%r(j) = parts%drho%r(j) + parts%mass%r(i)*((-dvx(1) + cab*(-dx(1))/sqrt(rr)*(-rhoab)/parts%rho%r(j))  &
+                     * (-parts%dwdx(1,k))+((-dvx(2)) + cab*(-dx(2))/sqrt(rr)*(-rhoab)/parts%rho%r(j))*(-parts%dwdx(2,k)))
+    if(parts%itype(i)*parts%itype(j)>0)cycle
+    parts%drho%r(i) = parts%drho%r(i) - parts%rhos(k)*(parts%dgu(1,k) * vx_i(1)%p + parts%dgu(2,k) *vx_i(2)%p)
+enddo
+
+do i = 1,pl%ntotal
+    pl%rho%r(i) = pl%rho%r(i) + dt * (pl%drho%r(i)/(parts%gammaa%r(i)+10**-8))
+enddo
+
+
+   time = time + dt
+   
+        if (mod(itimestep,print_step).eq.0) then
+         write(*,*)'______________________________________________'
+         write(*,*)'  current number of time step =',              &
+                   itimestep,'     current time=', real(time+dt)
+         write(*,*)'______________________________________________'
+        endif  
+
+   
+enddo
+
+return
+end subroutine      
+
+!----------------------------------------------------------------------      
       subroutine time_integration_for_water_by_unified3
 !----------------------------------------------------------------------
 !use param
@@ -1542,16 +1610,85 @@ pl%vx%y%r(i) = pl%vx%y%r(i) + dt * pl%dvx%y%r(i)
 pl%x(1,i) = pl%x(1,i) + dt * pl%vx%x%r(i)
 pl%x(2,i) = pl%x(2,i) + dt * pl%vx%y%r(i)
 enddo
-temp = 0.
+!temp = 0.
+!do k=1,parts%niac
+!    i = parts%pair_i(k)
+!    j = parts%pair_j(k)
+!    temp%r(i) = temp%r(i) + parts%mass%r(j) * parts%w(k)
+!    temp%r(j) = temp%r(j) + parts%mass%r(i) * parts%w(k)
+!enddo
+
+!do i = 1,pl%ntotal
+!    pl%rho%r(i) = pl%rho%r(i) * pl%gammaa%r(i) - temp%r(i)
+!enddo
+
+
+   time = time + dt
+   
+        if (mod(itimestep,print_step).eq.0) then
+         write(*,*)'______________________________________________'
+         write(*,*)'  current number of time step =',              &
+                   itimestep,'     current time=', real(time+dt)
+         write(*,*)'______________________________________________'
+        endif  
+
+   
+enddo
+
+return
+      end subroutine      
+      
+!----------------------------------------------------------------------      
+      subroutine time_integration_for_water_by_unified4  !把连续性方程改造一下，可以算是原创
+!----------------------------------------------------------------------
+!use param
+!use declarations_sph
+implicit none     
+
+integer :: i, j, k, d, ntotal, it 
+real(dp) dvx(3),dx(3) ,rr,ca,cb,cab,c0,rhoab
+type(particles), pointer :: pl
+type(p2r) vx_i(3), vx_j(3) 
+
+    pl => parts
+    call parts%setup_ndim1
+do it = 1, maxtimestep 
+    itimestep = itimestep+1
+    parts%itimestep = itimestep
+   call single_step_for_water2
+do i = 1,pl%ntotal
+pl%vx%x%r(i) = pl%vx%x%r(i) + dt * pl%dvx%x%r(i)
+pl%vx%y%r(i) = pl%vx%y%r(i) + dt * pl%dvx%y%r(i)
+pl%x(1,i) = pl%x(1,i) + dt * pl%vx%x%r(i)
+pl%x(2,i) = pl%x(2,i) + dt * pl%vx%y%r(i)
+enddo
+
 do k=1,parts%niac
     i = parts%pair_i(k)
     j = parts%pair_j(k)
-    temp%r(i) = temp%r(i) + parts%mass%r(j) * parts%w(k)
-    temp%r(j) = temp%r(j) + parts%mass%r(i) * parts%w(k)
+    rr = 0.
+    c0 = 10.* sqrt(9.81*0.6)
+    ca = c0 * (parts%rho%r(i)/1000.)**3
+    cb = c0 * (parts%rho%r(j)/1000.)**3
+    cab = max(ca,cb)
+    rhoab = parts%rho%r(i) - parts%rho%r(j) - 9.81*1000/c0**2*(parts%x(2,j)-parts%x(2,i))!这里很有可能是加号.
+    vx_i = parts%vx%cmpt(i); vx_j = parts%vx%cmpt(j)
+    do d=1,parts%dim
+      dvx(d) = vx_i(d)%p - vx_j(d)%p
+      dx(d) = parts%x(d,i) - parts%x(d,j)
+      rr = rr + dx(d)**2
+    enddo
+    
+    parts%drho%r(i) = parts%drho%r(i) + parts%mass%r(j)*((dvx(1) + cab*dx(1)/sqrt(rr)*rhoab/parts%rho%r(i))  &
+                     * parts%dwdx(1,k)+ (dvx(2) + cab*dx(2)/sqrt(rr)*rhoab/parts%rho%r(i))*parts%dwdx(2,k))
+    parts%drho%r(j) = parts%drho%r(j) + parts%mass%r(i)*((-dvx(1) + cab*(-dx(1))/sqrt(rr)*(-rhoab)/parts%rho%r(j))  &
+                     * (-parts%dwdx(1,k))+((-dvx(2)) + cab*(-dx(2))/sqrt(rr)*(-rhoab)/parts%rho%r(j))*(-parts%dwdx(2,k)))
+    if(parts%itype(i)*parts%itype(j)>0)cycle
+    parts%drho%r(i) = parts%drho%r(i) - parts%rho%r(j)*(parts%dgu(1,k) * vx_i(1)%p + parts%dgu(2,k) *vx_i(2)%p)
 enddo
 
 do i = 1,pl%ntotal
-    pl%rho%r(i) = pl%rho%r(i) * pl%gammaa%r(i) - temp%r(i)
+    pl%rho%r(i) = pl%rho%r(i) + dt * (pl%drho%r(i)/(parts%gammaa%r(i)+10**-8))
 enddo
 
 
@@ -1569,7 +1706,7 @@ enddo
 
 return
 end subroutine      
-      
+
 !DEC$IF(.FALSE.)
 !----------------------------------------------------------------------
              subroutine time_integration_for_soil
@@ -2054,10 +2191,10 @@ endif
 call get_gammaa2(pl)
 
 !------unified get rho of nvirt particles
-call nvirt_density_unified(pl)
+call nvirt_density_unified2(pl)
 !call pressure_nvirt(pl)
 !______Analytical value of delta gamma
-call delta_gamma_unified3(pl)
+call delta_gamma_unified2(pl)
 
 call real_density_unified(pl)
 
@@ -2104,7 +2241,7 @@ water => parts%material
 do i = 1,parts%ntotal
 parts%p%r(i) = water%b*((parts%rho%r(i)/(water%rho0))**water%gamma-1.d0)
 enddo
-call momentum_equation_unified(pl)  !这个应该是对的
+call momentum_equation_unified3(pl)  !这个应该是对的
 
 !up is for unified condition
  
@@ -2279,7 +2416,6 @@ call get_gammaa2(pl)
 
 call nvirt_density_unified3(pl)       
 
-!call nvirt_density_unified3(pl)
 !call pressure_nvirt(pl)
 !______Analytical value of delta gamma
 call delta_gamma_unified3(pl)
@@ -2326,10 +2462,10 @@ call real_density_unified2(pl)
 
 !down is for unified condition
 water => parts%material
-do i = 1,parts%ntotal
+do i = 1,parts%ntotal 
 parts%p%r(i) = water%b*((parts%rho%r(i)/(water%rho0))**water%gamma-1.d0)
 enddo
-call momentum_equation_unified2(pl)  !这个应该是对的
+call momentum_equation_unified5(pl)  
 
 !up is for unified condition
  
@@ -2465,7 +2601,9 @@ implicit none
 integer  nphase
 type(particles), pointer :: pl
 logical :: dbg = .false.
-integer i, ntotal,k,j
+integer i, ntotal,k,j,d
+real(dp) dvx(3),dx(3) ,rr,ca,cb,cab,c0,rhoab
+type(p2r) vx_i(3), vx_j(3) 
 type(array) temp
 type(material),pointer :: water
 
@@ -2480,7 +2618,21 @@ pl%dvx%x = 0.d0; pl%dvx%y = 0.d0; pl%drho = 0.d0
  
 !---  Interaction parameters, calculating neighboring particles
 !     and optimzing smoothing length
-  
+
+if(itimestep/=1)then
+  temp = 0.
+do k=1,parts%niac
+    i = parts%pair_i(k)
+    j = parts%pair_j(k)
+    if(parts%itype(i)>0)    temp%r(i) = temp%r(i) - parts%mass%r(j) * parts%w(k)
+    if(parts%itype(j)>0)    temp%r(j) = temp%r(j) - parts%mass%r(i) * parts%w(k)
+enddo
+endif
+
+do i =1,parts%ntotal
+    temp%r(i) = temp%r(i) + parts%gammaa%r(i) * parts%rho%r(i)
+enddo
+
 if (pl%numeric%nnps.eq.1) then 
    call direct_find(pl)
 else if (pl%numeric%nnps.eq.2) then
@@ -2504,26 +2656,45 @@ endif
 
 call get_gammaa2(pl)
 if(itimestep/=1)then
-temp = 0.
+
 do k=1,parts%niac
     i = parts%pair_i(k)
     j = parts%pair_j(k)
-    temp%r(i) = temp%r(i) + parts%mass%r(j) * parts%w(k)
-    temp%r(j) = temp%r(j) + parts%mass%r(i) * parts%w(k)
+    rr = 0.
+    c0 = 10.* sqrt(9.81*0.52)!因case不同而不同
+    ca = c0 * (parts%rho%r(i)/1000.)**3
+    cb = c0 * (parts%rho%r(j)/1000.)**3
+    cab = max(ca,cb)
+    rhoab = parts%rho%r(i) - parts%rho%r(j) - 9.81*1000/c0**2*(parts%x(2,j)-parts%x(2,i))!这里很有可能是加号.
+    vx_i = parts%vx%cmpt(i); vx_j = parts%vx%cmpt(j)
+    do d=1,parts%dim
+      dvx(d) = vx_i(d)%p - vx_j(d)%p
+      dx(d) = parts%x(d,i) - parts%x(d,j)
+      rr = rr + dx(d)**2
+    enddo
+
+    if(parts%itype(i)>0)  temp%r(i) = temp%r(i) + parts%mass%r(j) * parts%w(k)
+    if(parts%itype(j)>0)  temp%r(j) = temp%r(j) + parts%mass%r(i) * parts%w(k)
+    if(parts%itype(i)>0.and.parts%itype(j)>0) then
+        temp%r(i) = temp%r(i) + dt*(parts%mass%r(j)*cab/sqrt(rr)*rhoab/parts%rho%r(j)*dx(1)*parts%dwdx(1,k) + parts%mass%r(j)*cab/sqrt(rr)*rhoab/parts%rho%r(j)*dx(2)*parts%dwdx(2,k))
+        temp%r(j) = temp%r(j) + dt*(parts%mass%r(i)*cab/sqrt(rr)*(-rhoab)/parts%rho%r(i)*(-dx(1))*(-parts%dwdx(1,k)) + parts%mass%r(i)*cab/sqrt(rr)*(-rhoab)/parts%rho%r(i)*(-dx(2))*(-parts%dwdx(2,k)))        
+    endif
 enddo
 
 do i = 1,pl%ntotal
-    pl%rho%r(i) = (pl%rho%r(i) + temp%r(i))/parts%gammaa%r(i)
+    pl%rho%r(i) = temp%r(i)/parts%gammaa%r(i)
 enddo
 endif
 
 !------unified get rho of nvirt particles
-call nvirt_density_unified(pl)
+
+call nvirt_density_unified3(pl)       
+
 !call pressure_nvirt(pl)
 !______Analytical value of delta gamma
 call delta_gamma_unified3(pl)
 
-call real_density_unified(pl)
+call real_density_unified2(pl)
 
 !---  Density approximation or change rate
 !if(summation_density)then   
@@ -2565,10 +2736,11 @@ call real_density_unified(pl)
 
 !down is for unified condition
 water => parts%material
-do i = 1,parts%ntotal
+do i = 1,parts%ntotal 
 parts%p%r(i) = water%b*((parts%rho%r(i)/(water%rho0))**water%gamma-1.d0)
 enddo
-call momentum_equation_unified(pl)  !这个应该是对的
+call momentum_equation_unified5(pl)  
+
 
 !up is for unified condition
  
@@ -2664,7 +2836,7 @@ call momentum_equation_unified(pl)  !这个应该是对的
 !     Calculating average velocity of each partile for avoiding penetration
 
 !7~~~~not need now
-if (average_velocity) call av_vel(pl) 
+!if (average_velocity) call av_vel(pl) 
 !7~~~~not need now
 
 !---  Convert velocity, force, and energy to f and dfdt  
