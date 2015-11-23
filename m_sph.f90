@@ -1498,7 +1498,6 @@ do i = 1,pl%ntotal
     pl%rho%r(i) = pl%rho%r(i) + dt * (pl%drho%r(i)/(parts%gammaa%r(i)+10**-8))
 enddo
 
-
    time = time + dt
    
         if (mod(itimestep,print_step).eq.0) then
@@ -1544,7 +1543,7 @@ do k=1,parts%niac
     i = parts%pair_i(k)
     j = parts%pair_j(k)
     rr = 0.
-    c0 = 10.* sqrt(9.81*0.6)
+    c0 = 10.* sqrt(9.81*0.5)
     ca = c0 * (parts%rho%r(i)/1000.)**3
     cb = c0 * (parts%rho%r(j)/1000.)**3
     cab = max(ca,cb)
@@ -2661,7 +2660,7 @@ do k=1,parts%niac
     i = parts%pair_i(k)
     j = parts%pair_j(k)
     rr = 0.
-    c0 = 10.* sqrt(9.81*0.52)!因case不同而不同
+    c0 = 10.* sqrt(9.81*0.5)!因case不同而不同
     ca = c0 * (parts%rho%r(i)/1000.)**3
     cb = c0 * (parts%rho%r(j)/1000.)**3
     cab = max(ca,cb)
@@ -2688,7 +2687,7 @@ endif
 
 !------unified get rho of nvirt particles
 
-call nvirt_density_unified3(pl)       
+call nvirt_density_unified2(pl)       
 
 !call pressure_nvirt(pl)
 !______Analytical value of delta gamma

@@ -22,8 +22,8 @@ double precision element_size, soil_submerged_depth
 !call tank%set(xl=3.74d0,yl=2.06d0,m=374,n=206)
 !call tank%set(xl=0.44d0,yl=0.22d0,m=352,n=176)
 
-call tank%set(xl=3.26d0,yl=1.82d0,m=163,n=91)
-!2call tank%set(xl=3.26d0,yl=1.82d0,m=326,n=182)
+!1call tank%set(xl=3.26d0,yl=1.82d0,m=163,n=91)
+call tank%set(xl=3.26d0,yl=1.82d0,m=326,n=182)
 
 
 
@@ -51,19 +51,19 @@ call tank%cell_center
 ! Zoning
 tank%zone = 2
 do i = 1, tank%m*tank%n
-   if(tank%x(i)<0.02.or.tank%x(i)>3.24.or.tank%y(i)<0.02) tank%zone(i) = 1
-   if(tank%zone(i)==1.and.tank%x(i)<0.02.and.tank%y(i)>0.02) tank%zone(i)=3
-   if(tank%zone(i)==1.and.tank%x(i)>0.02.and.tank%x(i)<3.24) tank%zone(i)=4
-   if(tank%zone(i)==1.and.tank%x(i)>3.24) tank%zone(i)=5
-   if(tank%x(i)<0.02.and.tank%y(i)<0.02)  tank%zone(i)=6
-   if(tank%x(i)>3.24.and.tank%y(i)<0.02)  tank%zone(i)=6
+!1   if(tank%x(i)<0.02.or.tank%x(i)>3.24.or.tank%y(i)<0.02) tank%zone(i) = 1
+!1   if(tank%zone(i)==1.and.tank%x(i)<0.02.and.tank%y(i)>0.02) tank%zone(i)=3
+!1   if(tank%zone(i)==1.and.tank%x(i)>0.02.and.tank%x(i)<3.24) tank%zone(i)=4
+!1   if(tank%zone(i)==1.and.tank%x(i)>3.24) tank%zone(i)=5
+!1   if(tank%x(i)<0.02.and.tank%y(i)<0.02)  tank%zone(i)=6
+!1   if(tank%x(i)>3.24.and.tank%y(i)<0.02)  tank%zone(i)=6
    
-!2   if(tank%x(i)<0.01.or.tank%x(i)>3.25.or.tank%y(i)<0.01) tank%zone(i) = 1
-!2   if(tank%zone(i)==1.and.tank%x(i)<0.01.and.tank%y(i)>0.01) tank%zone(i)=3
-!2   if(tank%zone(i)==1.and.tank%x(i)>0.01.and.tank%x(i)<3.25) tank%zone(i)=4
-!2   if(tank%zone(i)==1.and.tank%x(i)>3.25) tank%zone(i)=5
-!2   if(tank%x(i)<0.01.and.tank%y(i)<0.01)  tank%zone(i)=6
-!2   if(tank%x(i)>3.25.and.tank%y(i)<0.01)  tank%zone(i)=6
+   if(tank%x(i)<0.01.or.tank%x(i)>3.25.or.tank%y(i)<0.01) tank%zone(i) = 1
+   if(tank%zone(i)==1.and.tank%x(i)<0.01.and.tank%y(i)>0.01) tank%zone(i)=3
+   if(tank%zone(i)==1.and.tank%x(i)>0.01.and.tank%x(i)<3.25) tank%zone(i)=4
+   if(tank%zone(i)==1.and.tank%x(i)>3.25) tank%zone(i)=5
+   if(tank%x(i)<0.01.and.tank%y(i)<0.01)  tank%zone(i)=6
+   if(tank%x(i)>3.25.and.tank%y(i)<0.01)  tank%zone(i)=6
    
 !   if(tank%zone(i)==3.and.tank%y(i)<0.08) tank%zone(i)=6
 !   if(tank%zone(i)==4.and.tank%x(i)<0.08) tank%zone(i)=6
@@ -141,11 +141,11 @@ call initial_density(parts)
 do i = 1,parts%ntotal + parts%nvirt 
     if(parts%zone(i)/=2)then 
         parts%vol%r(i) = parts%vol%r(i)/2.0d0
-        if(parts%x(1,i)<0.02.and.parts%x(2,i)<0.02) parts%vol%r(i)=parts%vol%r(i)/2.0d0
-        if(parts%x(1,i)>3.24.and.parts%x(2,i)<0.02) parts%vol%r(i)=parts%vol%r(i)/2.0d0
+!1        if(parts%x(1,i)<0.02.and.parts%x(2,i)<0.02) parts%vol%r(i)=parts%vol%r(i)/2.0d0
+!1        if(parts%x(1,i)>3.24.and.parts%x(2,i)<0.02) parts%vol%r(i)=parts%vol%r(i)/2.0d0
 
-!2        if(parts%x(1,i)<0.01.and.parts%x(2,i)<0.01) parts%vol%r(i)=parts%vol%r(i)/2.0d0
-!2        if(parts%x(1,i)>3.25.and.parts%x(2,i)<0.01) parts%vol%r(i)=parts%vol%r(i)/2.0d0
+        if(parts%x(1,i)<0.01.and.parts%x(2,i)<0.01) parts%vol%r(i)=parts%vol%r(i)/2.0d0
+        if(parts%x(1,i)>3.25.and.parts%x(2,i)<0.01) parts%vol%r(i)=parts%vol%r(i)/2.0d0
     endif
 enddo
 

@@ -927,8 +927,8 @@ k = this%ntotal+this%nvirt
       if(tank%zone(i) == 3)then         
          k = k + 1
          this%x(1,k) = tank%x(i)
-         this%x(2,k) = 1.81 - tank%dy * (k - this%ntotal - 1)
-!2         this%x(2,k) = 1.815 - tank%dy * (k - this%ntotal - 1)
+!1         this%x(2,k) = 1.81 - tank%dy * (k - this%ntotal - 1)
+         this%x(2,k) = 1.815 - tank%dy * (k - this%ntotal - 1)
 
          this%zone(k) = tank%zone(i)
       endif
@@ -942,8 +942,8 @@ k = this%ntotal+this%nvirt
          if(tank%x(i)<0.02)then
          k = k + 1
          this%x(1,k) = tank%x(i)    
-         this%x(2,k) = 0.01 - tank%dy * (k - this%ntotal - this%nvirt - 1)
-!2         this%x(2,k) = 0.005 - tank%dy * (k - this%ntotal - this%nvirt - 1)
+!1         this%x(2,k) = 0.01 - tank%dy * (k - this%ntotal - this%nvirt - 1)
+         this%x(2,k) = 0.005 - tank%dy * (k - this%ntotal - this%nvirt - 1)
          this%zone(k) = tank%zone(i)
          endif
       endif
@@ -956,7 +956,8 @@ k = this%ntotal+this%nvirt
       if(tank%zone(i) == 6)then         
          if(tank%x(i) > 0.02.and.tank%x(i)<0.08)then
         k = k + 1
-         this%x(1,k) = 0.03 + tank%dx * (k - this%ntotal - this%nvirt - 1)   
+!1         this%x(1,k) = 0.03 + tank%dx * (k - this%ntotal - this%nvirt - 1)   
+         this%x(1,k) = 0.015 + tank%dx * (k - this%ntotal - this%nvirt - 1)   
          this%x(2,k) = tank%y(i)
          this%zone(k) = tank%zone(i)
          endif
@@ -971,8 +972,8 @@ k = this%ntotal+this%nvirt
       if(tank%zone(i) == 4)then         
          k = k + 1
          this%x(2,k) = tank%y(i)
-         this%x(1,k) = 0.03 + tank%dx * (k - this%ntotal - this%nvirt - 1)
-!2         this%x(1,k) = 0.015 + tank%dx * (k - this%ntotal - this%nvirt - 1)
+!1         this%x(1,k) = 0.03 + tank%dx * (k - this%ntotal - this%nvirt - 1)
+         this%x(1,k) = 0.015 + tank%dx * (k - this%ntotal - this%nvirt - 1)
 
          this%zone(k) = tank%zone(i)
       endif
@@ -980,19 +981,19 @@ k = this%ntotal+this%nvirt
    
 this%nvirt = k-this%ntotal
 
-k = this%ntotal+this%nvirt
-   do i = 1, tank%m*tank%n
-      if(tank%zone(i) == 6)then         
-         if(tank%x(i)>3.and.tank%x(i)<3.24)then
-         k = k + 1
-         this%x(2,k) = tank%y(i)    
-         this%x(1,k) = 3.19 + tank%dx * (k - this%ntotal - this%nvirt - 1)
-         this%zone(k) = tank%zone(i)
-         endif
-      endif
-   enddo
+!k = this%ntotal+this%nvirt
+!   do i = 1, tank%m*tank%n
+!      if(tank%zone(i) == 6)then         
+!         if(tank%x(i)>3.and.tank%x(i)<3.24)then
+!         k = k + 1
+!         this%x(2,k) = tank%y(i)    
+!         this%x(1,k) = 3.19 + tank%dx * (k - this%ntotal - this%nvirt - 1)
+!         this%zone(k) = tank%zone(i)
+!         endif
+!      endif
+!   enddo
    
-this%nvirt = k-this%ntotal
+!this%nvirt = k-this%ntotal
 
 k = this%ntotal+this%nvirt
    do i = 1, tank%m*tank%n
@@ -1000,8 +1001,8 @@ k = this%ntotal+this%nvirt
          if(tank%x(i)>3.24)then
          k = k + 1
          this%x(1,k) = tank%x(i)    
-         this%x(2,k) = 0.01 + tank%dy * (k - this%ntotal - this%nvirt - 1)
-!2         this%x(2,k) = 0.005 + tank%dy * (k - this%ntotal - this%nvirt - 1)
+!1         this%x(2,k) = 0.01 + tank%dy * (k - this%ntotal - this%nvirt - 1)
+         this%x(2,k) = 0.005 + tank%dy * (k - this%ntotal - this%nvirt - 1)
          this%zone(k) = tank%zone(i)
          endif
       endif
@@ -1013,8 +1014,8 @@ k = this%ntotal+this%nvirt
    do i = 1, tank%m*tank%n
       if(tank%zone(i) == 5)then         
          k = k + 1
-         this%x(2,k) = 0.03 + tank%dy * (k - this%ntotal - this%nvirt - 1)
-!2         this%x(2,k) = 0.015 + tank%dy * (k - this%ntotal - this%nvirt - 1)
+!1         this%x(2,k) = 0.03 + tank%dy * (k - this%ntotal - this%nvirt - 1)
+         this%x(2,k) = 0.015 + tank%dy * (k - this%ntotal - this%nvirt - 1)
          this%x(1,k) = tank%x(i)
          this%zone(k) = tank%zone(i)
       endif
@@ -4032,23 +4033,20 @@ end function
       enddo
       
       do i =1,parts%ntotal
-!          if(parts%gammaa%r(i)==0) parts%gammaa%r(i) =1
           do d= 1,parts%dim
-              dpre(d,i) = dpre(d,i)*parts%rho%r(i)/(parts%gammaa%r(i)+10**-8)  !文章中的（28)式，还需要进步到（8）
+              dpre(d,i) = dpre(d,i)*parts%rho%r(i)/parts%gammaa%r(i)  !文章中的（28)式，还需要进步到（8）
           enddo
       enddo
       
-!      divvx  =  parts.div2(parts%vx)
-      
+
       do k=1,parts%niac
         i = parts%pair_i(k)
         j = parts%pair_j(k)
-!        if(parts%itype(i)>0.and.parts%itype(j)>0)then
            rr = 0.      
            do d=1,parts%dim
               dx(d) =  parts%x(d,i) -  parts%x(d,j)
-              dvx(1) =parts%vx%x%r(i) - parts%vx%x%r(j)
-              dvx(2) =parts%vx%y%r(i) - parts%vx%y%r(j)
+              dvx(1) = parts%vx%x%r(i) - parts%vx%x%r(j)
+              dvx(2) = parts%vx%y%r(i) - parts%vx%y%r(j)
               rr = rr + dx(d)*dx(d)
            enddo  
            rr = sqrt(rr)
@@ -4060,19 +4058,19 @@ end function
             lapsx = sqrt(parts%dgu(1,k)**2+parts%dgu(2,k)**2)*parts%mons(1,k)/parts%rho%r(i)
             lapsy = sqrt(parts%dgu(1,k)**2+parts%dgu(2,k)**2)*parts%mons(2,k)/parts%rho%r(i)
             lapa = sqrt(parts%dgu(1,k)**2+parts%dgu(2,k)**2)*(water%viscosity*parts%divvx%r(i))/parts%rho%r(i)!这里用div2可以吧？？？(33)式的第二项
-            if(parts%x(1,j)<0.02.and.parts%x(2,j)>0.02)then
+            if(parts%zone(j)==3)then
               lap(1,i) = lap(1,i) - lapa - lapsx
               lap(2,i) = lap(2,i) - lapsy
-            elseif(parts%x(1,j)>0.02.and.parts%x(1,j)<3.24.and.parts%x(2,j)<0.02)then
+            elseif(parts%zone(j)==4)then
               lap(1,i) = lap(1,i) - lapsx  
               lap(2,i) = lap(2,i) - lapa - lapsy
-            elseif(parts%x(1,i)>3.24.and.parts%x(2,i)>0.02)then
+            elseif(parts%zone(j)==5)then
               lap(1,i) = lap(1,i) + lapa - lapsx
               lap(2,i) = lap(2,i) - lapsy
-            elseif(parts%x(1,i)>3.24.and.parts%x(2,i)<0.02)then
+            elseif(parts%zone(j)==6.and.parts%x(1,j)>1.)then
               lap(1,i) = lap(1,i) + lapa/sqrt(2.) - lapsx/sqrt(2.)
               lap(2,i) = lap(2,i) + lapa/sqrt(2.) - lapsy/sqrt(2.)
-            elseif(parts%x(1,i)<0.02.and.parts%x(2,i)<0.02)then
+            elseif(parts%zone(j)==6.and.parts%x(1,j)<1.)then
               lap(1,i) = lap(1,i) - lapa/sqrt(2.) - lapsx/sqrt(2.)
               lap(2,i) = lap(2,i) - lapa/sqrt(2.) - lapsy/sqrt(2.)
             endif
@@ -5127,7 +5125,7 @@ enddo
 !     Thirdly, calculate the normalized rho, rho=sum(rho)/sum(w)
 
         do i=parts%ntotal +1,parts%ntotal + parts%nvirt
-          if(wi(i)==0)wi(i)=1
+          if(wi(i)==0) wi(i)=1
           rho%r(i) = rho%r(i)/wi(i)
           parts%mone%x%r(i) = parts%mone%x%r(i)/wi(i)
           parts%mone%y%r(i) = parts%mone%y%r(i)/wi(i)
@@ -5156,7 +5154,7 @@ enddo
         enddo
         
         do i=parts%ntotal +1,parts%ntotal + parts%nvirt
-          if(wi(i)==0)wi(i)=1
+          if(wi(i)==0) wi(i)=1
           parts%p%r(i)=parts%p%r(i)/wi(i)
         enddo
         
