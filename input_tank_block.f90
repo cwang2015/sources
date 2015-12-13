@@ -59,13 +59,14 @@ do i = 1, tank%m*tank%n
    if(tank%x(i)>0.98.and.tank%y(i)<0.02)  tank%zone(i)=6
 
    if(tank%zone(i)==2.and.tank%y(i)>0.52)tank%zone(i)= 8
+   if(tank%zone(i)==2.and.tank%y(i)<0.2.and.tank%x(i)<0.2)tank%zone(i)= 8
    
    
 enddo
 
 call parts%take_real(tank,2)
 
-call parts%take_boundary_for_tank_static(tank)
+call parts%take_boundary_for_tank_block(tank)
 
 call parts%setup_ndim1
 
@@ -89,12 +90,12 @@ parts%vx%x = 0.d0
 parts%vx%y = 0.d0
 
 ! ...Pressure. You must define the free surface first.
-water_surface = 0.51d0
+water_surface = 0.52d0
 property => parts%material
 do i = 1,parts%ntotal+parts%nvirt
    parts%p%r(i) = property%rho0*gravity*(parts%x(2,i)-water_surface)
    if(parts%zone(i)==3.and.parts%x(2,i)>0.52)parts%p%r(i)=0.0
-   if(parts%zone(i)==5.and.parts%x(2,i)>0.52)parts%p%r(i)=0.0!原来这里写的是4.。。。
+   if(parts%zone(i)==5.and.parts%x(2,i)>0.52)parts%p%r(i)=0.0
 enddo
 
 parts%c = property%c
@@ -112,7 +113,9 @@ call initial_density(parts)
 do i = 1,parts%ntotal + parts%nvirt 
     if(parts%zone(i)/=2)then 
         parts%vol%r(i) = parts%vol%r(i)/2.0d0
-        if(parts%x(1,i)<0.02.and.parts%x(2,i)<0.02) parts%vol%r(i)=parts%vol%r(i)/2.0d0
+        if(i==1160) parts%vol%r(i)=parts%vol%r(i)/2.0d0
+        if(i==1178) parts%vol%r(i)=parts%vol%r(i)/2.0d0
+        if(i==1169) parts%vol%r(i)=parts%vol%r(i)*3./2.0d0
         if(parts%x(1,i)>0.98.and.parts%x(2,i)<0.02) parts%vol%r(i)=parts%vol%r(i)/2.0d0
     endif
 enddo

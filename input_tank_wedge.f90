@@ -22,9 +22,10 @@ double precision element_size, soil_submerged_depth
 !call tank%set(xl=3.74d0,yl=2.06d0,m=374,n=206)
 !call tank%set(xl=0.44d0,yl=0.22d0,m=352,n=176)
 
-!call tank%set(xl=2.04d0,yl=1.52d0,m=102,n=76)
-!2call tank%set(xl=2.02d0,yl=1.51d0,m=202,n=151)
-call tank%set(xl = 2.44d0,yl = 1.52d0,m=122,n=76)
+!1call tank%set(xl = 2.04d0,yl = 1.52d0,m=102,n=76)
+call tank%set(xl = 4.88d0,yl = 3.04d0,m=244,n=152)
+
+!call tank%set(xl = 2.44d0,yl = 1.52d0,m=122,n=76)
 
 
 !call tank%set(xl=3.26d0,yl=1.82d0,m=32,n=18)
@@ -69,12 +70,12 @@ do i = 1, tank%m*tank%n
 !2   if(tank%zone(i)==2.and.tank%x(i)>0.51)tank%zone(i)= 8
 !2   if(tank%zone(i)==2.and.tank%y(i)>1.01)tank%zone(i)= 8
    
-   if(tank%x(i)<0.02.or.tank%x(i)>2.42.or.tank%y(i)<0.02) tank%zone(i) = 1
+   if(tank%x(i)<0.02.or.tank%x(i)>4.86.or.tank%y(i)<0.02) tank%zone(i) = 1
    if(tank%zone(i)==1.and.tank%x(i)<0.02.and.tank%y(i)>0.02) tank%zone(i)=3
-   if(tank%zone(i)==1.and.tank%x(i)>0.02.and.tank%x(i)<2.42) tank%zone(i)=4
-   if(tank%zone(i)==1.and.tank%x(i)>2.42) tank%zone(i)=5
+   if(tank%zone(i)==1.and.tank%x(i)>0.02.and.tank%x(i)<4.84) tank%zone(i)=4
+   if(tank%zone(i)==1.and.tank%x(i)>4.86) tank%zone(i)=5
    if(tank%x(i)<0.02.and.tank%y(i)<0.02)  tank%zone(i)=6
-   if(tank%x(i)>2.42.and.tank%y(i)<0.02)  tank%zone(i)=6
+   if(tank%x(i)>4.86.and.tank%y(i)<0.02)  tank%zone(i)=6
    if(tank%zone(i)==2.and.tank%x(i)>0.52)tank%zone(i)= 8
    if(tank%zone(i)==2.and.tank%y(i)>1.02)tank%zone(i)= 8
    
@@ -82,7 +83,9 @@ enddo
 
 call parts%take_real(tank,2)
 
-call parts%take_boundary_for_tank_wedge3(tank)
+!call parts%take_boundary_for_tank_wedge3(tank)
+
+call parts%take_boundary_for_tank_wedge2(tank)
 
 call parts%setup_ndim1
 
@@ -128,7 +131,7 @@ call initial_density(parts)
 
 do i = 1,parts%ntotal + parts%nvirt 
     if(parts%zone(i)/=2)then 
-        parts%vol%r(i) = parts%vol%r(i)/2.0d0
+        parts%vol%r(i) = parts%vol%r(i)/4.0d0
 !1        if(parts%x(1,i)<0.02.and.parts%x(2,i)<0.02) parts%vol%r(i)=parts%vol%r(i)/2.0d0
 !1        if(parts%x(1,i)>2.02.and.parts%x(2,i)<0.02) parts%vol%r(i)=parts%vol%r(i)/2.0d0
 !1        if(parts%x(1,i)==0.85) parts%vol%r(i)=parts%vol%r(i)*3.0d0/2.0d0
