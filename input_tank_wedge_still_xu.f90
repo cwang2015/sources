@@ -22,9 +22,9 @@ double precision element_size, soil_submerged_depth
 !call tank%set(xl=3.74d0,yl=2.06d0,m=374,n=206)
 !call tank%set(xl=0.44d0,yl=0.22d0,m=352,n=176)
 
-!1call tank%set(xl=2.04d0,yl=1.52d0,m=102,n=76)
+!call tank%set(xl=2.04d0,yl=1.52d0,m=102,n=76)
 !2call tank%set(xl=2.02d0,yl=1.51d0,m=202,n=151)
-call tank%set(xl = 2.44d0,yl = 1.52d0,m=122,n=76)
+call tank%set(xl = 2.32d0,yl = 1.52d0,m=116,n=76)
 
 
 
@@ -72,24 +72,29 @@ do i = 1, tank%m*tank%n
 !2   if(tank%zone(i)==2.and.tank%x(i)>0.51)tank%zone(i)= 8
 !2   if(tank%zone(i)==2.and.tank%y(i)>1.01)tank%zone(i)= 8
    
-   if(tank%x(i)<0.02.or.tank%x(i)>2.42.or.tank%y(i)<0.02) tank%zone(i) = 1
-   if(tank%zone(i)==1.and.tank%x(i)<0.02.and.tank%y(i)>0.02) tank%zone(i)=3
-   if(tank%zone(i)==1.and.tank%x(i)>0.02.and.tank%x(i)<2.42) tank%zone(i)=4
-   if(tank%zone(i)==1.and.tank%x(i)>2.42) tank%zone(i)=5
-   if(tank%x(i)<0.02.and.tank%y(i)<0.02)  tank%zone(i)=6
-   if(tank%x(i)>2.42.and.tank%y(i)<0.02)  tank%zone(i)=6
-   if(tank%zone(i)==2.and.tank%y(i)>0.42)tank%zone(i)= 8
-   if(tank%zone(i)==2.and.tank%x(i)>0.87.and.tank%y(i)<tank%x(i) - 0.85.and.tank%x(i)<1.1)tank%zone(i)= 8
-   if(tank%zone(i)==2.and.tank%x(i)>1.1.and.tank%y(i)<1.34 - tank%x(i).and.tank%x(i)<1.32)tank%zone(i)= 8
-   if(tank%zone(i)==2.and.tank%x(i)>2.22) tank%zone(i)= 8
+   if(tank%x(i)<0.06.or.tank%x(i)>2.26) tank%zone(i) = 1
+   if(tank%y(i)<0.06) tank%zone(i) = 1
+   if(tank%x(i)>0.88.and.tank%x(i)<1.14.and.tank%y(i)<(-0.88 + tank%x(i))) tank%zone(i) = 1
+   if(tank%x(i)>1.14.and.tank%x(i)<1.4.and.tank%y(i)<(1.4 - tank%x(i))) tank%zone(i) = 1   
+!   if(tank%zone(i)==1.and.tank%x(i)<0.02.and.tank%y(i)>0.02) tank%zone(i)=3
+!   if(tank%zone(i)==1.and.tank%x(i)>0.02.and.tank%x(i)<2.42) tank%zone(i)=4
+!   if(tank%zone(i)==1.and.tank%x(i)>2.42) tank%zone(i)=5
+!   if(tank%x(i)<0.02.and.tank%y(i)<0.02)  tank%zone(i)=6
+!   if(tank%x(i)>2.42.and.tank%y(i)<0.02)  tank%zone(i)=6
+   if(tank%zone(i)==2.and.tank%y(i)>0.46)tank%zone(i)= 8
+!   if(tank%zone(i)==2.and.tank%x(i)>0.91.and.tank%y(i)<tank%x(i) - 0.85.and.tank%x(i)<1.1)tank%zone(i)= 8
+!   if(tank%zone(i)==2.and.tank%x(i)>1.1.and.tank%y(i)<1.34 - tank%x(i).and.tank%x(i)<1.32)tank%zone(i)= 8
+   if(tank%zone(i)==2.and.tank%x(i)>2.26) tank%zone(i)= 8
    
    
 enddo
 
-call parts%take_real(tank,2)
-
-call parts%take_boundary_for_tank_wedge3(tank)!1是原来的，2是加密的，3是楔形体也等距的
-!3call parts%take_boundary_for_tank_wedge3(tank)!1是原来的，2是加密的，3是楔形体也等距的
+!call parts%take_real_new_wedgecase(tank,2)  
+call parts%take_real(tank,2)  
+call parts%take_virtual(tank,1)
+        
+!call parts%take_boundary_for_tank_wedge(tank)!1是原来的，2是加密的，3是楔形体也等距的
+!call parts%take_boundary_for_tank_wedge3(tank)!1是原来的，2是加密的，3是楔形体也等距的
 
 call parts%setup_ndim1
 
@@ -113,7 +118,7 @@ parts%vx%x = 0.d0
 parts%vx%y = 0.d0
 
 ! ...Pressure. You must define the free surface first.
-water_surface = 0.4d0
+water_surface = 0.46d0
 property => parts%material
 do i = 1,parts%ntotal+parts%nvirt
    parts%p%r(i) = property%rho0*gravity*(parts%x(2,i)-water_surface)
@@ -127,20 +132,71 @@ parts%c = property%c
 ! Calulate desity from pressure according to Equation of State (EoS): p = B(rho/rho0-1)^gamma
   
 call initial_density(parts)
-      
+
+
 !do i = 1,parts%ntotal +parts%nvirt 
 !    if(tank%zone(i)==1) parts%vol%r(i) =  tank%dx*tank%dy/2.0d0
 !    if(tank%zone(i)==3) parts%vol%r(i) =  tank%dx*tank%dy/4.0d0
 !    if(tank%zone(i)==4) parts%vol%r(i) =  tank%dx*tank%dy/4.0d0
 !enddo
 
-do i = 1,parts%ntotal + parts%nvirt 
-    if(parts%zone(i)/=2)then 
-        parts%vol%r(i) = parts%vol%r(i)/2.0d0
+
+!do i =  1, parts%ntotal 
+!if(parts%x(2,i) > (parts%x(1,i) - 0.865).and.parts%x(2,i)<(parts%x(1,i) - 0.855).and.parts%x(2,i) > 0.06.and.parts%x(2,i) < 0.26) then
+!    parts%x(1,i) = parts%x(1,i) + tank%dx*5./18.
+!    parts%x(2,i) = parts%x(2,i) + tank%dx/18.
+!    parts%vol%r(i) = parts%vol%r(i)*3./2.
+!endif
+!if(parts%x(2,i) > (parts%x(1,i) - 0.865).and.parts%x(2,i)<(parts%x(1,i) - 0.855).and.parts%x(2,i) > 0.06.and.parts%x(2,i) > 0.26.and.parts%x(2,i) < 0.28) then
+!    parts%x(1,i) = parts%x(1,i) 
+!    parts%x(2,i) = parts%x(2,i) - tank%dx*8./21.
+!    parts%vol%r(i) = parts%vol%r(i)*7./4.
+!endif
+!if(parts%x(2,i) > (1.395 - parts%x(1,i)).and.parts%x(2,i)<(1.405 - parts%x(1,i)).and.parts%x(2,i) > 0.06.and.parts%x(2,i) < 0.26) then
+!    parts%x(1,i) = parts%x(1,i) - tank%dx*5./18.
+!    parts%x(2,i) = parts%x(2,i) + tank%dx/18.
+!    parts%vol%r(i) = parts%vol%r(i)*3./2.
+!endif
+!enddo      
+
+
+!do i = 1, parts%ntotal
+!       if(parts%x(2,i) < (parts%x(1,i) - 0.87).and.parts%x(2,i)>(parts%x(1,i) - 0.88).and.parts%x(2,i) < 0.24) then
+!       parts%vol%r(i) = parts%vol%r(i)/2.
+!       endif
+!       if(parts%x(2,i) < (parts%x(1,i) - 0.865).and.parts%x(2,i)>(parts%x(1,i) - 0.89).and.parts%x(2,i) > 0.25.and.parts%x(2,i) < 0.26)then
+!       parts%vol%r(i) = parts%vol%r(i)*3./4.
+!       endif
+!       if(parts%x(2,i)>(1.375 - parts%x(1,i)).and.parts%x(2,i)<(1.395 - parts%x(1,i)).and.parts%x(2,i) < 0.24) then
+!       parts%vol%r(i) = parts%vol%r(i)/2.
+!       endif
+!enddo
+!do i = parts%ntotal + 1, parts%ntotal + parts%nvirt
+!if(parts%x(2,i) > (parts%x(1,i) - 0.885).and.parts%x(2,i)<(parts%x(1,i) - 0.875).and.parts%x(2,i) > 0.06.and.parts%x(2,i) < 0.24) then
+!    parts%x(1,i) = parts%x(1,i) + tank%dx/6.
+!    parts%x(2,i) = parts%x(2,i) - tank%dx/6.
+!    parts%vol%r(i) = parts%vol%r(i)/2.
+!endif
+!if(parts%x(2,i) > (parts%x(1,i) - 0.885).and.parts%x(2,i)<(parts%x(1,i) - 0.875).and.parts%x(2,i) > 0.06.and.parts%x(2,i) > 0.24) then
+!    parts%x(1,i) = parts%x(1,i) 
+!    parts%x(2,i) = parts%x(2,i) - tank%dx/3.
+!    parts%vol%r(i) = parts%vol%r(i)/4.
+!endif
+!if(parts%x(2,i) > (1.375 - parts%x(1,i)).and.parts%x(2,i)<(1.385 - parts%x(1,i)).and.parts%x(2,i) > 0.06.and.parts%x(2,i) < 0.24) then
+!    parts%x(1,i) = parts%x(1,i) - tank%dx/6.
+!    parts%x(2,i) = parts%x(2,i) - tank%dx/6.
+!    parts%vol%r(i) = parts%vol%r(i)/2.    
+!endif
+!enddo
+
+
+!do i = 1,parts%ntotal + parts%nvirt 
+!if(parts%zone(i)/=2)then 
+!        parts%vol%r(i) = parts%vol%r(i)/2.0d0
 !1        if(parts%x(1,i)<0.02.and.parts%x(2,i)<0.02) parts%vol%r(i)=parts%vol%r(i)/2.0d0
 !1        if(parts%x(1,i)>2.02.and.parts%x(2,i)<0.02) parts%vol%r(i)=parts%vol%r(i)/2.0d0
-!1        if(parts%x(1,i)==0.85) parts%vol%r(i)=parts%vol%r(i)*3.0d0/4.0d0
-!1        if(parts%x(1,i)>1.32.and.parts%x(1,i)<1.34) parts%vol%r(i)=parts%vol%r(i)*3.0d0/4.0d0
+!1        if(parts%x(1,i)==0.85) parts%vol%r(i)=parts%vol%r(i)*3.0d0/2.0d0
+!1        if(parts%x(1,i)==1.33) parts%vol%r(i)=parts%vol%r(i)*3.0d0/2.0d0
 !1        if(parts%x(1,i)>1.08.and.parts%x(1,i)<1.1) parts%vol%r(i)=parts%vol%r(i)*3.0d0/2.0d0
 
 !2        if(parts%x(1,i)<0.01.and.parts%x(2,i)<0.01) parts%vol%r(i)=parts%vol%r(i)/2.0d0
@@ -149,13 +205,13 @@ do i = 1,parts%ntotal + parts%nvirt
 !2        if(parts%x(1,i)==1.365) parts%vol%r(i)=parts%vol%r(i)*3.0d0/2.0d0
 !2        if(parts%x(1,i)>1.11.and.parts%x(1,i)<1.12) parts%vol%r(i)=parts%vol%r(i)*3.0d0/2.0d0
 
-        if(parts%x(1,i)<0.02.and.parts%x(2,i)<0.02) parts%vol%r(i)=parts%vol%r(i)/2.0d0
-        if(parts%x(1,i)>2.22.and.parts%x(2,i)<0.02) parts%vol%r(i)=parts%vol%r(i)/2.0d0
-        if(parts%x(1,i)==0.87) parts%vol%r(i)=parts%vol%r(i)*3.0d0/4.0d0
-        if(parts%x(1,i)>1.31.and.parts%x(1,i)<1.33) parts%vol%r(i)=parts%vol%r(i)*3.0d0/4.0d0
-        if(parts%x(1,i)>1.09.and.parts%x(1,i)<1.1) parts%vol%r(i)=parts%vol%r(i)*3.0d0/2.0d0
-    endif
-enddo
+!        if(parts%x(1,i)<0.02.and.parts%x(2,i)<0.02) parts%vol%r(i)=parts%vol%r(i)/2.0d0
+!        if(parts%x(1,i)>2.22.and.parts%x(2,i)<0.02) parts%vol%r(i)=parts%vol%r(i)/2.0d0
+!        if(parts%x(1,i)==0.87) parts%vol%r(i)=parts%vol%r(i)*3.0d0/2.0d0
+!        if(parts%x(1,i)>1.31.and.parts%x(1,i)<1.33) parts%vol%r(i)=parts%vol%r(i)*3.0d0/2.0d0
+!        if(parts%x(1,i)>1.09.and.parts%x(1,i)<1.1) parts%vol%r(i)=parts%vol%r(i)*3.0d0/2.0d0
+!    endif
+!enddo
 
 parts%mass = parts%vol * parts%rho
 

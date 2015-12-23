@@ -144,10 +144,10 @@ do i = 1,parts%ntotal + parts%nvirt
 !2        if(parts%x(1,i)==1.365) parts%vol%r(i)=parts%vol%r(i)*3.0d0/2.0d0
 !2        if(parts%x(1,i)>1.11.and.parts%x(1,i)<1.12) parts%vol%r(i)=parts%vol%r(i)*3.0d0/2.0d0
 
-        if(parts%x(1,i)<0.02.and.parts%x(2,i)<0.02) parts%vol%r(i)=parts%vol%r(i)/2.0d0
+        if(parts%x(1,i)<0.015.and.parts%x(2,i)<0.015) parts%vol%r(i)=parts%vol%r(i)/2.0d0
         if(parts%x(1,i)>2.22.and.parts%x(2,i)<0.02) parts%vol%r(i)=parts%vol%r(i)/2.0d0
-        if(parts%x(1,i)==0.87) parts%vol%r(i)=parts%vol%r(i)*3.0d0/2.0d0
-        if(parts%x(1,i)>1.31.and.parts%x(1,i)<1.33) parts%vol%r(i)=parts%vol%r(i)*3.0d0/2.0d0
+        if(parts%x(1,i)==0.87) parts%vol%r(i)=parts%vol%r(i)*3.0d0/4.0d0
+        if(parts%x(1,i)>1.319.and.parts%x(1,i)<1.33) parts%vol%r(i)=parts%vol%r(i)*3.0d0/4.0d0
         if(parts%x(1,i)>1.09.and.parts%x(1,i)<1.1) parts%vol%r(i)=parts%vol%r(i)*3.0d0/2.0d0
     endif
 enddo

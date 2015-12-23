@@ -1348,6 +1348,7 @@ else
            lastvx_y%r(i) = pl%vx%y%r(i) + dt*pl%dvx%y%r(i)
     enddo
 endif
+
 temp1_x = pl%vx%x;temp1_y = pl%vx%y
 pl%vx%x = lastvx_x;pl%vx%y = lastvx_y
 lastvx_x = temp1_x;lastvx_y = temp1_y
@@ -1559,17 +1560,23 @@ do it = 1, maxtimestep
     parts%itimestep = itimestep
    call single_step_for_water2
 do i = 1,pl%ntotal
+if(parts%zone(i)==7) then
+pl%vx%x%r(i) = 0.
+pl%dvx%x%r(i) = 0.
+else
 pl%vx%x%r(i) = pl%vx%x%r(i) + dt * pl%dvx%x%r(i)
 pl%vx%y%r(i) = pl%vx%y%r(i) + dt * pl%dvx%y%r(i)
+endif
 pl%x(1,i) = pl%x(1,i) + dt * pl%vx%x%r(i)
 pl%x(2,i) = pl%x(2,i) + dt * pl%vx%y%r(i)
 enddo
+
 
 do k=1,parts%niac
     i = parts%pair_i(k)
     j = parts%pair_j(k)
     rr = 0.
-    c0 = 10.* sqrt(9.81*0.5)
+    c0 = 25.* sqrt(9.81*0.5)
     ca = c0 * (parts%rho%r(i)/1000.)**3
     cb = c0 * (parts%rho%r(j)/1000.)**3
     cab = max(ca,cb)
@@ -1591,7 +1598,6 @@ enddo
 do i = 1,pl%ntotal
     pl%rho%r(i) = pl%rho%r(i) + dt * (pl%drho%r(i)/parts%gammaa%r(i))
 enddo
-
 
    time = time + dt
    
@@ -2220,7 +2226,6 @@ endif
 return
 end subroutine
 
-
 !-------------------------------------------------
       subroutine single_step_for_water
 !-------------------------------------------------
@@ -2269,26 +2274,17 @@ endif
 !--- Added by Wang
 !if(nor_density) call norm_density(pl)
 
-call get_gammaa2(pl)
-
-!------unified get rho of nvirt particles
-call nvirt_density_unified2(pl)
-!call pressure_nvirt(pl)
-!______Analytical value of delta gamma
-call delta_gamma_unified2(pl)
-
-call real_density_unified(pl)
-
 !---  Density approximation or change rate
+     
 !if(summation_density)then   
 !if(itimestep<62000) then
-!if(mod(itimestep,25)==0) then
-!call sum_density(pl)
-!else             
+if(mod(itimestep,25)==0) then
+call sum_density(pl)
+else             
 !    call sum_density(pl)         
     
-!    pl%drho = -pl.rho*pl.div2(pl.vx)
-!endif
+    pl%drho = -pl.rho*pl.div2(pl.vx)
+endif
 !else
 !if(mod(itimestep,25)==0) then
 !call sum_density(pl)
@@ -2298,35 +2294,22 @@ call real_density_unified(pl)
 !    pl%drho = -pl.rho*pl.div2(pl.vx)
 !endif
 !endif
-!do i = parts%ntotal +1,parts%ntotal+parts%nvirt
-!    pl%drho%r(i) = 0
-!enddo
-
-     
-!`````````````````if(artificial_density)then
+    
+    
+if(artificial_density)then
    !if(trim(pl%imaterial)=='water')then
       !!call renormalize_density_gradient(pl)
       !call art_density(pl)
-!`````````````````      call delta_sph_omp(pl,pl%rho,pl%drho)
-!       call delta_rho(pl,pl%rho,pl%drho)
+!      call delta_sph_omp(pl,pl%rho,pl%drho)
+       call delta_rho(pl,pl%rho,pl%drho)
    !endif
-!````````````````endif
+endif
 
 !---  Dynamic viscosity:
      
-!water => parts%material
-!parts%p = water%b*((parts%rho/(water%rho0))**water%gamma-1.d0)
-
-!down is for unified condition
 water => parts%material
-do i = 1,parts%ntotal
-parts%p%r(i) = water%b*((parts%rho%r(i)/(water%rho0))**water%gamma-1.d0)
-enddo
-call momentum_equation_unified3(pl)  !这个应该是对的
+parts%p = water%b*((parts%rho/(water%rho0))**water%gamma-1.d0)
 
-!up is for unified condition
- 
-!call pressure_nvirt(pl)
 !第二种状态方程
 !parts%p = water%c**2*(parts%rho-water%rho0)
 
@@ -2334,18 +2317,18 @@ call momentum_equation_unified3(pl)  !这个应该是对的
 !parts%c%r(1:ntotal) = water%c*(parts%rho%r(1:ntotal)/(water%rho0))**3.0    
 
 
+
 !---  Internal forces:
 
 !call shear_strain_rate(pl)
-!3~~~~~~~~~down is before
-!3pl%tab%x%ndim1 = pl%ntotal+pl%nvirt
-!3pl%tab%xy%ndim1 = pl%tab%x%ndim1; pl%tab%y%ndim1 = pl%tab%x%ndim1
+pl%tab%x%ndim1 = pl%ntotal+pl%nvirt
+pl%tab%xy%ndim1 = pl%tab%x%ndim1; pl%tab%y%ndim1 = pl%tab%x%ndim1
 !write(*,*) pl%tab%x%ndim1,pl%vx%x%ndim1
 !Calculate SPH sum for shear tensor Tab = va,b + vb,a - 2/3 delta_ab vc,c
 
-!3pl%tab%x = 2.d0/3.d0*(2.d0*pl%df4(pl%vx%x,'x')-pl%df4(pl%vx%y,'y'))
-!3pl%tab%xy = pl%df4(pl%vx%x,'y')+pl%df4(pl%vx%y,'x')
-!3pl%tab%y = 2.d0/3.d0*(2.d0*pl%df4(pl%vx%y,'y')-pl%df4(pl%vx%x,'x'))
+pl%tab%x = 2.d0/3.d0*(2.d0*pl%df4(pl%vx%x,'x')-pl%df4(pl%vx%y,'y'))
+pl%tab%xy = pl%df4(pl%vx%x,'y')+pl%df4(pl%vx%y,'x')
+pl%tab%y = 2.d0/3.d0*(2.d0*pl%df4(pl%vx%y,'y')-pl%df4(pl%vx%x,'x'))
 
 !call velocity_divergence(pl)
 
@@ -2353,28 +2336,19 @@ call momentum_equation_unified3(pl)  !这个应该是对的
 
 !   call newtonian_fluid(pl)
 
-!3      parts%str%x = water%viscosity*parts%tab%x
-!3      parts%str%y = water%viscosity*parts%tab%y
-!3      parts%str%xy = water%viscosity*parts%tab%xy
-
+      parts%str%x = water%viscosity*parts%tab%x
+      parts%str%y = water%viscosity*parts%tab%y
+      parts%str%xy = water%viscosity*parts%tab%xy
+! write(*,*) parts%tab%x%r(862),parts%tab%y%r(861),parts%tab%y%r(882),parts%tab%y%r(883)
+! write(*,*) parts%str%x%r(862),parts%str%y%r(861),parts%str%y%r(882),parts%str%y%r(883)
 !Calculate internal force for water phase !! -phi_f Grad(p)
 
-
-!3   pl%dvx%x = -pl%df(pl%p,'x') + pl%df(pl%str%x,'x') + pl%df(pl%str%xy,'y')
-!3   pl%dvx%y = -pl%df(pl%p,'y') + pl%df(pl%str%xy,'x') + pl%df(pl%str%y,'y')   
-
-!down is for dealt-sph
-!   pl%dvx%x = pl%df(pl%str%x,'x') + pl%df(pl%str%xy,'y')
-!   pl%dvx%y = pl%df(pl%str%xy,'x') + pl%df(pl%str%y,'y') 
-!   call pressure_nvirt(pl)
-!   pl%dvx%x = pl%dvx%x - pl%df(pl%p,'x')
-!   pl%dvx%y = pl%dvx%y - pl%df(pl%p,'y')
-!up is for dealt-sph
-
-!3   pl%dvx%x = pl%dvx%x/pl%rho
-!3   pl%dvx%y = pl%dvx%y/pl%rho
+   pl%dvx%x = -pl%df(pl%p,'x') + pl%df(pl%str%x,'x') + pl%df(pl%str%xy,'y')
+   pl%dvx%y = -pl%df(pl%p,'y') + pl%df(pl%str%xy,'x') + pl%df(pl%str%y,'y')   
+   pl%dvx%x = pl%dvx%x/pl%rho
+   pl%dvx%y = pl%dvx%y/pl%rho
    !write(*,*) pl%dvx%x%r(1:50),pl%dvx%y%r(1:50)
-!3~~~~~~~~~up is before
+! write(*,*) parts%dvx%x%r(862),parts%dvx%y%r(862),parts%dvx%y%r(861),parts%dvx%y%r(861)
 !if(artificial_density)then
    !if(trim(pl%imaterial)=='water')then
       !!call renormalize_density_gradient(pl)
@@ -2384,10 +2358,8 @@ call momentum_equation_unified3(pl)  !这个应该是对的
 !endif
 !---  Artificial viscosity:
 
-!4~~~~not need now
 !if (visc_artificial) call pl%art_visc
-!4~~~~not need now       
-
+       
 !if(trim(pl%imaterial)=='water'.and.water_artificial_volume)  &
         !call art_volume_fraction_water2(pl)
  !       call pl%delta_sph_omp(pl%vof,pl%dvof)
@@ -2401,25 +2373,19 @@ call momentum_equation_unified3(pl)  !这个应该是对的
 !      if (ex_force)then
 !          if(self_gravity) call gravity_force(pl)
 !          call repulsive_force(pl)
-
-!5~~~~not need now
-!call pl%repulsive_force_omp                ! can be tried
+call pl%repulsive_force_omp                ! can be tried
 !      endif
-!5~~~~not need now     
 
-!6~~~~not need now
-!pl%dvx%y = pl%dvx%y + gravity
-!6~~~~not need now
-
+pl%dvx%y = pl%dvx%y + gravity
+!write(*,*) parts%dvx%x%r(862),parts%dvx%y%r(862),parts%dvx%y%r(861),parts%dvx%y%r(861),parts%dvx%y%r(860),parts%dvx%y%r(860)
 !     Calculating the neighboring particles and undating HSML
       
 !if (sle.ne.0) call h_upgrade(pl)
 
 !     Calculating average velocity of each partile for avoiding penetration
 
-!7~~~~not need now
 if (average_velocity) call av_vel(pl) 
-!7~~~~not need now
+
 
 !---  Convert velocity, force, and energy to f and dfdt  
       
@@ -2440,9 +2406,7 @@ endif
 
          
 return
-      end subroutine
-      
-
+end subroutine
 !-------------------------------------------------
       subroutine single_step_for_water2
 !-------------------------------------------------
@@ -2514,16 +2478,15 @@ endif
 !enddo
 !endif
 !------unified get rho of nvirt particles
-
 call nvirt_density_unified2(pl)       
 
 !call pressure_nvirt(pl)
 !______Analytical value of delta gamma
-if(mod(itimestep,2)==0) then
-  call delta_gamma_unified6(pl)
-else 
+!if(mod(itimestep,2)==0) then
+!  call delta_gamma_unified6(pl)
+!else 
   call delta_gamma_unified3(pl)
-endif
+!endif
 
 call real_density_unified2(pl)
 
@@ -2551,14 +2514,14 @@ call real_density_unified2(pl)
 !enddo
 
      
-!`````````````````if(artificial_density)then
+if(artificial_density)then
    !if(trim(pl%imaterial)=='water')then
       !!call renormalize_density_gradient(pl)
       !call art_density(pl)
-!`````````````````      call delta_sph_omp(pl,pl%rho,pl%drho)
+      call delta_sph_omp(pl,pl%rho,pl%drho)
 !       call delta_rho(pl,pl%rho,pl%drho)
    !endif
-!````````````````endif
+endif
 
 !---  Dynamic viscosity:
      
@@ -2570,7 +2533,7 @@ water => parts%material
 do i = 1,parts%ntotal 
 parts%p%r(i) = water%b*((parts%rho%r(i)/(water%rho0))**water%gamma-1.d0)
 enddo
-call momentum_equation_unified3(pl)  
+!call momentum_equation_unified6(pl)  
 
 !up is for unified condition
  
@@ -2706,7 +2669,7 @@ integer  nphase
 type(particles), pointer :: pl
 logical :: dbg = .false.
 integer i, ntotal,k,j,d
-real(dp) dvx(3),dx(3) ,rr,ca,cb,cab,c0,rhoab
+real(dp) dvx(3),dx(3) ,rr,ca,cb,cab,c0,rhoab,hv(3),r,selfdens
 type(p2r) vx_i(3), vx_j(3) 
 type(array) temp
 type(material),pointer :: water
@@ -2723,8 +2686,16 @@ pl%dvx%x = 0.d0; pl%dvx%y = 0.d0; pl%drho = 0.d0
 !---  Interaction parameters, calculating neighboring particles
 !     and optimzing smoothing length
 
+        
+      hv = 0.d0
+      r=0.d0
+
+
 if(itimestep/=1)then
-  temp = 0.
+ do i=1,parts%ntotal
+   call parts%kernel(r,hv,parts%hsml(i),selfdens,hv)
+   temp%r(i)=-selfdens*parts%mass%r(i)  !由于rho不能要自加，这里也要自加
+ enddo
 do k=1,parts%niac
     i = parts%pair_i(k)
     j = parts%pair_j(k)
@@ -2760,12 +2731,17 @@ endif
 
 call get_gammaa2(pl)
 if(itimestep/=1)then
-
+    
+ do i=1,parts%ntotal
+   call parts%kernel(r,hv,parts%hsml(i),selfdens,hv)
+   temp%r(i)=temp%r(i) + selfdens*parts%mass%r(i)  !由于rho不能要自加，这里也要自加
+ enddo
+ 
 do k=1,parts%niac
     i = parts%pair_i(k)
     j = parts%pair_j(k)
     rr = 0.
-    c0 = 15!.*sqrt(9.8*0.5)!因case不同而不同
+    c0 = 20!.*sqrt(9.8*0.5)!因case不同而不同
     ca = c0 * (parts%rho%r(i)/1000.)**3
     cb = c0 * (parts%rho%r(j)/1000.)**3
     cab = max(ca,cb)
@@ -2811,13 +2787,14 @@ endif
 !if(itimestep>1)then
 !    call nvirt_density_unified201(pl)
 !else
-call nvirt_density_unified2(pl)    
+!call nvirt_density_unified2(pl)    
 !endif!这样就用了deltaP的方式来求了
 !call pressure_nvirt_unified(pl)
 !______Analytical value of delta gamma
-call delta_gamma_unified3(pl)
+call delta_gamma_unified2(pl)
 
 call real_density_unified2(pl)
+call nvirt_density_unified3(pl)    
 
 !---  Density approximation or change rate
 !if(summation_density)then   
@@ -2862,18 +2839,43 @@ water => parts%material
 do i = 1,parts%ntotal 
 parts%p%r(i) = water%b*((parts%rho%r(i)/(water%rho0))**water%gamma-1.d0)
 enddo
-
 !if(itimestep>1)then
 !call momentum_equation_unified401(pl) 
 !else
 call momentum_equation_unified4(pl)      
 !endif!这样就用了deltaP的方式来求了
 
+!pl%tab%x%ndim1 = pl%ntotal+pl%nvirt
+!pl%tab%xy%ndim1 = pl%tab%x%ndim1; pl%tab%y%ndim1 = pl%tab%x%ndim1
+!write(*,*) pl%tab%x%ndim1,pl%vx%x%ndim1
+!Calculate SPH sum for shear tensor Tab = va,b + vb,a - 2/3 delta_ab vc,c
+
+!pl%tab%x = 2.d0/3.d0*(2.d0*pl%df4(pl%vx%x,'x')-pl%df4(pl%vx%y,'y'))
+!pl%tab%xy = pl%df4(pl%vx%x,'y')+pl%df4(pl%vx%y,'x')
+!pl%tab%y = 2.d0/3.d0*(2.d0*pl%df4(pl%vx%y,'y')-pl%df4(pl%vx%x,'x'))
+
+!call velocity_divergence(pl)
+
+!call pressure(pl)
+
+!   call newtonian_fluid(pl)
+
+!      parts%str%x = water%viscosity*parts%tab%x
+!      parts%str%y = water%viscosity*parts%tab%y
+!      parts%str%xy = water%viscosity*parts%tab%xy
+! write(*,*) parts%tab%x%r(862),parts%tab%y%r(861),parts%tab%y%r(882),parts%tab%y%r(883)
+! write(*,*) parts%str%x%r(862),parts%str%y%r(861),parts%str%y%r(882),parts%str%y%r(883)
+!Calculate internal force for water phase !! -phi_f Grad(p)
+
+!  pl%dvx%x = -pl%df(pl%p,'x') + pl%df(pl%str%x,'x') + pl%df(pl%str%xy,'y')
+!  pl%dvx%y = -pl%df(pl%p,'y') + pl%df(pl%str%xy,'x') + pl%df(pl%str%y,'y')   
+!  pl%dvx%x = pl%dvx%x/pl%rho
+!  pl%dvx%y = pl%dvx%y/pl%rho
 
 !        do i=parts%ntotal +1,parts%ntotal + parts%nvirt
 !          if(2187<i.and.i<2219)write(*,*) parts%p%r(i),i
 !        enddo
-!call freesurface2(pl)  !freesurface2通过使用divr来求解。通过比较后发现，这种形式在相应算例中优于freesurface
+!call freesurface2(pl)  !freesurface2通过使用divr来求解。通过比较后发现，这种形式在相应算例中优于freesurface,xiaoguo biancha
 
 !     do i=parts%ntotal +1,parts%ntotal + parts%nvirt
 !        parts%p%r(i)=parts%p%r(i)/wi(i)
