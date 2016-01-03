@@ -24,7 +24,7 @@ double precision element_size, soil_submerged_depth
 
 !1call tank%set(xl=2.04d0,yl=1.52d0,m=102,n=76)
 !2call tank%set(xl=2.02d0,yl=1.51d0,m=202,n=151)
-call tank%set(xl = 0.00050d0,yl = 0.00105d0,m=20,n=42)
+call tank%set(xl = 0.00100d0,yl = 0.00105d0,m=40,n=42)
 
 
 
@@ -72,7 +72,7 @@ call parts%setup_ndim1
 ! vol means the volume of a cell. We calculate the mass of each particle according to mass = rho*vol
 
 parts%vol = tank%dx*tank%dy
-parts%hsml = 1.2*tank%dx
+parts%hsml = 2*tank%dx
 parts%dspp = tank%dx
 
 ! itype is positive for real particles, negative for virtual particles.
