@@ -1666,8 +1666,81 @@ enddo
    
 enddo
 
+close(1000)
+
 return
       end subroutine      
+      
+
+!----------------------------------------------------------------------      
+      subroutine time_integration_for_water_by_unified_Couette
+!----------------------------------------------------------------------
+!use param
+!use declarations_sph
+implicit none     
+
+integer :: i, j, k, d, ntotal, it 
+real(dp) dvx(3),dx(3) ,rr,ca,cb,cab,c0,rhoab
+type(particles), pointer :: pl
+type(array) :: temp
+type(p2r) vx_i(3), vx_j(3) 
+
+temp%ndim1 = parts%ntotal+parts%nvirt
+allocate(temp%r(parts%ntotal+parts%nvirt))
+    pl => parts
+    call parts%setup_ndim1
+    
+do i = 1,pl%ntotal + pl%nvirt
+    if(parts%zone(i) == 1) pl%vx%x%r(i) = 0.000025
+enddo
+
+do it = 1, maxtimestep 
+    itimestep = itimestep+1
+    parts%itimestep = itimestep
+   call single_step_for_water_Couette
+   
+do i = 1,pl%ntotal
+pl%vx%x%r(i) = pl%vx%x%r(i) + dt * pl%dvx%x%r(i)
+!pl%vx%y%r(i) = pl%vx%y%r(i) + dt * pl%dvx%y%r(i)
+pl%x(1,i) = pl%x(1,i) + dt * pl%vx%x%r(i)
+!pl%x(2,i) = pl%x(2,i) + dt * pl%vx%y%r(i)
+if(pl%x(1,i)>0.0005) pl%x(1,i)=pl%x(1,i) - 0.0005
+enddo
+!do i = pl%ntotal + 1,pl%ntotal + pl%nvirt
+!  pl%x(1,i) = pl%x(1,i) + dt * pl%vx%x%r(i)
+!enddo
+
+
+!temp = 0.
+!do k=1,parts%niac
+!    i = parts%pair_i(k)
+!    j = parts%pair_j(k)
+!    temp%r(i) = temp%r(i) + parts%mass%r(j) * parts%w(k)
+!    temp%r(j) = temp%r(j) + parts%mass%r(i) * parts%w(k)
+!enddo
+
+!do i = 1,pl%ntotal
+!    pl%rho%r(i) = pl%rho%r(i) * pl%gammaa%r(i) - temp%r(i)
+!enddo
+
+
+   time = time + dt
+   
+        if (mod(itimestep,print_step).eq.0) then
+         write(*,*)'______________________________________________'
+         write(*,*)'  current number of time step =',              &
+                   itimestep,'     current time=', real(time+dt)
+         write(*,*)'______________________________________________'
+        endif  
+
+   
+enddo
+
+close(1000)
+close(1001)
+close(1002)
+return
+      end subroutine     
       
 !----------------------------------------------------------------------      
       subroutine time_integration_for_water_by_unified4  !把连续性方程改造一下，可以算是原创
@@ -2741,7 +2814,7 @@ do k=1,parts%niac
     i = parts%pair_i(k)
     j = parts%pair_j(k)
     rr = 0.
-    c0 = 20!.*sqrt(9.8*0.5)!因case不同而不同
+    c0 = 13!.*sqrt(9.8*0.5)!因case不同而不同
     ca = c0 * (parts%rho%r(i)/1000.)**3
     cb = c0 * (parts%rho%r(j)/1000.)**3
     cab = max(ca,cb)
@@ -2875,7 +2948,362 @@ call momentum_equation_unified4(pl)
 !        do i=parts%ntotal +1,parts%ntotal + parts%nvirt
 !          if(2187<i.and.i<2219)write(*,*) parts%p%r(i),i
 !        enddo
-!call freesurface2(pl)  !freesurface2通过使用divr来求解。通过比较后发现，这种形式在相应算例中优于freesurface,xiaoguo biancha
+!call freesurface2(pl)  !freesurface2通过使用divr来求解。通过比较后发现，这种形式在相应算例中优于freesurface
+
+!     do i=parts%ntotal +1,parts%ntotal + parts%nvirt
+!        parts%p%r(i)=parts%p%r(i)/wi(i)
+!        if(2187<i.and.i<2219)write(*,*) parts%p%r(i),i
+!     enddo
+        
+
+!up is for unified condition
+ 
+!call pressure_nvirt(pl)
+!第二种状态方程
+!parts%p = water%c**2*(parts%rho-water%rho0)
+
+!call freesurface(pl) 
+!parts%c%r(1:ntotal) = water%c*(parts%rho%r(1:ntotal)/(water%rho0))**3.0    
+
+
+!---  Internal forces:
+
+!call shear_strain_rate(pl)
+!3~~~~~~~~~down is before
+!3pl%tab%x%ndim1 = pl%ntotal+pl%nvirt
+!3pl%tab%xy%ndim1 = pl%tab%x%ndim1; pl%tab%y%ndim1 = pl%tab%x%ndim1
+!write(*,*) pl%tab%x%ndim1,pl%vx%x%ndim1
+!Calculate SPH sum for shear tensor Tab = va,b + vb,a - 2/3 delta_ab vc,c
+
+!3pl%tab%x = 2.d0/3.d0*(2.d0*pl%df4(pl%vx%x,'x')-pl%df4(pl%vx%y,'y'))
+!3pl%tab%xy = pl%df4(pl%vx%x,'y')+pl%df4(pl%vx%y,'x')
+!3pl%tab%y = 2.d0/3.d0*(2.d0*pl%df4(pl%vx%y,'y')-pl%df4(pl%vx%x,'x'))
+
+!call velocity_divergence(pl)
+
+!call pressure(pl)
+
+!   call newtonian_fluid(pl)
+
+!3      parts%str%x = water%viscosity*parts%tab%x
+!3      parts%str%y = water%viscosity*parts%tab%y
+!3      parts%str%xy = water%viscosity*parts%tab%xy
+
+!Calculate internal force for water phase !! -phi_f Grad(p)
+
+
+!3   pl%dvx%x = -pl%df(pl%p,'x') + pl%df(pl%str%x,'x') + pl%df(pl%str%xy,'y')
+!3   pl%dvx%y = -pl%df(pl%p,'y') + pl%df(pl%str%xy,'x') + pl%df(pl%str%y,'y')   
+
+!down is for dealt-sph
+!   pl%dvx%x = pl%df(pl%str%x,'x') + pl%df(pl%str%xy,'y')
+!   pl%dvx%y = pl%df(pl%str%xy,'x') + pl%df(pl%str%y,'y') 
+!   call pressure_nvirt(pl)
+!   pl%dvx%x = pl%dvx%x - pl%df(pl%p,'x')
+!   pl%dvx%y = pl%dvx%y - pl%df(pl%p,'y')
+!up is for dealt-sph
+
+!3   pl%dvx%x = pl%dvx%x/pl%rho
+!3   pl%dvx%y = pl%dvx%y/pl%rho
+   !write(*,*) pl%dvx%x%r(1:50),pl%dvx%y%r(1:50)
+!3~~~~~~~~~up is before
+!if(artificial_density)then
+   !if(trim(pl%imaterial)=='water')then
+      !!call renormalize_density_gradient(pl)
+      !call art_density(pl)
+!       call delta_sph_vx(pl)
+   !endif
+!endif
+!---  Artificial viscosity:
+
+!4~~~~not need now
+!if (visc_artificial) call pl%art_visc
+!4~~~~not need now       
+
+!if(trim(pl%imaterial)=='water'.and.water_artificial_volume)  &
+        !call art_volume_fraction_water2(pl)
+ !       call pl%delta_sph_omp(pl%vof,pl%dvof)
+
+!--- Damping
+!       if(trim(pl%imaterial)=='soil') call damping_stress(pl)
+    
+!---  External forces:
+
+      !if (ex_force) call ext_force(pl)
+!      if (ex_force)then
+!          if(self_gravity) call gravity_force(pl)
+!          call repulsive_force(pl)
+
+!5~~~~not need now
+!call pl%repulsive_force_omp                ! can be tried
+!      endif
+!5~~~~not need now     
+
+!6~~~~not need now
+!pl%dvx%y = pl%dvx%y + gravity
+!6~~~~not need now
+
+!     Calculating the neighboring particles and undating HSML
+      
+!if (sle.ne.0) call h_upgrade(pl)
+
+!     Calculating average velocity of each partile for avoiding penetration
+!7
+!7~~~~not need now
+!if (average_velocity) call av_vel(pl) 
+!7~~~~not need now
+parts%res_F = parts%p%r(1488) + parts%p%r(1489) + parts%p%r(1490) + parts%p%r(1491) + parts%p%r(1492) + parts%p%r(1493) + parts%p%r(1494) + parts%p%r(1495) +  &
+              parts%p%r(1496) + parts%p%r(1497) + parts%p%r(1498) + parts%p%r(1499) + parts%p%r(1500) + parts%p%r(1501) + parts%p%r(1502) + parts%p%r(1503) +  &
+              parts%p%r(1504) + parts%p%r(1505) + parts%p%r(1506) + parts%p%r(1507) + parts%p%r(1508) + parts%p%r(1509) + parts%p%r(1510) + parts%p%r(1511) 
+               
+!---  Convert velocity, force, and energy to f and dfdt  
+
+      if(itimestep>=save_step_from.and.   &
+         mod(itimestep,save_step).eq.0)then
+open(1000,file = 'res_f.dat')
+write(1000,*) parts%res_F
+      endif 
+
+
+if(mod(itimestep,print_step).eq.0) then     
+!  call pl%particle_monitor
+   call pl%minimum_time_step  
+endif
+
+      if(itimestep>=save_step_from.and.   &
+         mod(itimestep,save_step).eq.0)then
+         call output
+         endif 
+
+!      if(itimestep>=8650.and.itimestep<=8777)then
+!         call output
+!      endif 
+
+
+         
+return
+      end subroutine
+    
+
+!-------------------------------------------------
+      subroutine single_step_for_water_Couette
+!-------------------------------------------------
+!   Subroutine to determine the right hand side of a differential 
+!   equation in a single step for performing time integration 
+!----------------------------------------------------------------------
+!use param 
+!use declarations_sph
+!use m_sph_fo
+implicit none
+
+integer  nphase
+type(particles), pointer :: pl
+logical :: dbg = .false.
+integer i, ntotal,k,j,d
+real(dp) dvx(3),dx(3) ,rr,ca,cb,cab,c0,rhoab,hv(3),r,selfdens
+type(p2r) vx_i(3), vx_j(3) 
+type(array) temp
+type(material),pointer :: water
+
+temp%ndim1 = parts%ntotal+parts%nvirt
+allocate(temp%r(parts%ntotal+parts%nvirt))
+water => parts%material
+pl => parts        
+if(dbg) write(*,*) 'In single_step...'
+call pl%setup_ndim1
+pl%dvx%x = 0.d0; pl%dvx%y = 0.d0; pl%drho = 0.d0
+!pl%dvof = 1.d0
+ 
+!---  Interaction parameters, calculating neighboring particles
+!     and optimzing smoothing length
+
+        
+      hv = 0.d0
+      r=0.d0
+
+
+
+if (pl%numeric%nnps.eq.1) then 
+   call direct_find_Couette(pl)
+!   call direct_find(pl)
+else if (pl%numeric%nnps.eq.2) then
+   call link_list(pl)     
+!        call link_list(itimestep, ntotal+nvirt,hsml(1),x,niac,pair_i,
+!     &       pair_j,w,dwdx,ns)
+!        call link_list(itimestep, parts%ntotal+parts%nvirt,
+!     &       parts%hsml(1),parts%x,parts%niac,parts%pair_i,
+!     &       parts%pair_j,parts%w,parts%dwdx,parts%countiac)
+else if (pl%numeric%nnps.eq.3) then 
+!        call tree_search(itimestep, ntotal+nvirt,hsml,x,niac,pair_i,
+!     &       pair_j,w,dwdx,ns)
+endif         
+
+if(mod(itimestep,print_step).eq.0.and.int_stat) then
+   call pl%interaction_statistics
+endif   
+
+! write(*,*) 'niac=',parts%niac
+
+
+      
+!--- Added by Wang
+!if(nor_density) call norm_density(pl)
+
+call get_gammaa2(pl)
+!      write(*,*)parts%gammaa%r(1),parts%gammaa%r(41),parts%gammaa%r(81),parts%gammaa%r(361)
+      
+!if(itimestep/=1)then
+    
+! do i=1,parts%ntotal
+!   call parts%kernel(r,hv,parts%hsml(i),selfdens,hv)
+!   temp%r(i)=temp%r(i) + selfdens*parts%mass%r(i)  !由于rho不能要自加，这里也要自加
+! enddo
+  
+!do k=1,parts%niac
+!    i = parts%pair_i(k)
+!    j = parts%pair_j(k)
+!    rr = 0.
+!    c0 = 30!.*sqrt(9.8*0.5)!因case不同而不同
+!    ca = c0 * (parts%rho%r(i)/1000.)**3
+!    cb = c0 * (parts%rho%r(j)/1000.)**3
+!    cab = max(ca,cb)
+!    rhoab = parts%rho%r(i) - parts%rho%r(j) - 9.81*1000/c0**2*(parts%x(2,j)-parts%x(2,i))!这里很有可能是加号.
+!    vx_i = parts%vx%cmpt(i); vx_j = parts%vx%cmpt(j)
+!    do d=1,parts%dim
+!      dvx(d) = vx_i(d)%p - vx_j(d)%p
+!      dx(d) = parts%x(d,i) - parts%x(d,j)
+!      rr = rr + dx(d)**2
+!    enddo
+
+!    if(parts%itype(i)>0)  temp%r(i) = temp%r(i) + parts%mass%r(j) * parts%w(k)
+!    if(parts%itype(j)>0)  temp%r(j) = temp%r(j) + parts%mass%r(i) * parts%w(k)
+!    if(parts%itype(i)>0.and.parts%itype(j)>0) then
+!        temp%r(i) = temp%r(i) + dt*(parts%mass%r(j)*cab/sqrt(rr)*rhoab/parts%rho%r(j)*(dx(1)*parts%dwdx(1,k) + dx(2)*parts%dwdx(2,k)))
+!        temp%r(j) = temp%r(j) + dt*(parts%mass%r(i)*cab/sqrt(rr)*(-rhoab)/parts%rho%r(i)*((-dx(1))*(-parts%dwdx(1,k)) + (-dx(2))*(-parts%dwdx(2,k))))        
+!    endif
+!enddo
+
+!do i = 1,pl%ntotal
+!    pl%rho%r(i) = temp%r(i)/parts%gammaa%r(i)
+!enddo
+!endif
+
+!------unified get rho of nvirt particles
+
+
+!call shear_strain_rate(pl)
+!pl%tab%x%ndim1 = pl%ntotal+pl%nvirt
+!pl%tab%xy%ndim1 = pl%tab%x%ndim1; pl%tab%y%ndim1 = pl%tab%x%ndim1
+!write(*,*) pl%tab%x%ndim1,pl%vx%x%ndim1
+!Calculate SPH sum for shear tensor Tab = va,b + vb,a - 2/3 delta_ab vc,c
+
+!pl%tab%x = 2.d0/3.d0*(2.d0*pl%df4(pl%vx%x,'x')-pl%df4(pl%vx%y,'y'))
+!pl%tab%xy = pl%df4(pl%vx%x,'y')+pl%df4(pl%vx%y,'x')
+!pl%tab%y = 2.d0/3.d0*(2.d0*pl%df4(pl%vx%y,'y')-pl%df4(pl%vx%x,'x'))
+
+!      parts%str%x = water%viscosity*parts%tab%x
+!      parts%str%y = water%viscosity*parts%tab%y
+!      parts%str%xy = water%viscosity*parts%tab%xy
+
+
+!if(itimestep>1)then
+!    call nvirt_density_unified201(pl)
+!else
+!call nvirt_density_unified2(pl)    
+!endif!这样就用了deltaP的方式来求了
+!call pressure_nvirt_unified(pl)
+!______Analytical value of delta gamma
+!call delta_gamma_unified2(pl)
+
+!call real_density_unified2(pl)
+call nvirt_density_unified2_Couette(pl)    
+
+call delta_gamma_unified3(pl)
+do i =1,parts%ntotal + parts%nvirt
+    parts%rho%r(i) = 1000
+    parts%p%r(i) = 0.d0
+enddo
+
+!---  Density approximation or change rate
+!if(summation_density)then   
+!if(itimestep<62000) then
+!if(mod(itimestep,25)==0) then
+!call sum_density(pl)
+!else             
+!    call sum_density(pl)         
+    
+!    pl%drho = -pl.rho*pl.div2(pl.vx)
+!endif
+!else
+!if(mod(itimestep,25)==0) then
+!call sum_density(pl)
+!else             
+!    call sum_density(pl)         
+    
+!    pl%drho = -pl.rho*pl.div2(pl.vx)
+!endif
+!endif
+!do i = parts%ntotal +1,parts%ntotal+parts%nvirt
+!    pl%drho%r(i) = 0
+!enddo
+
+     
+!`````````````````if(artificial_density)then
+   !if(trim(pl%imaterial)=='water')then
+      !!call renormalize_density_gradient(pl)
+      !call art_density(pl)
+!`````````````````      call delta_sph_omp(pl,pl%rho,pl%drho)
+!       call delta_rho(pl,pl%rho,pl%drho)
+   !endif
+!````````````````endif
+
+!---  Dynamic viscosity:
+     
+!water => parts%material
+!parts%p = water%b*((parts%rho/(water%rho0))**water%gamma-1.d0)
+
+!down is for unified condition
+water => parts%material
+!do i = 1,parts%ntotal 
+!parts%p%r(i) = water%b*((parts%rho%r(i)/(water%rho0))**water%gamma-1.d0)
+!enddo
+!if(itimestep>1)then
+!call momentum_equation_unified401(pl) 
+!else
+call momentum_equation_unified_Couette(pl)      
+!endif!这样就用了deltaP的方式来求了
+
+!pl%tab%x%ndim1 = pl%ntotal+pl%nvirt
+!pl%tab%xy%ndim1 = pl%tab%x%ndim1; pl%tab%y%ndim1 = pl%tab%x%ndim1
+!write(*,*) pl%tab%x%ndim1,pl%vx%x%ndim1
+!Calculate SPH sum for shear tensor Tab = va,b + vb,a - 2/3 delta_ab vc,c
+
+!pl%tab%x = 2.d0/3.d0*(2.d0*pl%df4(pl%vx%x,'x')-pl%df4(pl%vx%y,'y'))
+!pl%tab%xy = pl%df4(pl%vx%x,'y')+pl%df4(pl%vx%y,'x')
+!pl%tab%y = 2.d0/3.d0*(2.d0*pl%df4(pl%vx%y,'y')-pl%df4(pl%vx%x,'x'))
+
+!call velocity_divergence(pl)
+
+!call pressure(pl)
+
+!   call newtonian_fluid(pl)
+
+!      parts%str%x = water%viscosity*parts%tab%x
+!      parts%str%y = water%viscosity*parts%tab%y
+!      parts%str%xy = water%viscosity*parts%tab%xy
+! write(*,*) parts%tab%x%r(862),parts%tab%y%r(861),parts%tab%y%r(882),parts%tab%y%r(883)
+! write(*,*) parts%str%x%r(862),parts%str%y%r(861),parts%str%y%r(882),parts%str%y%r(883)
+!Calculate internal force for water phase !! -phi_f Grad(p)
+
+!  pl%dvx%x = -pl%df(pl%p,'x') + pl%df(pl%str%x,'x') + pl%df(pl%str%xy,'y')
+!  pl%dvx%y = -pl%df(pl%p,'y') + pl%df(pl%str%xy,'x') + pl%df(pl%str%y,'y')   
+!  pl%dvx%x = pl%dvx%x/pl%rho
+!  pl%dvx%y = pl%dvx%y/pl%rho
+
+!        do i=parts%ntotal +1,parts%ntotal + parts%nvirt
+!          if(2187<i.and.i<2219)write(*,*) parts%p%r(i),i
+!        enddo
+!call freesurface2(pl)  !freesurface2通过使用divr来求解。通过比较后发现，这种形式在相应算例中优于freesurface
 
 !     do i=parts%ntotal +1,parts%ntotal + parts%nvirt
 !        parts%p%r(i)=parts%p%r(i)/wi(i)
@@ -2979,8 +3407,32 @@ call momentum_equation_unified4(pl)
 !7~~~~not need now
 !if (average_velocity) call av_vel(pl) 
 !7~~~~not need now
+      if(itimestep.eq.100)then
+open(1000,file = 'res_f_Couette001.dat')
+write(1000,*) parts%vx%x%r(800),parts%vx%x%r(799),parts%vx%x%r(798),parts%vx%x%r(797),parts%vx%x%r(796),parts%vx%x%r(795),parts%vx%x%r(794),parts%vx%x%r(793), &
+              parts%vx%x%r(792),parts%vx%x%r(791),parts%vx%x%r(790),parts%vx%x%r(789),parts%vx%x%r(788),parts%vx%x%r(787),parts%vx%x%r(786),parts%vx%x%r(785), &
+              parts%vx%x%r(784),parts%vx%x%r(783),parts%vx%x%r(782),parts%vx%x%r(781),parts%vx%x%r(780),parts%vx%x%r(779),parts%vx%x%r(778),parts%vx%x%r(777), &
+              parts%vx%x%r(776),parts%vx%x%r(775),parts%vx%x%r(774),parts%vx%x%r(773),parts%vx%x%r(772),parts%vx%x%r(771),parts%vx%x%r(770),parts%vx%x%r(769), &
+              parts%vx%x%r(768),parts%vx%x%r(767),parts%vx%x%r(766),parts%vx%x%r(765),parts%vx%x%r(764),parts%vx%x%r(763),parts%vx%x%r(762),parts%vx%x%r(761)
+      endif 
 
-!---  Convert velocity, force, and energy to f and dfdt  
+      if(itimestep.eq.1000)then
+open(1001,file = 'res_f_Couette01.dat')
+write(1001,*) parts%vx%x%r(800),parts%vx%x%r(799),parts%vx%x%r(798),parts%vx%x%r(797),parts%vx%x%r(796),parts%vx%x%r(795),parts%vx%x%r(794),parts%vx%x%r(793), &
+              parts%vx%x%r(792),parts%vx%x%r(791),parts%vx%x%r(790),parts%vx%x%r(789),parts%vx%x%r(788),parts%vx%x%r(787),parts%vx%x%r(786),parts%vx%x%r(785), &
+              parts%vx%x%r(784),parts%vx%x%r(783),parts%vx%x%r(782),parts%vx%x%r(781),parts%vx%x%r(780),parts%vx%x%r(779),parts%vx%x%r(778),parts%vx%x%r(777), &
+              parts%vx%x%r(776),parts%vx%x%r(775),parts%vx%x%r(774),parts%vx%x%r(773),parts%vx%x%r(772),parts%vx%x%r(771),parts%vx%x%r(770),parts%vx%x%r(769), &
+              parts%vx%x%r(768),parts%vx%x%r(767),parts%vx%x%r(766),parts%vx%x%r(765),parts%vx%x%r(764),parts%vx%x%r(763),parts%vx%x%r(762),parts%vx%x%r(761)
+      endif 
+
+      if(itimestep.eq.10000)then
+open(1002,file = 'res_f_Couette1.dat')
+write(1002,*) parts%vx%x%r(800),parts%vx%x%r(799),parts%vx%x%r(798),parts%vx%x%r(797),parts%vx%x%r(796),parts%vx%x%r(795),parts%vx%x%r(794),parts%vx%x%r(793), &
+              parts%vx%x%r(792),parts%vx%x%r(791),parts%vx%x%r(790),parts%vx%x%r(789),parts%vx%x%r(788),parts%vx%x%r(787),parts%vx%x%r(786),parts%vx%x%r(785), &
+              parts%vx%x%r(784),parts%vx%x%r(783),parts%vx%x%r(782),parts%vx%x%r(781),parts%vx%x%r(780),parts%vx%x%r(779),parts%vx%x%r(778),parts%vx%x%r(777), &
+              parts%vx%x%r(776),parts%vx%x%r(775),parts%vx%x%r(774),parts%vx%x%r(773),parts%vx%x%r(772),parts%vx%x%r(771),parts%vx%x%r(770),parts%vx%x%r(769), &
+              parts%vx%x%r(768),parts%vx%x%r(767),parts%vx%x%r(766),parts%vx%x%r(765),parts%vx%x%r(764),parts%vx%x%r(763),parts%vx%x%r(762),parts%vx%x%r(761)
+      endif 
       
 if(mod(itimestep,print_step).eq.0) then     
 !  call pl%particle_monitor
@@ -3001,6 +3453,7 @@ endif
 return
 end subroutine
     
+      
 !-------------------------------------------------
       subroutine single_step_for_water5 !完全按照第一篇文章的来
 !-------------------------------------------------

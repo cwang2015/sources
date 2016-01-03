@@ -14,18 +14,9 @@ double precision element_size, soil_submerged_depth
 
 ! Set nozzle and tank geometry parameters
 
-!call tank%set(xl=3.34d0,yl=1.86d0,m=334,n=186)
-!call tank%set(xl=3.34d0,yl=1.86d0,m=167,n=93)
-!call tank%set(xl=3.32d0,yl=1.86d0,m=166,n=93)
-!call tank%set(xl=3.4d0,yl=1.9d0,m=34,n=19)
-!call tank%set(xl=3.32d0,yl=1.86d0,m=664,n=372)
-!call tank%set(xl=3.74d0,yl=2.06d0,m=374,n=206)
-!call tank%set(xl=0.44d0,yl=0.22d0,m=352,n=176)
 
-!1call tank%set(xl = 2.04d0,yl = 1.52d0,m=102,n=76)
-call tank%set(xl = 4.88d0,yl = 3.04d0,m=244,n=152)
+call tank%set(xl = 38.1d0,yl = 1.05d0,m=762,n=21)
 
-!call tank%set(xl = 2.44d0,yl = 1.52d0,m=122,n=76)
 
 
 !call tank%set(xl=3.26d0,yl=1.82d0,m=32,n=18)
@@ -52,32 +43,13 @@ call tank%cell_center
 ! Zoning
 tank%zone = 2
 do i = 1, tank%m*tank%n
-!1   if(tank%x(i)<0.02.or.tank%x(i)>2.02.or.tank%y(i)<0.02) tank%zone(i) = 1
-!1   if(tank%zone(i)==1.and.tank%x(i)<0.02.and.tank%y(i)>0.02) tank%zone(i)=3
-!1   if(tank%zone(i)==1.and.tank%x(i)>0.02.and.tank%x(i)<2.02) tank%zone(i)=4
-!1   if(tank%zone(i)==1.and.tank%x(i)>2.02) tank%zone(i)=5
-!1   if(tank%x(i)<0.02.and.tank%y(i)<0.02)  tank%zone(i)=6
-!1   if(tank%x(i)>2.02.and.tank%y(i)<0.02)  tank%zone(i)=6
-!1   if(tank%zone(i)==2.and.tank%x(i)>0.52)tank%zone(i)= 8
-!1   if(tank%zone(i)==2.and.tank%y(i)>1.02)tank%zone(i)= 8
-
-!2   if(tank%x(i)<0.01.or.tank%x(i)>2.01.or.tank%y(i)<0.01) tank%zone(i) = 1
-!2   if(tank%zone(i)==1.and.tank%x(i)<0.01.and.tank%y(i)>0.01) tank%zone(i)=3
-!2   if(tank%zone(i)==1.and.tank%x(i)>0.01.and.tank%x(i)<2.01) tank%zone(i)=4
-!2   if(tank%zone(i)==1.and.tank%x(i)>2.01) tank%zone(i)=5
-!2   if(tank%x(i)<0.01.and.tank%y(i)<0.01)  tank%zone(i)=6
-!2   if(tank%x(i)>2.01.and.tank%y(i)<0.01)  tank%zone(i)=6
-!2   if(tank%zone(i)==2.and.tank%x(i)>0.51)tank%zone(i)= 8
-!2   if(tank%zone(i)==2.and.tank%y(i)>1.01)tank%zone(i)= 8
    
-   if(tank%x(i)<0.02.or.tank%x(i)>4.86.or.tank%y(i)<0.02) tank%zone(i) = 1
-   if(tank%zone(i)==1.and.tank%x(i)<0.02.and.tank%y(i)>0.02) tank%zone(i)=3
-   if(tank%zone(i)==1.and.tank%x(i)>0.02.and.tank%x(i)<4.84) tank%zone(i)=4
-   if(tank%zone(i)==1.and.tank%x(i)>4.86) tank%zone(i)=5
-   if(tank%x(i)<0.02.and.tank%y(i)<0.02)  tank%zone(i)=6
-   if(tank%x(i)>4.86.and.tank%y(i)<0.02)  tank%zone(i)=6
-   if(tank%zone(i)==2.and.tank%x(i)>0.52)tank%zone(i)= 8
-   if(tank%zone(i)==2.and.tank%y(i)>1.02)tank%zone(i)= 8
+   if(tank%x(i)<0.05.or.tank%x(i)>38.05.or.tank%y(i)<0.05) tank%zone(i) = 1
+   if(tank%zone(i)==1.and.tank%x(i)<0.05)tank%zone(i)= 3
+   if(tank%zone(i)==1.and.tank%x(i)>0.05.and.tank%x(i)<38.05)tank%zone(i)= 4
+   if(tank%zone(i)==1.and.tank%x(i)>38.05)tank%zone(i)= 5
+   if(tank%zone(i)==2.and.tank%x(i)>15.51)tank%zone(i)= 8
+   if(tank%zone(i)==2.and.tank%y(i)>0.76)tank%zone(i)= 8
    
 enddo
 
@@ -85,7 +57,7 @@ call parts%take_real(tank,2)
 
 !call parts%take_boundary_for_tank_wedge3(tank)
 
-call parts%take_boundary_for_tank_wedge2(tank)
+call parts%take_boundary_for_tank_wedge_freesurface(tank)
 
 call parts%setup_ndim1
 
