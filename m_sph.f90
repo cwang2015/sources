@@ -400,6 +400,7 @@ allocate(parts%countiac(maxn));                 parts%countiac=0
 allocate(parts%grid(parts%maxngx,parts%maxngy,parts%maxngz)); parts%grid = 0
 allocate(parts%xgcell(dim,maxn)); parts%xgcell = 0
 allocate(parts%celldata(maxn)); parts%celldata = 0
+allocate(parts%norm(2,10000))
 
 ! Fields variables
 
@@ -1479,7 +1480,8 @@ endif
 !---  Density approximation or change rate
      
 !if(summation_density)then      
-!if(mod(itimestep,30)==0) call sum_density(pl)
+!if(mod(pl%itimestep,30)==0) call sum_density(pl)
+!call sum_density(pl)
 !else             
     !call con_density(pl)         
     pl%drho = -pl.rho*pl.div2(pl.vx)
@@ -1577,7 +1579,8 @@ if(trim(pl%imaterial)=='soil')then
       call plastic_flow_rule2(pl)
    elseif(pl%plasticity==3)then
       call plastic_or_not(pl)
-      call plastic_flow_rule3(pl)
+!      call plastic_flow_rule3(pl)
+   call non_associated_plastic_flow_rule3(pl)
    endif
 endif
 
@@ -1737,7 +1740,7 @@ endif
 !---  Density approximation or change rate
      
 !if(summation_density)then      
-!if(mod(itimestep,30)==0) call sum_density(pl)
+!if(mod(pl%itimestep,30)==0) call sum_density(pl)
 !else             
 !    call con_density(pl)         
     pl%drho = -pl.rho*pl.div2(pl.vx)
@@ -1895,9 +1898,9 @@ endif
 pl%tab%x%ndim1 = pl%ntotal+pl%nvirt
 pl%tab%xy%ndim1 = pl%tab%x%ndim1; pl%tab%y%ndim1 = pl%tab%x%ndim1
 !write(*,*) pl%tab%x%ndim1,pl%vx%x%ndim1
-pl%tab%x = 2.d0/3.d0*(2.d0*pl%df4(pl%vx%x,'x')-pl%df4(pl%vx%y,'y'))
-pl%tab%xy = pl%df4(pl%vx%x,'y')+pl%df4(pl%vx%y,'x')
-pl%tab%y = 2.d0/3.d0*(2.d0*pl%df4(pl%vx%y,'y')-pl%df4(pl%vx%x,'x'))
+pl%tab%x = 2.d0/3.d0*(2.d0*pl%df4_omp(pl%vx%x,'x')-pl%df4_omp(pl%vx%y,'y'))
+pl%tab%xy = pl%df4_omp(pl%vx%x,'y')+pl%df4_omp(pl%vx%y,'x')
+pl%tab%y = 2.d0/3.d0*(2.d0*pl%df4_omp(pl%vx%y,'y')-pl%df4_omp(pl%vx%x,'x'))
 
 pl%vcc = pl%div_omp(pl%vx)
 
@@ -1927,6 +1930,7 @@ elseif(pl%plasticity==2)then
 elseif(pl%plasticity==3)then
    call plastic_or_not(pl)
    call plastic_flow_rule3(pl)
+!!   call non_associated_plastic_flow_rule3(pl)
 endif
 
 ! --- Jaumann rate  !When???

@@ -2249,11 +2249,11 @@ C
       F(I,1)=F(I,2)
    40 CONTINUE
       
- !     do i = 1, imax                   !!! Add by cwang!
- !         do j = 2,jmax
- !             if(x(i).gt.0.05)f(i,j)=0.0
- !         enddo
- !     enddo
+      do i = 1, imax                   !!! Add by cwang!
+          do j = 2,jmax
+              if(x(i).gt.0.05)f(i,j)=0.0
+          enddo
+      enddo
       
  
       do i = 1, imax

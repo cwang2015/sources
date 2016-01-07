@@ -4,6 +4,10 @@
 use m_array
 implicit none
 
+type keyword
+   character(len=72) name
+   
+endtype
 
 type realarray
     real, pointer, dimension(:,:) :: r
@@ -12,7 +16,7 @@ endtype
 
 type block             
      real(dp) xl, yl
-     integer  m,  n
+     integer  m,  n, np
      real(dp) dx, dy
      real(dp), pointer, dimension(:) :: x,y
      integer,  pointer, dimension(:) :: zone
@@ -20,6 +24,7 @@ type block
    contains
      procedure :: set => set_block_sub
      procedure :: cell_center => get_cell_center_sub
+     procedure :: get_vertex => get_vertex_sub
 end type
 !-------------------------------------------------------------------------------------
 type material
@@ -280,6 +285,7 @@ integer, pointer, dimension(:) :: fail => null()
 
 ! Boundry particles defined as type particles
 type(particles), pointer :: bor
+real(dp), pointer, dimension(:,:) :: norm
 
 contains
 
@@ -303,6 +309,7 @@ contains
        procedure :: link_list
        procedure :: link_list2
        procedure :: find_pairs
+       procedure :: calc_norm
        procedure :: kernel
        procedure :: initial_density
        procedure :: pressure
@@ -425,6 +432,54 @@ do i = 1, this%m
       k = k + 1
       this%x(k) = (i-1)*this%dx + this%dx/2.
       this%y(k) = (j-1)*this%dy + this%dy/2.
+   enddo
+enddo
+
+return
+end subroutine
+
+
+!------------------------------------------------
+   subroutine get_vertex_sub(this)
+!------------------------------------------------
+implicit none
+class(block) this
+integer i,j,k
+
+this%dx = this%xl/this%m
+this%dy = this%yl/this%n
+
+!! Boundary points!
+
+   k = 0
+   do j = 1, this%n
+      k = k + 1
+      this%x(k) = 0.0
+      this%y(k) = this%yl-(j-1)*this%dy
+   enddo
+   do i = 1, this%m
+      k = k + 1
+      this%x(k) = (i-1)*this%dx
+      this%y(k) = 0.0
+   enddo
+   do j = 1, this%n
+      k = k + 1
+      this%x(k) = this%xl
+      this%y(k) = 0.d0 + (j-1)*this%dy
+   enddo
+   do i = 1, this%m
+      k = k + 1
+      this%x(k) = this%xl - (i-1)*this%dx
+      this%y(k) = this%yl
+   enddo
+
+!! Inner points
+
+do i = 1, this%m-1
+   do j = 1, this%n-1
+      k = k + 1
+      this%x(k) = i*this%dx
+      this%y(k) = j*this%dy
    enddo
 enddo
 
@@ -772,7 +827,8 @@ integer i,j,k
 
 k = this%ntotal
 
-   do i = 1, tank%m*tank%n
+!   do i = 1, tank%m*tank%n
+   do i = 1, tank%np
       if(tank%zone(i)== zone)then             
          k = k + 1
          this%x(1,k) = tank%x(i)
@@ -785,7 +841,6 @@ this%ntotal = k
 
 return
 end subroutine
-
 
 !DEC$IF(.FALSE.)
 !-----------------------------------------------------
@@ -832,7 +887,8 @@ integer i,j,k
 ! Take virtual particles in tank
 
 k = this%ntotal+this%nvirt
-   do i = 1, tank%m*tank%n
+!   do i = 1, tank%m*tank%n  
+   do i = 1, tank%np  
       if(tank%zone(i)== zone)then             
          k = k + 1
          this%x(1,k) = tank%x(i)
@@ -844,6 +900,8 @@ this%nvirt = k-this%ntotal
 
 return
 end subroutine
+
+
 
 !----------------------------------------
       subroutine setup_itype(parts)
@@ -1992,6 +2050,26 @@ end subroutine
       endif 
 		
       end subroutine
+
+!--------------------------------------------------------------------------
+      subroutine calc_norm(parts)
+!--------------------------------------------------------------------------
+implicit none
+class(particles) parts
+real(dp) ds
+integer i,j,k,d
+
+do i = parts%ntotal+1, parts%ntotal + parts%nvirt-1 
+   k = i-parts%ntotal
+   ds = sqrt((parts%x(1,i)-parts%x(1,i+1))**2.+(parts%x(2,i)-parts%x(2,i+1))**2.)
+   do d = 1, parts%dim
+      parts%norm(1,k) = (parts%x(2,i+1)-parts%x(2,i))/ds
+      parts%norm(2,k) = (parts%x(1,i)-parts%x(1,i+1))/ds
+   enddo
+enddo
+
+return
+end subroutine
 
 !--------------------------------------------------------------------------
       subroutine repulsive_force(parts)
@@ -3926,6 +4004,76 @@ enddo
       
       return
       end subroutine
+
+!---------------------------------------------------------------------
+      subroutine non_associated_plastic_flow_rule3(parts)
+!---------------------------------------------------------------------
+      implicit none
+
+      class(particles) parts
+      double precision, pointer, dimension(:) :: dsxx,dsxy,dsyy,vcc
+      double precision, pointer, dimension(:) :: sxx, sxy, syy
+      type(material), pointer :: property
+      double precision alpha, phi, K, G,e,niu, J2, sde, dlambda, psi
+      double precision exx, exy, eyy                ! total strain rate
+      double precision :: small_value = 1.d-10
+      integer i, ntotal
+
+      ntotal = parts%ntotal + parts%nvirt
+
+      dsxx => parts%dstr%x%r
+      dsxy => parts%dstr%xy%r
+      dsyy => parts%dstr%y%r
+      vcc  => parts%vcc%r
+      sxx => parts%str%x%r
+      sxy => parts%str%xy%r
+      syy => parts%str%y%r
+
+      property => parts%material
+      phi = property%phi
+      psi = 0.   !0.01744
+      k   = property%k; e = property%E; niu = property%niu
+      alpha = tan(phi)/sqrt(9.+12.*tan(phi)**2.)
+      G = e/(2.0*(1+niu))
+!$omp parallel do private(exx,exy,eyy,sde,J2,dlambda)
+      do i = 1, ntotal
+                            if(parts%fail(i)==1)then
+
+      exx = parts%tab%x%r(i)/2.+parts%vcc%r(i)/3.   ! Due to this, this should before Jaumman
+      exy = parts%tab%xy%r(i)/2.
+      eyy = parts%tab%y%r(i)/2.+parts%vcc%r(i)/3.
+
+      sde = sxx(i)*exx+2.*sxy(i)*exy+syy(i)*eyy
+      J2 = (sxx(i)**2.+2.*sxy(i)**2.+syy(i)**2.+(sxx(i)+syy(i))**2.)/2.
+      J2 = J2 + small_value
+
+      !G = parts%eta(i)
+!!      dlambda = (3.*alpha*K*vcc(i)+G/sqrt(J2)*sde)/(9.*alpha**2.*K+G)
+      dlambda = (3.*alpha*K*vcc(i)+G/sqrt(J2)*sde)/(27.*alpha*K*sin(psi)+G)
+      !if(dlambda<0)write(*,*) 'dlambda = ',dlambda,i,parts%itimestep
+      if(dlambda<0)cycle
+      !dsxx(i) = dsxx(i)-dlambda*(3.*alpha*K+G/sqrt(J2)*sxx(i))
+      dsxx(i) = dsxx(i)-dlambda*(G/sqrt(J2)*sxx(i))
+      dsxy(i) = dsxy(i)-dlambda*(G/sqrt(J2)*sxy(i))
+      !dsyy(i) = dsyy(i)-dlambda*(3.*alpha*K+G/sqrt(J2)*syy(i))
+      dsyy(i) = dsyy(i)-dlambda*(G/sqrt(J2)*syy(i))
+
+      !parts%p(i) = parts%p(i) + 3.*k*alpha*dlambda*0.000005   !!! simultaneous pressure
+!!      parts%dp%r(i) = parts%dp%r(i) + 3.*k*alpha*dlambda
+      parts%dp%r(i) = parts%dp%r(i) + 9.*K*sin(psi)*dlambda
+
+! Accumulative deviatoric strain
+ 
+      parts%epsilon_p%r(i) = parts%epsilon_p%r(i)       & 
+                         + dlambda*sxy(i)/(2*sqrt(J2))*parts%dt
+
+                            endif ! Fail
+      enddo
+!$omp end parallel do
+      
+      return
+      end subroutine
+
 
 !---------------------------------------------------------------
       subroutine darcy_law(water, soil)

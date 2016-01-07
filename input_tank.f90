@@ -16,9 +16,12 @@ double precision element_size, soil_submerged_depth
 
 !call tank%set(xl=3.43424d0,yl=1.18052d0,m=96,n=33)
 !call tank%set(xl=0.44d0,yl=0.22d0,m=352,n=176)
-!call tank%set(xl=0.42d0,yl=0.41d0,m=336,n=328)  !ds = 0.00125
-call tank%set(xl=0.42d0,yl=0.82d0,m=336,n=656)   !ds = 0.00125
+!call tank%set(xl=0.42d0,yl=0.82d0,m=42,n=82)  !ds = 0.01
+call tank%set(xl=0.42d0,yl=0.82d0,m=84,n=164)  !ds = 0.005
+!call tank%set(xl=0.42d0,yl=0.82d0,m=168,n=328)  !ds = 0.0025
+!call tank%set(xl=0.42d0,yl=0.82d0,m=336,n=656)   !ds = 0.00125
 npoint = tank%m*tank%n
+tank%np = npoint
 allocate(tank%x(npoint),tank%y(npoint),tank%zone(npoint))
 call tank%cell_center
 tank%x = tank%x - 0.01; tank%y = tank%y - 0.01
@@ -68,7 +71,7 @@ parts%vx%y = 0.d0
 water_surface = 0.2d0
 property => parts%material
 do i = 1,parts%ntotal+parts%nvirt
-   parts%p%r(i) = property%rho0*gravity*(parts%x(2,i)-water_surface)
+   parts%p%r(i) = property%rho0*parts%gravity*(parts%x(2,i)-water_surface)
    if(parts%zone(i)==3.or.parts%zone(i)==4)parts%p%r(i)=0.0
 enddo
 
