@@ -1635,11 +1635,24 @@ do it = 1, maxtimestep
     itimestep = itimestep+1
     parts%itimestep = itimestep
    call single_step_for_water3
+   
+!do i = 1,pl%ntotal
+!    if(pl%x(1,i)<0.014) then
+!        parts%dvx%x%r(i)= 0.
+!        parts%vx%x%r(i)= 0.
+!        parts%dvx%y%r(i)=0.
+!        parts%vx%y%r(i)=0.
+!    endif
+!enddo
+   
 do i = 1,pl%ntotal
 pl%vx%x%r(i) = pl%vx%x%r(i) + dt * pl%dvx%x%r(i)
 pl%vx%y%r(i) = pl%vx%y%r(i) + dt * pl%dvx%y%r(i)
 pl%x(1,i) = pl%x(1,i) + dt * pl%vx%x%r(i)
 pl%x(2,i) = pl%x(2,i) + dt * pl%vx%y%r(i)
+!if(pl%x(2,i)>1.5) then
+!    pl%x(2,i)=1.5
+!endif
 enddo
 !temp = 0.
 !do k=1,parts%niac
@@ -1672,6 +1685,77 @@ return
       end subroutine      
       
 
+!----------------------------------------------------------------------      
+      subroutine time_integration_for_water_by_unified_verlet
+!----------------------------------------------------------------------
+!use param
+!use declarations_sph
+implicit none     
+
+integer :: i, j, k, d, ntotal, it 
+type(particles), pointer :: pl
+type(array) :: lastvx_x,lastvx_y,temp1_x,temp1_y,lastrho,temp2
+
+lastvx_x%ndim1 = parts%ntotal+parts%nvirt
+lastvx_y%ndim1 = parts%ntotal+parts%nvirt
+temp1_x%ndim1 = parts%ntotal+parts%nvirt
+temp1_y%ndim1 = parts%ntotal+parts%nvirt
+temp2%ndim1 = parts%ntotal+parts%nvirt
+allocate(lastvx_x%r(parts%ntotal+parts%nvirt))
+allocate(lastvx_y%r(parts%ntotal+parts%nvirt))
+allocate(temp1_x%r(parts%ntotal+parts%nvirt))
+allocate(temp1_y%r(parts%ntotal+parts%nvirt))
+allocate(temp2%r(parts%ntotal+parts%nvirt))
+    pl => parts
+    call parts%setup_ndim1
+    lastvx_x = pl%vx%x
+    lastvx_y = pl%vx%y
+    temp1_x = pl%vx%x
+    temp1_y = pl%vx%y
+
+do it = 1, maxtimestep 
+    itimestep = itimestep+1
+    parts%itimestep = itimestep
+   call single_step_for_water3
+
+if(mod(itimestep,50) .ne. 0) then
+    do i = 1, pl%ntotal  
+           pl%x(1,i) = pl%x(1,i) + dt * pl%vx%x%r(i) + (dt**2./2.)*pl%dvx%x%r(i)
+           lastvx_x%r(i) = lastvx_x%r(i) + parts%av%x%r(i) + 2.*dt*pl%dvx%x%r(i)
+           pl%x(2,i) = pl%x(2,i) + dt * pl%vx%y%r(i) + (dt**2./2.)*pl%dvx%y%r(i)
+           lastvx_y%r(i) = lastvx_y%r(i) + parts%av%y%r(i) + 2.*dt*pl%dvx%y%r(i)
+    enddo
+else
+    do i = 1, pl%ntotal
+           pl%x(1,i) = pl%x(1,i) + dt * pl%vx%x%r(i) + (dt**2./2.)*pl%dvx%x%r(i)
+           lastvx_x%r(i) = pl%vx%x%r(i) + parts%av%x%r(i) + dt*pl%dvx%x%r(i)
+           pl%x(2,i) = pl%x(2,i) + dt * pl%vx%y%r(i) + (dt**2./2.)*pl%dvx%y%r(i)
+           lastvx_y%r(i) = pl%vx%y%r(i) + parts%av%y%r(i) + dt*pl%dvx%y%r(i)
+    enddo
+endif
+
+temp1_x = pl%vx%x;temp1_y = pl%vx%y
+pl%vx%x = lastvx_x;pl%vx%y = lastvx_y
+lastvx_x = temp1_x;lastvx_y = temp1_y
+
+
+   time = time + dt
+   
+        if (mod(itimestep,print_step).eq.0) then
+         write(*,*)'______________________________________________'
+         write(*,*)'  current number of time step =',              &
+                   itimestep,'     current time=', real(time+dt)
+         write(*,*)'______________________________________________'
+        endif  
+
+   
+enddo
+
+return
+      end subroutine      
+
+      
+      
 !----------------------------------------------------------------------      
       subroutine time_integration_for_water_by_unified_Couette
 !----------------------------------------------------------------------
@@ -2814,7 +2898,7 @@ do k=1,parts%niac
     i = parts%pair_i(k)
     j = parts%pair_j(k)
     rr = 0.
-    c0 = 15!.*sqrt(9.8*0.5)!因case不同而不同
+    c0 = 30!.*sqrt(9.8*0.5)!因case不同而不同
     ca = c0 * (parts%rho%r(i)/1000.)**3
     cb = c0 * (parts%rho%r(j)/1000.)**3
     cab = max(ca,cb)
@@ -2839,6 +2923,11 @@ do i = 1,pl%ntotal
 enddo
 endif
 
+!do i = 1,pl%ntotal
+!    if(pl%x(1,i)<0.01) pl%rho%r(i) =1000
+!enddo
+
+    
 !------unified get rho of nvirt particles
 
 
@@ -2915,8 +3004,9 @@ enddo
 !if(itimestep>1)then
 !call momentum_equation_unified401(pl) 
 !else
-call momentum_equation_unified4(pl)      
+call momentum_equation_unified4half(pl)      
 !endif!这样就用了deltaP的方式来求了
+
 
 !pl%tab%x%ndim1 = pl%ntotal+pl%nvirt
 !pl%tab%xy%ndim1 = pl%tab%x%ndim1; pl%tab%y%ndim1 = pl%tab%x%ndim1
@@ -3052,10 +3142,16 @@ call momentum_equation_unified4(pl)
 !7~~~~not need now
 !if (average_velocity) call av_vel(pl) 
 !7~~~~not need now
-parts%res_F = parts%p%r(1488) + parts%p%r(1489) + parts%p%r(1490) + parts%p%r(1491) + parts%p%r(1492) + parts%p%r(1493) + parts%p%r(1494) + parts%p%r(1495) +  &
-              parts%p%r(1496) + parts%p%r(1497) + parts%p%r(1498) + parts%p%r(1499) + parts%p%r(1500) + parts%p%r(1501) + parts%p%r(1502) + parts%p%r(1503) +  &
-              parts%p%r(1504) + parts%p%r(1505) + parts%p%r(1506) + parts%p%r(1507) + parts%p%r(1508) + parts%p%r(1509) + parts%p%r(1510) + parts%p%r(1511) 
-               
+!parts%res_F = parts%p%r(1488) + parts%p%r(1489) + parts%p%r(1490) + parts%p%r(1491) + parts%p%r(1492) + parts%p%r(1493) + parts%p%r(1494) + parts%p%r(1495) +  &
+!              parts%p%r(1496) + parts%p%r(1497) + parts%p%r(1498) + parts%p%r(1499) + parts%p%r(1500) + parts%p%r(1501) + parts%p%r(1502) + parts%p%r(1503) +  &
+!              parts%p%r(1504) + parts%p%r(1505) + parts%p%r(1506) + parts%p%r(1507) + parts%p%r(1508) + parts%p%r(1509) + parts%p%r(1510) + parts%p%r(1511) 
+parts%res_F = parts%p%r(5475) + parts%p%r(5476) + parts%p%r(5477) + parts%p%r(5478) + parts%p%r(5479) + parts%p%r(5480) + parts%p%r(5481) + parts%p%r(5482) +  &
+              parts%p%r(5483) + parts%p%r(5484) + parts%p%r(5485) + parts%p%r(5486) + parts%p%r(5487) + parts%p%r(5488) + parts%p%r(5489) + parts%p%r(5490) +  &
+              parts%p%r(5491) + parts%p%r(5492) + parts%p%r(5493) + parts%p%r(5494) + parts%p%r(5495) + parts%p%r(5496) + parts%p%r(5497) + parts%p%r(5498) +  &
+              parts%p%r(5499) + parts%p%r(5500) + parts%p%r(5501) + parts%p%r(5502) + parts%p%r(5503) + parts%p%r(5504) + parts%p%r(5505) + parts%p%r(5506) +  &
+              parts%p%r(5507) + parts%p%r(5508) + parts%p%r(5509) + parts%p%r(5510) + parts%p%r(5511) + parts%p%r(5512) + parts%p%r(5513) + parts%p%r(5514) +  &
+              parts%p%r(5515) + parts%p%r(5516) + parts%p%r(5517) + parts%p%r(5518) + parts%p%r(5519) + parts%p%r(5520) + parts%p%r(5521) + parts%p%r(5522) +  & 
+              parts%p%r(5523)
 !---  Convert velocity, force, and energy to f and dfdt  
 
       if(itimestep>=save_step_from.and.   &
@@ -3084,6 +3180,8 @@ endif
 return
       end subroutine
     
+
+
 
 !-------------------------------------------------
       subroutine single_step_for_water_Couette
@@ -3270,7 +3368,7 @@ water => parts%material
 !if(itimestep>1)then
 !call momentum_equation_unified401(pl) 
 !else
-call momentum_equation_unified_Couette(pl)      
+call momentum_equation_unified_Couette3(pl)      
 !endif!这样就用了deltaP的方式来求了
 
 !pl%tab%x%ndim1 = pl%ntotal+pl%nvirt
