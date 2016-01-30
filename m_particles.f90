@@ -89,6 +89,7 @@ integer :: dim = 2
         
    integer :: niac  = 0
    integer :: ntotal = 0, nvirt = 0
+   integer :: nvtx, ncell
    real(dp) dspp  ! initial particle interval  
 
 !Parameters for the computational geometry,  
@@ -186,6 +187,7 @@ integer :: skf = 4
    integer,  pointer, dimension(:)   :: itype=> null()
    real(dp), pointer, dimension(:,:) :: x    => null()
    type(array), pointer :: vol  => null()
+   type(array), pointer :: vol_nm  => null()
    type(array), pointer :: mass => null()
    real(dp), pointer, dimension(:)   :: hsml => null()
    integer,  pointer, dimension(:)   :: zone => null()
@@ -310,9 +312,14 @@ integer :: skf = 4
        procedure :: interaction_statistics
        procedure :: minimum_time_step
        procedure :: take_real => take_real_points1
+       procedure :: take_real_new_mesh
        procedure :: take_real_new_wedgecase
        procedure :: take_virtual => take_virtual_points1
        procedure :: take_virtual_Couette
+       procedure :: take_virtual_new_mesh
+       procedure :: sort_new_meshn
+       procedure :: sort_new_meshs
+       procedure :: sort_new_meshl
        procedure :: take_boundary
        procedure :: take_boundary_for_tank
        procedure :: take_boundary_for_tank_jiami
@@ -838,19 +845,47 @@ integer i,j,k
 k = this%ntotal
 
    do i = 1, tank%m*tank%n
-      if(tank%zone(i)== zone)then             
+      if(tank%zone(i)== zone)then    
          k = k + 1
          this%x(1,k) = tank%x(i)
          this%x(2,k) = tank%y(i)
          this%zone(k) = tank%zone(i)
       endif
    enddo
-
 this%ntotal = k
-
 return
 end subroutine
 
+!--------------------------------------------------
+      subroutine take_real_new_mesh(this,tank,zone)
+!--------------------------------------------------
+implicit none
+
+class(particles) this
+type(block) tank
+integer zone
+
+integer i,j,k
+
+! Take real particles in tank
+
+k = this%ntotal
+
+!   do i = 1, tank%m*tank%n
+    do i = 1,this%nvtx
+      if(tank%zone(i)== zone)then    
+         k = k + 1
+         this%x(1,k) = tank%x(i)
+         this%x(2,k) = tank%y(i)
+         this%vol%r(k) = this%vol_nm%r(i)
+         this%zone(k) = tank%zone(i)
+      endif
+   enddo
+!write(*,*) 'ssssssssssssss'
+this%ntotal = k
+return
+      end subroutine
+      
 !--------------------------------------------------
       subroutine take_real_new_wedgecase(this,tank,zone)
 !--------------------------------------------------
@@ -956,6 +991,150 @@ this%nvirt = k-this%ntotal
 return
 end subroutine
 
+!-----------------------------------------------------
+      subroutine take_virtual_new_mesh(this,tank,zone)
+!-----------------------------------------------------
+implicit none
+
+class(particles) this
+type(block) tank
+integer zone
+
+integer i,j,k
+
+! Take virtual particles in tank
+
+
+
+k = this%ntotal+this%nvirt
+    do i = 1, this%nvtx
+      if(tank%zone(i)== zone)then             
+         k = k + 1
+         this%x(1,k) = tank%x(i)
+         this%x(2,k) = tank%y(i)
+         this%vol%r(k) = this%vol_nm%r(i)
+         this%zone(k) = tank%zone(i)
+
+      endif
+    enddo
+    
+    do i = 1, this%nvtx
+      if(tank%zone(i)== zone)then   
+      if(tank%zone(i)== 1.or.tank%zone(i)==8)then             
+         k = k + 1
+         this%x(1,k) = tank%x(i)
+         this%x(2,k) = 1.02 - tank%y(i) 
+         this%vol%r(k) = this%vol_nm%r(i)
+         this%zone(k) = tank%zone(i)
+      endif
+      endif
+    enddo
+
+    
+this%nvirt = k-this%ntotal
+
+
+return
+end subroutine
+
+!-----------------------------------------------------
+      subroutine sort_new_meshn(this,tank,zone)
+!-----------------------------------------------------
+implicit none
+
+class(particles) this
+type(block) tank
+integer zone
+real max,temp1,temp2,temp0
+integer i,j,k,m,n
+
+! Take virtual particles in tank
+    do i = this%ntotal, this%ntotal+this%nvirt -1
+      if(this%zone(i)== zone)then        
+         do j = i+1,this%ntotal+this%nvirt
+           if(this%zone(j)== zone)then     
+            if(this%x(2,i) < this%x(2,j)) then
+                temp0 = this%x(2,j)
+                this%x(2,j) = this%x(2,i)
+                this%x(2,i) = temp0
+                temp2 = this%vol%r(j)
+                this%vol%r(j) = this%vol%r(i) 
+                this%vol%r(i) = temp2
+            endif
+           endif
+         enddo
+      endif
+    enddo
+
+
+return
+      end subroutine
+      
+!-----------------------------------------------------
+      subroutine sort_new_meshs(this,tank,zone)
+!-----------------------------------------------------
+implicit none
+
+class(particles) this
+type(block) tank
+integer zone
+real max,temp1,temp2,temp0
+integer i,j,k,m,n
+
+! Take virtual particles in tank
+    do i = this%ntotal, this%ntotal+this%nvirt -1
+      if(this%zone(i)== zone)then        
+         do j = i+1,this%ntotal+this%nvirt
+           if(this%zone(j)== zone)then     
+            if(this%x(2,i) > this%x(2,j)) then
+                temp0 = this%x(2,j)
+                this%x(2,j) = this%x(2,i)
+                this%x(2,i) = temp0
+                temp2 = this%vol%r(j)
+                this%vol%r(j) = this%vol%r(i) 
+                this%vol%r(i) = temp2
+            endif
+           endif
+         enddo
+      endif
+    enddo
+
+
+return
+end subroutine
+      
+!-----------------------------------------------------
+      subroutine sort_new_meshl(this,tank,zone)
+!-----------------------------------------------------
+implicit none
+
+class(particles) this
+type(block) tank
+integer zone
+real max,temp1,temp2,temp0
+integer i,j,k,m,n
+
+! Take virtual particles in tank
+    do i = this%ntotal, this%ntotal+this%nvirt -1
+      if(this%zone(i)== zone)then        
+         do j = i+1,this%ntotal+this%nvirt
+           if(this%zone(j)== zone)then     
+            if(this%x(1,i) > this%x(1,j)) then
+                temp0 = this%x(1,j)
+                this%x(1,j) = this%x(1,i)
+                this%x(1,i) = temp0
+                temp2 = this%vol%r(j)
+                this%vol%r(j) = this%vol%r(i) 
+                this%vol%r(i) = temp2
+            endif
+           endif
+         enddo
+      endif
+    enddo
+
+
+return
+end subroutine
 
 !-----------------------------------------------------
       subroutine take_virtual_Couette(this,tank,zone)
@@ -2259,6 +2438,7 @@ if(associated(parts%mone%y))parts%mone%y%ndim1 = ntotal
 if(associated(parts%dvx%x))parts%dvx%x%ndim1 = ntotal
 if(associated(parts%dvx%y))parts%dvx%y%ndim1 = ntotal
 if(associated(parts%vol))parts%vol%ndim1 = ntotal
+if(associated(parts%vol_nm))parts%vol_nm%ndim1 = ntotal
 if(associated(parts%rho_min))parts%rho_min%ndim1 = ntotal
 !if(associated(parts%u_min))parts%u_min%ndim1 = ntotal
 if(associated(parts%p_min))parts%p_min%ndim1 = ntotal
@@ -2301,7 +2481,8 @@ select case (this%skf)
 end select 
 
 end function
-
+     
+    
 !----------------------------------------------------------------------
        subroutine direct_find(parts)
 !----------------------------------------------------------------------
@@ -5140,13 +5321,6 @@ end function
       
       
       end subroutine
-
-
-      
-      
-      
-      
-
 
 !     wi(maxn)---integration of the kernel itself
       

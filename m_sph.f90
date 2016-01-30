@@ -598,6 +598,9 @@ if(.not.associated(parts%x))     allocate(parts%x(dim,maxn))
 if(.not.associated(parts%vol))then
     allocate(parts%vol); allocate(parts%vol%r(maxn))
 endif
+if(.not.associated(parts%vol_nm))then
+    allocate(parts%vol_nm); allocate(parts%vol_nm%r(maxn))
+endif
 if(.not.associated(parts%mass)) then
     allocate(parts%mass); allocate(parts%mass%r(maxn))
 endif
@@ -3508,7 +3511,7 @@ call momentum_equation_unified_Couette(pl)
 
 
 
-      if(itimestep.eq.100)then
+      if(itimestep.eq.1000)then
 open(1000,file = 'res_f_Couette001.dat')
 write(1000,*) parts%vx%x%r(1320),parts%vx%x%r(1319),parts%vx%x%r(1318),parts%vx%x%r(1317),parts%vx%x%r(1316),parts%vx%x%r(1315),parts%vx%x%r(1314),parts%vx%x%r(1313), &
               parts%vx%x%r(1312),parts%vx%x%r(1311),parts%vx%x%r(1310),parts%vx%x%r(1309),parts%vx%x%r(1308),parts%vx%x%r(1307),parts%vx%x%r(1306),parts%vx%x%r(1305), &
@@ -3517,7 +3520,7 @@ write(1000,*) parts%vx%x%r(1320),parts%vx%x%r(1319),parts%vx%x%r(1318),parts%vx%
               parts%vx%x%r(1288),parts%vx%x%r(1287),parts%vx%x%r(1286),parts%vx%x%r(1285),parts%vx%x%r(1284),parts%vx%x%r(1283),parts%vx%x%r(1282),parts%vx%x%r(1281)
       endif 
 
-      if(itimestep.eq.1000)then
+      if(itimestep.eq.10000)then
 open(1001,file = 'res_f_Couette01.dat')
 write(1001,*) parts%vx%x%r(1320),parts%vx%x%r(1319),parts%vx%x%r(1318),parts%vx%x%r(1317),parts%vx%x%r(1316),parts%vx%x%r(1315),parts%vx%x%r(1314),parts%vx%x%r(1313), &
               parts%vx%x%r(1312),parts%vx%x%r(1311),parts%vx%x%r(1310),parts%vx%x%r(1309),parts%vx%x%r(1308),parts%vx%x%r(1307),parts%vx%x%r(1306),parts%vx%x%r(1305), &
@@ -3526,7 +3529,7 @@ write(1001,*) parts%vx%x%r(1320),parts%vx%x%r(1319),parts%vx%x%r(1318),parts%vx%
               parts%vx%x%r(1288),parts%vx%x%r(1287),parts%vx%x%r(1286),parts%vx%x%r(1285),parts%vx%x%r(1284),parts%vx%x%r(1283),parts%vx%x%r(1282),parts%vx%x%r(1281)
       endif 
       
-      if(itimestep.eq.10000)then
+      if(itimestep.eq.100000)then
 open(1002,file = 'res_f_Couette1.dat')
 write(1002,*) parts%vx%x%r(1320),parts%vx%x%r(1319),parts%vx%x%r(1318),parts%vx%x%r(1317),parts%vx%x%r(1316),parts%vx%x%r(1315),parts%vx%x%r(1314),parts%vx%x%r(1313), &
               parts%vx%x%r(1312),parts%vx%x%r(1311),parts%vx%x%r(1310),parts%vx%x%r(1309),parts%vx%x%r(1308),parts%vx%x%r(1307),parts%vx%x%r(1306),parts%vx%x%r(1305), &
