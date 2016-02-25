@@ -129,7 +129,7 @@ real(dp) mingridx(3),maxgridx(3),dgeomx(3)
 
 !maxn: Maximum number of particles
 !max_interation : Maximum number of interaction pairs
-integer :: maxn = 30000, max_interaction = 10 * 30000
+integer :: maxn = 50000, max_interaction = 10 * 50000
   
 !SPH algorithm
 
@@ -317,6 +317,7 @@ integer :: skf = 4
        procedure :: take_virtual => take_virtual_points1
        procedure :: take_virtual_Couette
        procedure :: take_virtual_new_mesh
+       procedure :: take_virtual_new_mesh_couette
        procedure :: sort_new_meshn
        procedure :: sort_new_meshs
        procedure :: sort_new_meshl
@@ -1023,7 +1024,9 @@ k = this%ntotal+this%nvirt
       if(tank%zone(i)== 1.or.tank%zone(i)==8)then             
          k = k + 1
          this%x(1,k) = tank%x(i)
-         this%x(2,k) = 1.02 - tank%y(i) 
+!         this%x(2,k) = 1.02 - tank%y(i) block的数据
+!         this%x(2,k) = 0.82 - tank%y(i) !wedge的静水 
+         this%x(2,k) = 2.01 - tank%y(i)! wedgedam
          this%vol%r(k) = this%vol_nm%r(i)
          this%zone(k) = tank%zone(i)
       endif
@@ -1031,6 +1034,60 @@ k = this%ntotal+this%nvirt
     enddo
 
     
+    
+    
+this%nvirt = k-this%ntotal
+
+
+return
+end subroutine
+
+!-----------------------------------------------------
+      subroutine take_virtual_new_mesh_couette(this,tank,zone)
+!-----------------------------------------------------
+implicit none
+
+class(particles) this
+type(block) tank
+integer zone
+
+integer i,j,k
+
+! Take virtual particles in tank
+
+
+
+k = this%ntotal+this%nvirt
+    do i = 1, this%nvtx
+      if(tank%zone(i)== zone)then             
+         k = k + 1
+         this%x(1,k) = tank%x(i)
+         this%x(2,k) = tank%y(i)
+         this%vol%r(k) = this%vol_nm%r(i)
+         this%zone(k) = tank%zone(i)
+      endif
+    enddo
+    
+    do i = 1, this%nvtx
+      if(tank%zone(i)== zone)then            
+         k = k + 1
+         this%x(1,k) = tank%x(i) + 0.001025
+         this%x(2,k) = tank%y(i)
+         this%vol%r(k) = this%vol_nm%r(i)
+         this%zone(k) = tank%zone(i)
+      endif
+    enddo
+    
+    do i = 1, this%nvtx
+      if(tank%zone(i)== zone)then            
+         k = k + 1
+         this%x(1,k) = tank%x(i) - 0.001025
+         this%x(2,k) = tank%y(i)
+         this%vol%r(k) = this%vol_nm%r(i)
+         this%zone(k) = tank%zone(i)
+      endif
+    enddo
+
 this%nvirt = k-this%ntotal
 
 
@@ -1123,6 +1180,9 @@ integer i,j,k,m,n
                 temp0 = this%x(1,j)
                 this%x(1,j) = this%x(1,i)
                 this%x(1,i) = temp0
+                temp1 = this%x(2,j)
+                this%x(2,j) = this%x(2,i)
+                this%x(2,i) = temp1
                 temp2 = this%vol%r(j)
                 this%vol%r(j) = this%vol%r(i) 
                 this%vol%r(i) = temp2
@@ -1557,7 +1617,7 @@ integer i,j,k
 
 k = this%ntotal+this%nvirt
    do i = 1, tank%m*tank%n
-      if(tank%zone(i) == 3.and.tank%y(i)>0.2)then         
+      if(tank%zone(i) == 3)then         
          k = k + 1
          this%x(1,k) = tank%x(i)
          this%x(2,k) = 0.99 - tank%dy * (k - this%ntotal - 1)
@@ -1567,17 +1627,6 @@ k = this%ntotal+this%nvirt
    
 this%nvirt = k-this%ntotal
 
-k = this%ntotal+this%nvirt
-   do i = 1, tank%m*tank%n
-      if(tank%zone(i) == 3.and.tank%y(i)<0.2)then         
-         k = k + 1
-         this%x(1,k) = tank%x(i) + tank%dx * (k - this%ntotal - this%nvirt - 1)
-         this%x(2,k) = 0.19
-         this%zone(k) = tank%zone(i)
-      endif
-   enddo
-   
-this%nvirt = k-this%ntotal
 
 
 k = this%ntotal+this%nvirt
@@ -1585,8 +1634,8 @@ k = this%ntotal+this%nvirt
       if(tank%zone(i) == 6)then         
          if(tank%x(i)<0.02)then
          k = k + 1
-         this%x(1,k) = 0.19
-         this%x(2,k) = 0.19
+         this%x(1,k) = 0.01
+         this%x(2,k) = 0.01
          this%zone(k) = tank%zone(i)
          endif
       endif
@@ -1594,24 +1643,13 @@ k = this%ntotal+this%nvirt
    
 this%nvirt = k-this%ntotal
 
-k = this%ntotal+this%nvirt
-   do i = 1, tank%m*tank%n
-      if(tank%zone(i) == 4.and.tank%x(i)<0.2)then          
-           k = k + 1
-           this%x(2,k) = 0.17 - tank%dx * (k - this%ntotal - this%nvirt - 1)
-           this%x(1,k) = 0.19         
-           this%zone(k) = tank%zone(i)
-      endif
-   enddo
-   
-this%nvirt = k-this%ntotal
 
 k = this%ntotal+this%nvirt
    do i = 1, tank%m*tank%n
-      if(tank%zone(i) == 4.and.tank%x(i)>0.2)then          
+      if(tank%zone(i) == 4)then          
            k = k + 1
            this%x(2,k) = tank%y(i)
-           this%x(1,k) = 0.21 + tank%dx * (k - this%ntotal - this%nvirt - 1) 
+           this%x(1,k) = 0.03 + tank%dx * (k - this%ntotal - this%nvirt - 1) 
            this%zone(k) = tank%zone(i)
       endif
    enddo
@@ -1625,7 +1663,7 @@ k = this%ntotal+this%nvirt
          if(tank%x(i)>0.98)then
          k = k + 1
          this%x(2,k) = tank%y(i)    
-         this%x(1,k) = 0.99 + tank%dx * (k - this%ntotal - this%nvirt - 1)
+         this%x(1,k) = 0.99 
          this%zone(k) = tank%zone(i)
          endif
       endif
@@ -2609,7 +2647,8 @@ end function
             endif 
           endif
         if(parts%x(1,i)>0.00078.and.parts%x(1,j)<0.00022.and.parts%itype(i)*parts%itype(j)>0)then
-          dxiac(1) = parts%x(1,i) - (parts%x(1,j) + 0.001)
+!          dxiac(1) = parts%x(1,i) - (parts%x(1,j) + 0.001)
+          dxiac(1) = parts%x(1,i) - (parts%x(1,j) + 0.001025)
           driac    = dxiac(1)*dxiac(1)
           do d=2,parts%dim
             dxiac(d) = parts%x(d,i) - parts%x(d,j)
@@ -2639,7 +2678,8 @@ end function
             endif
           endif 
        elseif(parts%x(1,i)<0.00022.and.parts%x(1,j)>0.00078.and.parts%itype(i)*parts%itype(j)>0)then
-          dxiac(1) = parts%x(1,i) - (parts%x(1,j) - 0.001)
+!          dxiac(1) = parts%x(1,i) - (parts%x(1,j) - 0.001)
+       dxiac(1) = parts%x(1,i) - (parts%x(1,j) - 0.001025)
           driac    = dxiac(1)*dxiac(1)
           do d=2,parts%dim
             dxiac(d) = parts%x(d,i) - parts%x(d,j)
@@ -6225,13 +6265,15 @@ end function
        if(parts%x(1,i)>0.00078.and.parts%x(1,j)<0.00022.and.parts%itype(i)*parts%itype(j)>0)then
 !             write(*,*)'dx=',dx(1)
            do d=1,parts%dim
-              dx(d) =  parts%x(d,i) - (parts%x(d,j) + 0.001)
+!              dx(d) =  parts%x(d,i) - (parts%x(d,j) + 0.001)
+              dx(d) =  parts%x(d,i) - (parts%x(d,j) + 0.001025)
               dvx(d) = vx_i(d)%p - vx_j(d)%p
               rr = rr + dx(d)*dx(d)
            enddo  
        elseif(parts%x(1,i)<0.00022.and.parts%x(1,j)>0.00078.and.parts%itype(i)*parts%itype(j)>0)then
            do d=1,parts%dim
-              dx(d) =  parts%x(d,i) - (parts%x(d,j) - 0.001)
+!              dx(d) =  parts%x(d,i) - (parts%x(d,j) - 0.001)
+              dx(d) =  parts%x(d,i) - (parts%x(d,j) - 0.001025)
               dvx(d) = vx_i(d)%p - vx_j(d)%p
               rr = rr + dx(d)*dx(d)
            enddo  
@@ -7217,8 +7259,19 @@ end function
           i = parts%pair_i(k)
           j = parts%pair_j(k)
           if(parts%itype(i)*parts%itype(j)>0)cycle
-              parts%dgu(1,k) = parts%n(1,j)*parts%w(k) * hsml/2
-              parts%dgu(2,k) = parts%n(2,j)*parts%w(k) * hsml/2
+              q0 = sqrt(((parts%x(1,i) - parts%x(1,j))*parts%n(1,j))**2 + ((parts%x(2,i) - parts%x(2,j))*parts%n(2,j))**2)/hsml
+              q1 = sqrt((parts%x(1,i) - parts%x(1,j))**2 + (parts%x(2,i) - parts%x(2,j))**2)/hsml
+              q2 = sqrt((parts%x(1,i) - parts%x(1,j+1))**2 + (parts%x(2,i) - parts%x(2,j+1))**2)/hsml
+              cos1 = -((parts%x(1,i) - parts%x(1,j)) * (parts%x(1,j+1) - parts%x(1,j)) + (parts%x(2,i) - parts%x(2,j)) * (parts%x(2,j+1) - parts%x(2,j)))/   &
+                 (sqrt((parts%x(1,i) - parts%x(1,j))**2 + (parts%x(2,i) -parts%x(2,j))**2)*sqrt((parts%x(1,j+1) - parts%x(1,j))**2 + (parts%x(2,j+1) - parts%x(2,j))**2))
+              cos2 = -((parts%x(1,i) - parts%x(1,j+1)) * (parts%x(1,j+1) - parts%x(1,j)) + (parts%x(2,i) - parts%x(2,j+1)) * (parts%x(2,j+1) - parts%x(2,j)))/  &
+                 (sqrt((parts%x(1,i) - parts%x(1,j+1))**2 + (parts%x(2,i) -parts%x(2,j+1))**2)*sqrt((parts%x(1,j+1) - parts%x(1,j))**2 + (parts%x(2,j+1) - parts%x(2,j))**2))
+              q1c = q1*cos1
+              q2c = q2*cos2
+              Pq2 = 7./192.*q2**5-21./64.*q2**4+35./32.*q2**3-35./24.*q2**2+7./4.+q0**2*(35./768.*q2**3-7./16.*q2**2+105./64.*q2-35./12.)+q0**4*(35./512.*q2-7./8.)
+              Pq1 = 7./192.*q1**5-21./64.*q1**4+35./32.*q1**3-35./24.*q1**2+7./4.+q0**2*(35./768.*q1**3-7./16.*q1**2+105./64.*q1-35./12.)+q0**4*(35./512.*q1-7./8.)
+              parts%dgu(1,k) = parts%n(1,j)*(q2c/pi*Pq2-q1c/pi*Pq1+q0**4/pi*(105./64.+35./512.*q0**2)*(sign(1.d0,q2c)*log((q2+abs(q2c))/abs(q0))-sign(1.d0,q1c)*log((q1+abs(q1c))/abs(q0))))/parts%hsml(j)
+              parts%dgu(2,k) = parts%n(2,j)*(q2c/pi*Pq2-q1c/pi*Pq1+q0**4/pi*(105./64.+35./512.*q0**2)*(sign(1.d0,q2c)*log((q2+abs(q2c))/abs(q0))-sign(1.d0,q1c)*log((q1+abs(q1c))/abs(q0))))/parts%hsml(j)
               parts%rhos(k) = (parts%rho%r(j) + parts%rho%r(j+1))/2
               parts%mons(1,k) = (parts%mone%x%r(j) + parts%mone%x%r(j+1))/2
               parts%mons(2,k) = (parts%mone%y%r(j) + parts%mone%y%r(j+1))/2

@@ -1791,7 +1791,8 @@ pl%vx%x%r(i) = pl%vx%x%r(i) + dt * pl%dvx%x%r(i)
 !pl%vx%y%r(i) = pl%vx%y%r(i) + dt * pl%dvx%y%r(i)
 pl%x(1,i) = pl%x(1,i) + dt * pl%vx%x%r(i)
 !pl%x(2,i) = pl%x(2,i) + dt * pl%vx%y%r(i)
-if(pl%x(1,i)>0.001) pl%x(1,i)=pl%x(1,i) - 0.001
+!if(pl%x(1,i)>0.001) pl%x(1,i)=pl%x(1,i) - 0.001
+if(pl%x(1,i)>0.001025) pl%x(1,i)=pl%x(1,i) - 0.001025
 enddo
 !do i = pl%ntotal + 1,pl%ntotal + pl%nvirt
 !  pl%x(1,i) = pl%x(1,i) + dt * pl%vx%x%r(i)
@@ -2901,7 +2902,7 @@ do k=1,parts%niac
     i = parts%pair_i(k)
     j = parts%pair_j(k)
     rr = 0.
-    c0 = 30!.*sqrt(9.8*0.5)!因case不同而不同
+    c0 = 20!.*sqrt(9.8*0.5)!因case不同而不同
     ca = c0 * (parts%rho%r(i)/1000.)**3
     cb = c0 * (parts%rho%r(j)/1000.)**3
     cab = max(ca,cb)
@@ -2959,7 +2960,7 @@ endif
 call delta_gamma_unified2(pl)
 
 call real_density_unified2(pl)
-call nvirt_density_unified3(pl)    
+call nvirt_density_unified2(pl)    
 
 !---  Density approximation or change rate
 !if(summation_density)then   
@@ -3007,7 +3008,7 @@ enddo
 !if(itimestep>1)then
 !call momentum_equation_unified401(pl) 
 !else
-call momentum_equation_unified4(pl)      
+call momentum_equation_unified4half(pl)      
 !endif!这样就用了deltaP的方式来求了
 
 
@@ -3145,21 +3146,22 @@ call momentum_equation_unified4(pl)
 !7~~~~not need now
 !if (average_velocity) call av_vel(pl) 
 !7~~~~not need now
-!parts%res_F = parts%p%r(1488) + parts%p%r(1489) + parts%p%r(1490) + parts%p%r(1491) + parts%p%r(1492) + parts%p%r(1493) + parts%p%r(1494) + parts%p%r(1495) +  &
-!              parts%p%r(1496) + parts%p%r(1497) + parts%p%r(1498) + parts%p%r(1499) + parts%p%r(1500) + parts%p%r(1501) + parts%p%r(1502) + parts%p%r(1503) +  &
-!              parts%p%r(1504) + parts%p%r(1505) + parts%p%r(1506) + parts%p%r(1507) + parts%p%r(1508) + parts%p%r(1509) + parts%p%r(1510) + parts%p%r(1511) 
-parts%res_F = parts%p%r(5475) + parts%p%r(5476) + parts%p%r(5477) + parts%p%r(5478) + parts%p%r(5479) + parts%p%r(5480) + parts%p%r(5481) + parts%p%r(5482) +  &
-              parts%p%r(5483) + parts%p%r(5484) + parts%p%r(5485) + parts%p%r(5486) + parts%p%r(5487) + parts%p%r(5488) + parts%p%r(5489) + parts%p%r(5490) +  &
-              parts%p%r(5491) + parts%p%r(5492) + parts%p%r(5493) + parts%p%r(5494) + parts%p%r(5495) + parts%p%r(5496) + parts%p%r(5497) + parts%p%r(5498) +  &
-              parts%p%r(5499) + parts%p%r(5500) + parts%p%r(5501) + parts%p%r(5502) + parts%p%r(5503) + parts%p%r(5504) + parts%p%r(5505) + parts%p%r(5506) +  &
-              parts%p%r(5507) + parts%p%r(5508) + parts%p%r(5509) + parts%p%r(5510) + parts%p%r(5511) + parts%p%r(5512) + parts%p%r(5513) + parts%p%r(5514) +  &
-              parts%p%r(5515) + parts%p%r(5516) + parts%p%r(5517) + parts%p%r(5518) + parts%p%r(5519) + parts%p%r(5520) + parts%p%r(5521) + parts%p%r(5522) +  & 
-              parts%p%r(5523)
+!parts%res_F = parts%p%r(5475) + parts%p%r(5476) + parts%p%r(5477) + parts%p%r(5478) + parts%p%r(5479) + parts%p%r(5480) + parts%p%r(5481) + parts%p%r(5482) +  &
+!              parts%p%r(5483) + parts%p%r(5484) + parts%p%r(5485) + parts%p%r(5486) + parts%p%r(5487) + parts%p%r(5488) + parts%p%r(5489) + parts%p%r(5490) +  &
+!              parts%p%r(5491) + parts%p%r(5492) + parts%p%r(5493) + parts%p%r(5494) + parts%p%r(5495) + parts%p%r(5496) + parts%p%r(5497) + parts%p%r(5498) +  &
+!              parts%p%r(5499) + parts%p%r(5500) + parts%p%r(5501) + parts%p%r(5502) + parts%p%r(5503) + parts%p%r(5504) + parts%p%r(5505) + parts%p%r(5506) +  &
+!              parts%p%r(5507) + parts%p%r(5508) + parts%p%r(5509) + parts%p%r(5510) + parts%p%r(5511) + parts%p%r(5512) + parts%p%r(5513) + parts%p%r(5514) +  &
+!              parts%p%r(5515) + parts%p%r(5516) + parts%p%r(5517) + parts%p%r(5518) + parts%p%r(5519) + parts%p%r(5520) + parts%p%r(5521) + parts%p%r(5522) +  & 
+!              parts%p%r(5523)
+parts%res_F = parts%p%r(5904) + parts%p%r(5905) + parts%p%r(5906) + parts%p%r(5907) + parts%p%r(5908) + parts%p%r(5909) + parts%p%r(5910) + parts%p%r(5911) +  &
+              parts%p%r(5912) + parts%p%r(5913) + parts%p%r(5914) + parts%p%r(5915) + parts%p%r(5916) + parts%p%r(5917) + parts%p%r(5918) + parts%p%r(5919) +  &
+              parts%p%r(5920) + parts%p%r(5921) + parts%p%r(5922) + parts%p%r(5924) + parts%p%r(5925) + parts%p%r(5926) + parts%p%r(5927) 
+
 !---  Convert velocity, force, and energy to f and dfdt  
 
       if(itimestep>=save_step_from.and.   &
          mod(itimestep,save_step).eq.0)then
-open(1000,file = 'res_f.dat')
+open(1000,file = 'res_f2224half.dat')
 write(1000,*) parts%res_F
       endif 
 
@@ -3509,34 +3511,59 @@ call momentum_equation_unified_Couette(pl)
 !if (average_velocity) call av_vel(pl) 
 !7~~~~not need now
 
-
-
-      if(itimestep.eq.1000)then
+      if(itimestep.eq.100)then
 open(1000,file = 'res_f_Couette001.dat')
-write(1000,*) parts%vx%x%r(1320),parts%vx%x%r(1319),parts%vx%x%r(1318),parts%vx%x%r(1317),parts%vx%x%r(1316),parts%vx%x%r(1315),parts%vx%x%r(1314),parts%vx%x%r(1313), &
-              parts%vx%x%r(1312),parts%vx%x%r(1311),parts%vx%x%r(1310),parts%vx%x%r(1309),parts%vx%x%r(1308),parts%vx%x%r(1307),parts%vx%x%r(1306),parts%vx%x%r(1305), &
-              parts%vx%x%r(1304),parts%vx%x%r(1303),parts%vx%x%r(1302),parts%vx%x%r(1301),parts%vx%x%r(1300),parts%vx%x%r(1299),parts%vx%x%r(1298),parts%vx%x%r(1297), &
-              parts%vx%x%r(1296),parts%vx%x%r(1295),parts%vx%x%r(1294),parts%vx%x%r(1293),parts%vx%x%r(1292),parts%vx%x%r(1291),parts%vx%x%r(1290),parts%vx%x%r(1289), &
-              parts%vx%x%r(1288),parts%vx%x%r(1287),parts%vx%x%r(1286),parts%vx%x%r(1285),parts%vx%x%r(1284),parts%vx%x%r(1283),parts%vx%x%r(1282),parts%vx%x%r(1281)
-      endif 
-
-      if(itimestep.eq.10000)then
-open(1001,file = 'res_f_Couette01.dat')
-write(1001,*) parts%vx%x%r(1320),parts%vx%x%r(1319),parts%vx%x%r(1318),parts%vx%x%r(1317),parts%vx%x%r(1316),parts%vx%x%r(1315),parts%vx%x%r(1314),parts%vx%x%r(1313), &
-              parts%vx%x%r(1312),parts%vx%x%r(1311),parts%vx%x%r(1310),parts%vx%x%r(1309),parts%vx%x%r(1308),parts%vx%x%r(1307),parts%vx%x%r(1306),parts%vx%x%r(1305), &
-              parts%vx%x%r(1304),parts%vx%x%r(1303),parts%vx%x%r(1302),parts%vx%x%r(1301),parts%vx%x%r(1300),parts%vx%x%r(1299),parts%vx%x%r(1298),parts%vx%x%r(1297), &
-              parts%vx%x%r(1296),parts%vx%x%r(1295),parts%vx%x%r(1294),parts%vx%x%r(1293),parts%vx%x%r(1292),parts%vx%x%r(1291),parts%vx%x%r(1290),parts%vx%x%r(1289), &
-              parts%vx%x%r(1288),parts%vx%x%r(1287),parts%vx%x%r(1286),parts%vx%x%r(1285),parts%vx%x%r(1284),parts%vx%x%r(1283),parts%vx%x%r(1282),parts%vx%x%r(1281)
+write(1000,*) parts%vx%x%r(1),parts%vx%x%r(2),parts%vx%x%r(3),parts%vx%x%r(4),parts%vx%x%r(5),parts%vx%x%r(6),parts%vx%x%r(7),parts%vx%x%r(8), &
+              parts%vx%x%r(9),parts%vx%x%r(10),parts%vx%x%r(11),parts%vx%x%r(12),parts%vx%x%r(13),parts%vx%x%r(14),parts%vx%x%r(15),parts%vx%x%r(16), &
+              parts%vx%x%r(17),parts%vx%x%r(18),parts%vx%x%r(19),parts%vx%x%r(20),parts%vx%x%r(21),parts%vx%x%r(22),parts%vx%x%r(23),parts%vx%x%r(24), &
+              parts%vx%x%r(25),parts%vx%x%r(26),parts%vx%x%r(27),parts%vx%x%r(28),parts%vx%x%r(29),parts%vx%x%r(30),parts%vx%x%r(31), &
+              parts%vx%x%r(32),parts%vx%x%r(33),parts%vx%x%r(34),parts%vx%x%r(35),parts%vx%x%r(36),parts%vx%x%r(37),parts%vx%x%r(38),parts%vx%x%r(39)
       endif 
       
-      if(itimestep.eq.100000)then
+if(itimestep.eq.1000)then
+open(1001,file = 'res_f_Couette01.dat')
+write(1001,*) parts%vx%x%r(1),parts%vx%x%r(2),parts%vx%x%r(3),parts%vx%x%r(4),parts%vx%x%r(5),parts%vx%x%r(6),parts%vx%x%r(7),parts%vx%x%r(8), &
+              parts%vx%x%r(9),parts%vx%x%r(10),parts%vx%x%r(11),parts%vx%x%r(12),parts%vx%x%r(13),parts%vx%x%r(14),parts%vx%x%r(15),parts%vx%x%r(16), &
+              parts%vx%x%r(17),parts%vx%x%r(18),parts%vx%x%r(19),parts%vx%x%r(20),parts%vx%x%r(21),parts%vx%x%r(22),parts%vx%x%r(23),parts%vx%x%r(24), &
+              parts%vx%x%r(25),parts%vx%x%r(26),parts%vx%x%r(27),parts%vx%x%r(28),parts%vx%x%r(29),parts%vx%x%r(30),parts%vx%x%r(31), &
+              parts%vx%x%r(32),parts%vx%x%r(33),parts%vx%x%r(34),parts%vx%x%r(35),parts%vx%x%r(36),parts%vx%x%r(37),parts%vx%x%r(38),parts%vx%x%r(39)
+endif 
+      
+if(itimestep.eq.10000)then
 open(1002,file = 'res_f_Couette1.dat')
-write(1002,*) parts%vx%x%r(1320),parts%vx%x%r(1319),parts%vx%x%r(1318),parts%vx%x%r(1317),parts%vx%x%r(1316),parts%vx%x%r(1315),parts%vx%x%r(1314),parts%vx%x%r(1313), &
-              parts%vx%x%r(1312),parts%vx%x%r(1311),parts%vx%x%r(1310),parts%vx%x%r(1309),parts%vx%x%r(1308),parts%vx%x%r(1307),parts%vx%x%r(1306),parts%vx%x%r(1305), &
-              parts%vx%x%r(1304),parts%vx%x%r(1303),parts%vx%x%r(1302),parts%vx%x%r(1301),parts%vx%x%r(1300),parts%vx%x%r(1299),parts%vx%x%r(1298),parts%vx%x%r(1297), &
-              parts%vx%x%r(1296),parts%vx%x%r(1295),parts%vx%x%r(1294),parts%vx%x%r(1293),parts%vx%x%r(1292),parts%vx%x%r(1291),parts%vx%x%r(1290),parts%vx%x%r(1289), &
-              parts%vx%x%r(1288),parts%vx%x%r(1287),parts%vx%x%r(1286),parts%vx%x%r(1285),parts%vx%x%r(1284),parts%vx%x%r(1283),parts%vx%x%r(1282),parts%vx%x%r(1281)
-      endif 
+write(1002,*) parts%vx%x%r(1),parts%vx%x%r(2),parts%vx%x%r(3),parts%vx%x%r(4),parts%vx%x%r(5),parts%vx%x%r(6),parts%vx%x%r(7),parts%vx%x%r(8), &
+              parts%vx%x%r(9),parts%vx%x%r(10),parts%vx%x%r(11),parts%vx%x%r(12),parts%vx%x%r(13),parts%vx%x%r(14),parts%vx%x%r(15),parts%vx%x%r(16), &
+              parts%vx%x%r(17),parts%vx%x%r(18),parts%vx%x%r(19),parts%vx%x%r(20),parts%vx%x%r(21),parts%vx%x%r(22),parts%vx%x%r(23),parts%vx%x%r(24), &
+              parts%vx%x%r(25),parts%vx%x%r(26),parts%vx%x%r(27),parts%vx%x%r(28),parts%vx%x%r(29),parts%vx%x%r(30),parts%vx%x%r(31), &
+              parts%vx%x%r(32),parts%vx%x%r(33),parts%vx%x%r(34),parts%vx%x%r(35),parts%vx%x%r(36),parts%vx%x%r(37),parts%vx%x%r(38),parts%vx%x%r(39)
+     endif 
+
+!      if(itimestep.eq.1000)then
+!open(1000,file = 'res_f_Couette001.dat')
+!write(1000,*) parts%vx%x%r(1320),parts%vx%x%r(1319),parts%vx%x%r(1318),parts%vx%x%r(1317),parts%vx%x%r(1316),parts%vx%x%r(1315),parts%vx%x%r(1314),parts%vx%x%r(1313), &
+!              parts%vx%x%r(1312),parts%vx%x%r(1311),parts%vx%x%r(1310),parts%vx%x%r(1309),parts%vx%x%r(1308),parts%vx%x%r(1307),parts%vx%x%r(1306),parts%vx%x%r(1305), &
+!              parts%vx%x%r(1304),parts%vx%x%r(1303),parts%vx%x%r(1302),parts%vx%x%r(1301),parts%vx%x%r(1300),parts%vx%x%r(1299),parts%vx%x%r(1298),parts%vx%x%r(1297), &
+!              parts%vx%x%r(1296),parts%vx%x%r(1295),parts%vx%x%r(1294),parts%vx%x%r(1293),parts%vx%x%r(1292),parts%vx%x%r(1291),parts%vx%x%r(1290),parts%vx%x%r(1289), &
+!             parts%vx%x%r(1288),parts%vx%x%r(1287),parts%vx%x%r(1286),parts%vx%x%r(1285),parts%vx%x%r(1284),parts%vx%x%r(1283),parts%vx%x%r(1282),parts%vx%x%r(1281)
+!      endif 
+
+!      if(itimestep.eq.10000)then
+!open(1001,file = 'res_f_Couette01.dat')
+!write(1001,*) parts%vx%x%r(1320),parts%vx%x%r(1319),parts%vx%x%r(1318),parts%vx%x%r(1317),parts%vx%x%r(1316),parts%vx%x%r(1315),parts%vx%x%r(1314),parts%vx%x%r(1313), &
+!              parts%vx%x%r(1312),parts%vx%x%r(1311),parts%vx%x%r(1310),parts%vx%x%r(1309),parts%vx%x%r(1308),parts%vx%x%r(1307),parts%vx%x%r(1306),parts%vx%x%r(1305), &
+!              parts%vx%x%r(1304),parts%vx%x%r(1303),parts%vx%x%r(1302),parts%vx%x%r(1301),parts%vx%x%r(1300),parts%vx%x%r(1299),parts%vx%x%r(1298),parts%vx%x%r(1297), &
+!              parts%vx%x%r(1296),parts%vx%x%r(1295),parts%vx%x%r(1294),parts%vx%x%r(1293),parts%vx%x%r(1292),parts%vx%x%r(1291),parts%vx%x%r(1290),parts%vx%x%r(1289), &
+!             parts%vx%x%r(1288),parts%vx%x%r(1287),parts%vx%x%r(1286),parts%vx%x%r(1285),parts%vx%x%r(1284),parts%vx%x%r(1283),parts%vx%x%r(1282),parts%vx%x%r(1281)
+!      endif 
+      
+!      if(itimestep.eq.100000)then
+!open(1002,file = 'res_f_Couette1.dat')
+!write(1002,*) parts%vx%x%r(1320),parts%vx%x%r(1319),parts%vx%x%r(1318),parts%vx%x%r(1317),parts%vx%x%r(1316),parts%vx%x%r(1315),parts%vx%x%r(1314),parts%vx%x%r(1313), &
+!              parts%vx%x%r(1312),parts%vx%x%r(1311),parts%vx%x%r(1310),parts%vx%x%r(1309),parts%vx%x%r(1308),parts%vx%x%r(1307),parts%vx%x%r(1306),parts%vx%x%r(1305), &
+!              parts%vx%x%r(1304),parts%vx%x%r(1303),parts%vx%x%r(1302),parts%vx%x%r(1301),parts%vx%x%r(1300),parts%vx%x%r(1299),parts%vx%x%r(1298),parts%vx%x%r(1297), &
+!              parts%vx%x%r(1296),parts%vx%x%r(1295),parts%vx%x%r(1294),parts%vx%x%r(1293),parts%vx%x%r(1292),parts%vx%x%r(1291),parts%vx%x%r(1290),parts%vx%x%r(1289), &
+!              parts%vx%x%r(1288),parts%vx%x%r(1287),parts%vx%x%r(1286),parts%vx%x%r(1285),parts%vx%x%r(1284),parts%vx%x%r(1283),parts%vx%x%r(1282),parts%vx%x%r(1281)
+!      endif 
       
 if(mod(itimestep,print_step).eq.0) then     
 !  call pl%particle_monitor

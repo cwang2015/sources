@@ -59,7 +59,7 @@ do i = 1, tank%m*tank%n
    if(tank%x(i)>0.98.and.tank%y(i)<0.02)  tank%zone(i)=6
 
    if(tank%zone(i)==2.and.tank%y(i)>0.52)tank%zone(i)= 8
-   if(tank%zone(i)==2.and.tank%y(i)<0.2.and.tank%x(i)<0.2)tank%zone(i)= 8
+!   if(tank%zone(i)==2.and.tank%y(i)<0.2.and.tank%x(i)<0.2)tank%zone(i)= 8
    
    
 enddo
@@ -113,9 +113,10 @@ call initial_density(parts)
 do i = 1,parts%ntotal + parts%nvirt 
     if(parts%zone(i)/=2)then 
         parts%vol%r(i) = parts%vol%r(i)/2.0d0
-        if(i==1160) parts%vol%r(i)=parts%vol%r(i)/2.0d0
-        if(i==1178) parts%vol%r(i)=parts%vol%r(i)/2.0d0
-        if(i==1169) parts%vol%r(i)=parts%vol%r(i)*3./2.0d0
+!        if(i==1160) parts%vol%r(i)=parts%vol%r(i)/2.0d0
+!        if(i==1178) parts%vol%r(i)=parts%vol%r(i)/2.0d0
+!        if(i==1169) parts%vol%r(i)=parts%vol%r(i)*3./2.0d0
+        if(parts%x(1,i)<0.02.and.parts%x(2,i)<0.02) parts%vol%r(i)=parts%vol%r(i)/2.0d0
         if(parts%x(1,i)>0.98.and.parts%x(2,i)<0.02) parts%vol%r(i)=parts%vol%r(i)/2.0d0
     endif
 enddo
