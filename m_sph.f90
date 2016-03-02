@@ -1659,7 +1659,8 @@ endif
       endif    
 
       call darcy_law_omp(parts,soil)          
-      call pore_water_pressure_omp(parts,soil) 
+      !call pore_water_pressure_omp(parts,soil) 
+      soil%dvx%y = soil%dvx%y - pl%gravity*(1./2.7)
 
       if(parts%volume_fraction)then
          call volume_fraction_soil_omp(soil)

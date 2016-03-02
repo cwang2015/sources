@@ -4110,6 +4110,8 @@ enddo
 !        if(volume_fraction) cf = water%vof(i)*water%rho(i)*(-gravity)/ks
         if(water%volume_fraction) cf = water%vof%r(i)*soil%vof%r(j)*water%rho%r(i)*(-gravity)/ks
 !        cf = water%vof%r(i)*water%rho%r(i)*(-gravity)/ks
+!
+
 
           vx_i = water%vx%cmpt(i); vx_j = soil%vx%cmpt(j)
           dvx_i = water%dvx%cmpt(i); dvx_j = soil%dvx%cmpt(j)
@@ -4117,6 +4119,11 @@ enddo
              !sp = cf*(water%vx(d,i)-soil%vx(d,j))*rrw
              !water%dvx(d,i) = water%dvx(d,i) - soil%mass(j)*sp
              !soil%dvx(d,j)  = soil%dvx(d,j) + water%mass(i)*sp   
+
+!Ergun
+
+        cf = 150.*1.e-3*(1-water%vof%r(i))**2/(water%vof%r(i)*0.225e-3**2)+1.75*(1-water%vof%r(i))*water%rho%r(i)*abs(vx_i(d)%p-vx_j(d)%p)/0.225e-3
+
              sp = cf*(vx_i(d)%p-vx_j(d)%p)*rrw
              dvx_i(d)%p = dvx_i(d)%p - soil%mass%r(j)*sp
              dvx_j(d)%p = dvx_j(d)%p + water%mass%r(i)*sp   
@@ -4196,7 +4203,12 @@ do it = 1,nthreads
           do d=1,dim
              !sp = cf*(water%vx(d,i)-soil%vx(d,j))*rrw
              !water%dvx(d,i) = water%dvx(d,i) - soil%mass(j)*sp
-             !soil%dvx(d,j)  = soil%dvx(d,j) + water%mass(i)*sp   
+             !soil%dvx(d,j)  = soil%dvx(d,j) + water%mass(i)*sp  
+
+!Ergun
+
+!        cf = 150.*1.e-3*(1-water%vof%r(i))**2/(water%vof%r(i)*0.225e-3**2)+1.75*(1-water%vof%r(i))*water%rho%r(i)*abs(vx_i(d)%p-vx_j(d)%p)/0.225e-3
+
              sp = cf*(vx_i(d)%p-vx_j(d)%p)*rrw
              !dvx_i(d)%p = dvx_i(d)%p - soil%mass%r(j)*sp
              !dvx_j(d)%p = dvx_j(d)%p + water%mass%r(i)*sp 

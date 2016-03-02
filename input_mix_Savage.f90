@@ -17,7 +17,8 @@ double precision element_size, soil_submerged_depth
 !call tank%set(xl=0.2d0,yl=0.1d0,m=80,n=40)
 !call tank%set(xl=0.25d0,yl=0.125d0,m=100,n=50)
 !call tank%set(xl=0.26d0,yl=0.13d0,m=52,n=26)
-call tank%set(xl=0.26d0,yl=0.13d0,m=104,n=52)
+!call tank%set(xl=0.26d0,yl=0.13d0,m=104,n=52)     !0.0025
+call tank%set(xl=0.26d0,yl=0.13d0,m=208,n=104)     !0.00125
 !call tank%set(xl=0.26d0,yl=0.13d0,m=208,n=104)
 !call tank%set(xl=0.26d0,yl=0.13d0,m=416,n=208)
 !call tank%set(xl=0.26d0,yl=0.13d0,m=832,n=416)
@@ -37,12 +38,12 @@ do i = 1, tank%m*tank%n
    if(tank%x(i)<0.d0.or.tank%x(i)>0.24.or.tank%y(i)<0.d0) tank%zone(i) = 1
 !   if(tank%x(i)<0.025.or.tank%x(i)>0.475.or.tank%y(i)<0.025) tank%zone(i) = 1
    if(tank%zone(i)==1.and.tank%x(i)>0.06)tank%zone(i)=3
-   if(tank%zone(i)==1.and.tank%y(i)>0.048)tank%zone(i)=5    !0.08
+   if(tank%zone(i)==1.and.tank%y(i)>0.048)tank%zone(i)=5    !0.08 !0.048
    if(tank%zone(i)==5.and.tank%y(i)>0.1)tank%zone(i)=6      !0.1
    if(tank%zone(i)==3.and.tank%y(i)>0.1)tank%zone(i)=6      !0.1
    if(tank%zone(i)==2.and.tank%x(i)>0.06)tank%zone(i)=4
-   if(tank%zone(i)==2.and.tank%y(i)>0.048)tank%zone(i)=4     !0.08
-   if(tank%zone(i)==4.and.tank%y(i)>0.1)tank%zone(i)=7
+   if(tank%zone(i)==2.and.tank%y(i)>0.048)tank%zone(i)=4     !0.08  !0.048
+   if(tank%zone(i)==4.and.tank%y(i)>0.1)tank%zone(i)=7      !0.1
 enddo
 !      write(*,*) tank%zone
 
