@@ -35,7 +35,7 @@ call tank%set(xl = 2.44d0,yl = 1.52d0,m=122,n=76)
 
 !call tank%set(xl=3.26d0,yl=1.82d0,m=32,n=18)
 
-open(unit=9,file='D:\LiuSPH\data\stillwatercircle.neu',status='old')!文件的名字是a.txt
+open(unit=9,file='D:\LiuSPH\data\circle.neu',status='old')!文件的名字是a.txt
 parts%vol = 0.d0
 do while(stat == 0)
  read(9,'(A)',iostat=stat) str
@@ -84,11 +84,40 @@ do i = 1, nvtx
    if(tank%y(i)<0.01)  tank%zone(i)=5
 !   if(tank%x(i)>2.42.and.tank%y(i)<0.02)  tank%zone(i)=6
 !   if(tank%zone(i)==2.and.tank%y(i)>0.42)tank%zone(i)= 8
-   if(tank%x(i)>0.86.and.tank%y(i)<tank%x(i) - 0.85.and.tank%x(i)<1.09)tank%zone(i)= 5
-   if(tank%x(i)>1.09.and.tank%y(i)<1.33 - tank%x(i).and.tank%x(i)<1.31)tank%zone(i)= 5
+
+   if(tank%x(i)>0.80.and.tank%x(i)<0.803.and.tank%y(i)<0.03)tank%zone(i)= 5
+   if(tank%x(i)>0.805.and.tank%x(i)<0.807.and.tank%y(i)<0.045)tank%zone(i)= 5
+   if(tank%x(i)>0.811.and.tank%x(i)<0.813.and.tank%y(i)<0.06)tank%zone(i)= 5
+   if(tank%x(i)>0.82.and.tank%x(i)<0.823.and.tank%y(i)<0.08)tank%zone(i)= 5
+   if(tank%x(i)>0.829.and.tank%x(i)<0.831.and.tank%y(i)<0.1)tank%zone(i)= 5
+   if(tank%x(i)>0.84.and.tank%x(i)<0.845.and.tank%y(i)<0.12)tank%zone(i)= 5
+   if(tank%x(i)>0.85.and.tank%x(i)<0.86.and.tank%y(i)<0.13)tank%zone(i)= 5
+   if(tank%x(i)>0.865.and.tank%x(i)<0.87.and.tank%y(i)<0.15)tank%zone(i)= 5
+   if(tank%x(i)>0.88.and.tank%x(i)<0.89.and.tank%y(i)<0.16)tank%zone(i)= 5
+   if(tank%x(i)>0.9.and.tank%x(i)<0.905.and.tank%y(i)<0.17)tank%zone(i)= 5
+   if(tank%x(i)>0.92.and.tank%x(i)<0.93.and.tank%y(i)<0.18)tank%zone(i)= 5
+   if(tank%x(i)>0.94.and.tank%x(i)<0.95.and.tank%y(i)<0.19)tank%zone(i)= 5
+   if(tank%x(i)>0.95.and.tank%x(i)<0.97.and.tank%y(i)<0.19)tank%zone(i)= 5
+   if(tank%x(i)>0.97.and.tank%x(i)<0.98.and.tank%y(i)<0.19)tank%zone(i)= 5
+   if(tank%x(i)>0.98.and.tank%x(i)<1.01.and.tank%y(i)<0.191)tank%zone(i)= 5
+   if(tank%x(i)>1.02.and.tank%x(i)<1.03.and.tank%y(i)<0.190)tank%zone(i)= 5
+   if(tank%x(i)>1.02.and.tank%x(i)<1.03.and.tank%y(i)<0.190)tank%zone(i)= 5
+   if(tank%x(i)>1.04.and.tank%x(i)<1.05.and.tank%y(i)<0.187)tank%zone(i)= 5
+   if(tank%x(i)>1.05.and.tank%x(i)<1.06.and.tank%y(i)<0.182)tank%zone(i)= 5
+   if(tank%x(i)>1.07.and.tank%x(i)<1.08.and.tank%y(i)<0.175)tank%zone(i)= 5
+   if(tank%x(i)>1.09.and.tank%x(i)<1.1.and.tank%y(i)<0.17)tank%zone(i)= 5
+   if(tank%x(i)>1.11.and.tank%x(i)<1.12.and.tank%y(i)<0.16)tank%zone(i)= 5
+   if(tank%x(i)>1.13.and.tank%x(i)<1.14.and.tank%y(i)<0.15)tank%zone(i)= 5
+   if(tank%x(i)>1.14.and.tank%x(i)<1.15.and.tank%y(i)<0.13)tank%zone(i)= 5
+   if(tank%x(i)>1.15.and.tank%x(i)<1.16.and.tank%y(i)<0.12)tank%zone(i)= 5
+   if(tank%x(i)>1.16.and.tank%x(i)<1.17.and.tank%y(i)<0.1)tank%zone(i)= 5
+   if(tank%x(i)>1.17.and.tank%x(i)<1.18.and.tank%y(i)<0.08)tank%zone(i)= 5
+   if(tank%x(i)>1.18.and.tank%x(i)<1.19.and.tank%y(i)<0.06)tank%zone(i)= 5
+   if(tank%x(i)>1.19.and.tank%x(i)<1.2.and.tank%y(i)<0.05)tank%zone(i)= 5
+   if(tank%x(i)>1.19.and.tank%x(i)<1.2.and.tank%y(i)<0.03)tank%zone(i)= 5
+!   if(tank%x(i)>0.86.and.tank%y(i)<tank%x(i) - 0.85.and.tank%x(i)<1.09)tank%zone(i)= 5
+!   if(tank%x(i)>1.09.and.tank%y(i)<1.33 - tank%x(i).and.tank%x(i)<1.31)tank%zone(i)= 5
 !   if(tank%zone(i)==2.and.tank%x(i)>2.22) tank%zone(i)= 8
-   
-   
 enddo
 
 parts%nvtx = nvtx
@@ -124,12 +153,12 @@ parts%vx%x = 0.d0
 parts%vx%y = 0.d0
 
 ! ...Pressure. You must define the free surface first.
-water_surface = 0.4d0
+water_surface = 0.5d0
 property => parts%material
 do i = 1,parts%ntotal+parts%nvirt
    parts%p%r(i) = property%rho0*gravity*(parts%x(2,i)-water_surface)
-   if(parts%zone(i)==1.and.parts%x(2,i)>0.41)parts%p%r(i)=0.0
-   if(parts%zone(i)==8.and.parts%x(2,i)>0.41)parts%p%r(i)=0.0
+   if(parts%zone(i)==1.and.parts%x(2,i)>0.51)parts%p%r(i)=0.0
+   if(parts%zone(i)==8.and.parts%x(2,i)>0.51)parts%p%r(i)=0.0
 !   if(parts%zone(i)/=2.and.parts%x(1,i)>0.11)parts%p%r(i)=0.0
 enddo
 
@@ -140,7 +169,7 @@ parts%c = property%c
 call initial_density(parts)
       
 do i = 1,parts%ntotal + parts%nvirt 
-   if(parts%x(2,i)>0.39.and.parts%zone(i)==2)then
+   if(parts%x(2,i)>0.49.and.parts%x(2,i)<0.59)then
         parts%vol%r(i) = parts%vol%r(i)*2.0d0
    endif
 enddo

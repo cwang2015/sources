@@ -2960,7 +2960,7 @@ endif
 call delta_gamma_unified2(pl)
 
 call real_density_unified2(pl)
-call nvirt_density_unified2(pl)    
+call nvirt_density_unified3(pl)    
 
 !---  Density approximation or change rate
 !if(summation_density)then   
@@ -3153,17 +3153,17 @@ call momentum_equation_unified4half(pl)
 !              parts%p%r(5507) + parts%p%r(5508) + parts%p%r(5509) + parts%p%r(5510) + parts%p%r(5511) + parts%p%r(5512) + parts%p%r(5513) + parts%p%r(5514) +  &
 !              parts%p%r(5515) + parts%p%r(5516) + parts%p%r(5517) + parts%p%r(5518) + parts%p%r(5519) + parts%p%r(5520) + parts%p%r(5521) + parts%p%r(5522) +  & 
 !              parts%p%r(5523)
-parts%res_F = parts%p%r(5904) + parts%p%r(5905) + parts%p%r(5906) + parts%p%r(5907) + parts%p%r(5908) + parts%p%r(5909) + parts%p%r(5910) + parts%p%r(5911) +  &
-              parts%p%r(5912) + parts%p%r(5913) + parts%p%r(5914) + parts%p%r(5915) + parts%p%r(5916) + parts%p%r(5917) + parts%p%r(5918) + parts%p%r(5919) +  &
-              parts%p%r(5920) + parts%p%r(5921) + parts%p%r(5922) + parts%p%r(5924) + parts%p%r(5925) + parts%p%r(5926) + parts%p%r(5927) 
+!2parts%res_F = parts%p%r(5904) + parts%p%r(5905) + parts%p%r(5906) + parts%p%r(5907) + parts%p%r(5908) + parts%p%r(5909) + parts%p%r(5910) + parts%p%r(5911) +  &
+!2              parts%p%r(5912) + parts%p%r(5913) + parts%p%r(5914) + parts%p%r(5915) + parts%p%r(5916) + parts%p%r(5917) + parts%p%r(5918) + parts%p%r(5919) +  &
+!2              parts%p%r(5920) + parts%p%r(5921) + parts%p%r(5922) + parts%p%r(5924) + parts%p%r(5925) + parts%p%r(5926) + parts%p%r(5927) 
 
 !---  Convert velocity, force, and energy to f and dfdt  
 
-      if(itimestep>=save_step_from.and.   &
-         mod(itimestep,save_step).eq.0)then
-open(1000,file = 'res_f2224half.dat')
-write(1000,*) parts%res_F
-      endif 
+!2      if(itimestep>=save_step_from.and.   &
+!2         mod(itimestep,save_step).eq.0)then
+!2open(1000,file = 'res_f2224half.dat')
+!2write(1000,*) parts%res_F
+!2      endif 
 
 
 if(mod(itimestep,print_step).eq.0) then     
