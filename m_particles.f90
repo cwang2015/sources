@@ -1024,10 +1024,10 @@ k = this%ntotal+this%nvirt
       if(tank%zone(i)== 1.or.tank%zone(i)==8)then             
          k = k + 1
          this%x(1,k) = tank%x(i)
-         this%x(2,k) = 1.02 - tank%y(i)! block!和圆形静水的数据
+!         this%x(2,k) = 1.02 - tank%y(i)! block!和圆形静水的数据
 !          this%x(2,k) = 1.05 - tank%y(i)   !和圆形静水的数据
 !         this%x(2,k) = 0.82 - tank%y(i) !wedge的静水 
-!         this%x(2,k) = 2.01 - tank%y(i)! wedgedam
+         this%x(2,k) = 2.01 - tank%y(i)! wedgedam
          this%vol%r(k) = this%vol_nm%r(i)
          this%zone(k) = tank%zone(i)
       endif
@@ -6066,23 +6066,23 @@ end function
 !                lapsx = 2.*sqrt(parts%dgu(1,k)**2 + parts%dgu(2,k)**2)*water%viscosity* (dvx(1)*abs(parts%n(2,j)))/(parts%rhos(k)*zb) 
 !                lapsy = 2.*sqrt(parts%dgu(1,k)**2 + parts%dgu(2,k)**2)*water%viscosity* (dvx(2)*abs(parts%n(1,j)))/(parts%rhos(k)*zb)
 
-                lapsx = 2.*sqrt(parts%dgu(1,k)**2 + parts%dgu(2,k)**2)*water%viscosity* (dvx(1) - parts%n(2,j)*(dvx(1)*parts%n(1,j) + dvx(2)*parts%n(2,j)))/(parts%rhos(k)*zb) !这里面修改了n的方向
-                lapsy = 2.*sqrt(parts%dgu(1,k)**2 + parts%dgu(2,k)**2)*water%viscosity* (dvx(2) - parts%n(1,j)*(dvx(1)*parts%n(1,j) + dvx(2)*parts%n(2,j)))/(parts%rhos(k)*zb) !这里面修改了n的方向
+!2                lapsx = 2.*sqrt(parts%dgu(1,k)**2 + parts%dgu(2,k)**2)*water%viscosity* (dvx(1) - parts%n(2,j)*(dvx(1)*parts%n(1,j) + dvx(2)*parts%n(2,j)))/(parts%rhos(k)*zb) !这里面修改了n的方向
+!2               lapsy = 2.*sqrt(parts%dgu(1,k)**2 + parts%dgu(2,k)**2)*water%viscosity* (dvx(2) - parts%n(1,j)*(dvx(1)*parts%n(1,j) + dvx(2)*parts%n(2,j)))/(parts%rhos(k)*zb) !这里面修改了n的方向
 !             endif
 !            if(parts%x(1,i)<0.01) cycle
-             lap(1,i) = lap(1,i) - lapsx
-             lap(2,i) = lap(2,i) - lapsy
+!2             lap(1,i) = lap(1,i) - lapsx
+!2             lap(2,i) = lap(2,i) - lapsy
        endif
           
            
            
-!       if(parts%itype(i)>0.and.parts%itype(j)<0)then
-!           if(parts%rhos(k)==0) cycle
-!          lapsx =  sqrt(parts%dgu(1,k)**2+parts%dgu(2,k)**2) * parts%mons(1,k)/parts%rhos(k)
-!          lapsy =  sqrt(parts%dgu(1,k)**2+parts%dgu(2,k)**2) * parts%mons(2,k)/parts%rhos(k)            
-!            lap(1,i) = lap(1,i) - lapsx
-!            lap(2,i) = lap(2,i) - lapsy
-!       endif
+       if(parts%itype(i)>0.and.parts%itype(j)<0)then
+           if(parts%rhos(k)==0) cycle
+          lapsx =  2.*sqrt(parts%dgu(1,k)**2+parts%dgu(2,k)**2) * parts%mons(1,k)/parts%rhos(k)
+          lapsy =  2.*sqrt(parts%dgu(1,k)**2+parts%dgu(2,k)**2) * parts%mons(2,k)/parts%rhos(k)            
+            lap(1,i) = lap(1,i) - lapsx
+            lap(2,i) = lap(2,i) - lapsy
+       endif
       enddo
 
       
