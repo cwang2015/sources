@@ -290,11 +290,11 @@ contains
 !                  read(pvalu,*) dry_soil
 !                  write(*,*) 'Dry soil = ', dry_soil
 
-!      case('PARTICLE SIZE')
+      case('PARTICLE SIZE')
 !                  ndim = 1
 !                  if(ncoma>=ndim) call trim_pvalu(trim(pvalu),',',ndim)
-!                  read(pvalu,*) particle_size
-!                  write(*,*) 'Particle size = ', particle_size
+                  read(pvalu,*) parts%particle_size
+                  write(*,*) 'Particle size = ', parts%particle_size
 
 !       case('OPERATING MODE')
 !
@@ -318,6 +318,11 @@ contains
           write(*,*) 'Water property: rho0, b, gamma, c, viscosity' 
           write(*,*) h2o%rho0, h2o%b, h2o%gamma, h2o%c, h2o%viscosity
 
+      case('WATER PRESSURE')
+          read(pvalu,*) parts%water_pressure
+          write(*,*) 'Water pressure: 0=hydro-static, 1=dynamic'
+          write(*,*) parts%water_pressure    
+
       case('SOIL PROPERTY')
 
           read(pvalu,*) sio2%rho0, sio2%k, sio2%E, sio2%niu, sio2%c
@@ -336,9 +341,21 @@ contains
 
       case('SOIL FAILURE CRITERIA')
        
-          read(pvalu,*) sio2%cohesion, SIO2%phi
-          write(*,*) 'Soil failure criteria: cohesion, phi'
-          write(*,*) sio2%cohesion, sio2%phi
+          read(pvalu,*) sio2%cohesion, SIO2%phi, sio2%psi
+          write(*,*) 'Soil failure criteria: cohesion, phi, psi'
+          write(*,*) sio2%cohesion, sio2%phi, sio2%psi
+
+      case('FLOW RULE')
+
+          read(pvalu,*) parts%flow_rule
+          write(*,*) 'Flow rule: 1, associated, 2, non-associated'
+          write(*,*) parts%flow_rule
+
+      case('CRITICAL STATE')
+          read(pvalu,*) parts%critical_state
+          write(*,*) 'Critical state: '
+          write(*,*) parts%critical_state
+          soil%critical_state = parts%critical_state
 
       case('TIME STEP SIZE')
                   ndim = 1
@@ -363,6 +380,12 @@ contains
           write(*,*) 'Background grid grange: x_min, x_max, y_min, y_max'
           write(*,*) parts%x_mingeom,parts%x_maxgeom,  & 
                      parts%y_mingeom,parts%y_maxgeom
+
+      case('USAW')
+                  read(pvalu,*) parts%usaw
+          write(*,*) 'unified semi-analytical wall boundary condition'
+          write(*,*) parts%usaw
+          soil%usaw = parts%usaw
 
       case DEFAULT
 
@@ -401,6 +424,20 @@ allocate(parts%grid(parts%maxngx,parts%maxngy,parts%maxngz)); parts%grid = 0
 allocate(parts%xgcell(dim,maxn)); parts%xgcell = 0
 allocate(parts%celldata(maxn)); parts%celldata = 0
 allocate(parts%norm(2,10000))
+
+! Sherpard Filter
+allocate(parts%wi); call parts%wi%set(rank=0,parts=parts,name = ' ')
+call parts%wi%max_alloc
+parts%wi%r = 0.d0
+
+! Boundary information
+allocate(parts%bn); call parts%bn%set(rank=1,parts=parts,name='bn')
+call parts%bn%max_alloc
+parts%bn = 0.d0
+
+allocate(parts%bs); call parts%bs%set(rank=0,parts=parts, name='bs')
+call parts%bs%max_alloc
+parts%bs = 0.d0
 
 ! Fields variables
 
@@ -474,11 +511,24 @@ soil%wxy => soil%tab%xy
 soil%material => SiO2
 soil%numeric => parts%numeric
 
+soil%flow_rule = parts%flow_rule
+
 soil%x_maxgeom = parts%x_maxgeom; soil%x_mingeom = parts%x_mingeom
 soil%y_maxgeom = parts%y_maxgeom; soil%y_mingeom = parts%y_mingeom
 
 call soil%get_num_threads
 allocate(soil%niac_start(soil%nthreads),soil%niac_end(soil%nthreads))
+
+if(soil%critical_state==1)then
+   allocate(soil%dvof); call soil%dvof%set(rank=0,parts=soil,name='dvof')
+   call soil%dvof%max_alloc; soil%dvof%r = 0.d0   
+   allocate(soil%vof_min)
+   call soil%vof_min%set(rank=0,parts=soil,name='vof_min')
+   call soil%vof_min%max_alloc; soil%vof_min%r = 0.d0   
+
+   allocate(soil%psi); call soil%psi%set(rank=0,parts=soil,name='psi')
+   call soil%psi%max_alloc; soil%psi%r = 0.d0   
+endif
 
 return
 end subroutine
@@ -559,6 +609,14 @@ allocate(parts%av); call parts%av%set(rank=1,parts=parts,name='av')
 call parts%av%max_alloc
 parts%av%x%r  = 0.d0; parts%av%y%r  = 0.d0
 
+! For particle shifting
+allocate(parts%r0);call parts%r0%set(rank=0,parts=parts,name='r0')
+call parts%r0%max_alloc; parts%r0%r = 0.d0
+allocate(parts%mt);call parts%mt%set(rank=0,parts=parts,name='mt')
+call parts%mt%max_alloc; parts%mt%r = 0.d0
+allocate(parts%ps); call parts%ps%set(rank=1,parts=parts,name='ps')
+call parts%ps%max_alloc
+parts%ps%x%r  = 0.d0; parts%ps%y%r  = 0.d0
 
 ! Volume Fraction
 allocate(parts%vof); call parts%vof%set(rank=0,parts=parts,name='vof')
@@ -582,6 +640,26 @@ if(trim(parts%imaterial)=='soil')then
 !   allocate(parts%str%x%r(maxn), parts%str%y%r(maxn), parts%str%xy%r(maxn))
    call parts%str%set(rank=2,parts=parts,name='str'); call parts%str%max_alloc
    parts%str%x%r = 0.d0; parts%str%xy%r = 0.d0; parts%str%y%r = 0.d0   !!! %r
+   
+   
+    !artificial stress
+    allocate(parts%strp); 
+    call parts%strp%set(rank=2,parts=parts,name='strp')
+    call parts%strp%max_alloc
+    parts%strp%x%r = 0.d0; parts%strp%y%r = 0.d0; parts%strp%xy%r = 0.d0
+    
+    allocate(parts%ast); call parts%ast%set(rank=2,parts=parts,name='ast')
+    call parts%ast%max_alloc
+    parts%ast%x%r = 0.d0; parts%ast%y%r = 0.d0; parts%ast%xy%r = 0.d0
+    
+    allocate(parts%astp); call parts%astp%set(rank=2,parts=parts,name='astp')
+    call parts%astp%max_alloc
+    parts%astp%x%r = 0.d0; parts%astp%y%r = 0.d0; parts%astp%xy%r = 0.d0
+    
+    allocate(parts%thetai); call parts%thetai%set(rank=0,parts=parts,name='thetai')
+    call parts%thetai%max_alloc
+    parts%thetai%r = 0.d0
+   
 
    allocate(parts%str_min)
    !allocate(parts%str_min%x,parts%str_min%y,parts%str_min%xy)
@@ -631,6 +709,7 @@ if(trim(parts%imaterial)=='soil')then
    allocate(parts%spp)   !!! VOF
    call parts%spp%set(rank=0,parts=parts,name='spp'); call parts%spp%max_alloc
    parts%spp%r = 0.d0
+
 endif
 
 !allocate(parts%drhodx); allocate(parts%drhodx%r(maxn))
@@ -677,7 +756,13 @@ end subroutine
                              !if(.not.single_phase)then
                                 pl => soil
                                 call first_half
+
+                                if(pl%critical_state==0)then
                                 call drucker_prager_failure_criterion(pl)
+                                else
+                        call  drucker_prager_failure_criterion_critical_state(pl)
+                                endif
+
                                 !call volume_fraction_soil(soil)
                                 !call volume_fraction_water(parts, soil)
                              !endif  
@@ -712,8 +797,13 @@ end subroutine
                                        call plastic_or_not(pl)
                                        call return_mapping
                                     endif
-
+                                    
+                                    if(pl%critical_state==0)then
                                     call drucker_prager_failure_criterion(pl)
+                                    else
+                   call drucker_prager_failure_criterion_critical_state(pl)
+                                    endif
+
                                     !call volume_fraction_soil(soil)
                                     !call volume_fraction_water(parts, soil)
                                 !endif
@@ -731,7 +821,13 @@ end subroutine
                                       call return_mapping
                                    endif
 
-                                   call drucker_prager_failure_criterion(pl)
+                                    if(pl%critical_state==0)then
+                                    call drucker_prager_failure_criterion(pl)
+                                    else
+                   call drucker_prager_failure_criterion_critical_state(pl)
+                                    endif
+
+                                   
                                    !call volume_fraction_soil(soil)
                                    !call volume_fraction_water(parts, soil)
                                 !endif
@@ -791,7 +887,13 @@ type(p2r) vxi(3), dvxi(3), v_mini(3)
             pl%vof_min = pl%vof
             pl%vof = pl%vof+(pl%dt/2.)*pl%dvof 
          endif
- 
+
+         if(trim(pl%imaterial)=='soil'.and.pl%critical_state==1)then
+            pl%vof_min = pl%vof
+            pl%vof = pl%vof+(pl%dt/2.)*pl%dvof 
+         endif
+
+
          if(trim(pl%imaterial)=='soil')then
                   if(pl%stress_integration==1)then
          !pl%sxx(i) = pl%sxx(i) + dt*pl%dsxx(i)   ! Nothing to do!
@@ -832,7 +934,7 @@ type(p2r) vxi(3), dvxi(3), v_mini(3)
       subroutine first_step
 ! -------------------------------------------------------------------
       implicit none
-      type(p2r) vxi(3), dvxi(3), v_mini(3), avi(3)
+      type(p2r) vxi(3), dvxi(3), v_mini(3), avi(3),psi(3)
 
 !      do i=1,pl%ntotal +pl%nvirt     ! origionally pl%ntotal
          
@@ -843,6 +945,11 @@ type(p2r) vxi(3), dvxi(3), v_mini(3)
          if(trim(pl%imaterial)=='water'.and.pl%volume_fraction)then
             pl%vof = pl%vof+(pl%dt/2.)*pl%dvof
          endif
+
+         if(trim(pl%imaterial)=='soil'.and.pl%critical_state==1)then
+            pl%vof = pl%vof+(pl%dt/2.)*pl%dvof
+         endif
+
 
          if(trim(pl%imaterial)=='soil')then
                   if(pl%stress_integration==1)then
@@ -861,12 +968,14 @@ type(p2r) vxi(3), dvxi(3), v_mini(3)
       do i=1,pl%ntotal +pl%nvirt     ! origionally pl%ntotal
          if(pl%itype(i)<0)cycle
          vxi = pl%vx%cmpt(i); dvxi = pl%dvx%cmpt(i); avi = pl%av%cmpt(i)
+         psi = pl%ps%cmpt(i)
          do d = 1, pl%dim        
             !pl%vx(d, i) = pl%vx(d, i) + (dt/2.) * pl%dvx(d, i)   &
             !            + pl%av(d, i)
             !pl%x(d, i) = pl%x(d, i) + dt * pl%vx(d, i)
             vxi(d)%p = vxi(d)%p + (pl%dt/2.) * dvxi(d)%p + avi(d)%p
-            pl%x(d, i) = pl%x(d, i) + pl%dt * vxi(d)%p            
+            !pl%x(d, i) = pl%x(d, i) + pl%dt * vxi(d)%p            
+            pl%x(d, i) = pl%x(d, i) + pl%dt * (vxi(d)%p+psi(d)%p)   !!! Shifting            
          enddo           
             !pl%vx(1, i) = pl%vx(1, i) + (dt/2.) * pl%dvx%x%r(i)   &
             !            + pl%av(1, i)
@@ -882,7 +991,7 @@ type(p2r) vxi(3), dvxi(3), v_mini(3)
       subroutine second_half
 ! ------------------------------------------------------------------
       implicit none
-      type(p2r) vxi(3), dvxi(3), v_mini(3),avi(3)
+      type(p2r) vxi(3), dvxi(3), v_mini(3),avi(3), psi(3)
       !$omp parallel do private(d,vxi,dvxi,v_mini,avi)
       do i=1,pl%ntotal +pl%nvirt  ! origionally pl%ntotal            
             
@@ -894,6 +1003,11 @@ type(p2r) vxi(3), dvxi(3), v_mini(3)
             pl%vof%r(i) = pl%vof_min%r(i)+pl%dt*pl%dvof%r(i) 
          endif
                  
+         if(trim(pl%imaterial)=='soil'.and.pl%critical_state==1)then
+            pl%vof%r(i) = pl%vof_min%r(i)+pl%dt*pl%dvof%r(i) 
+         endif
+
+
          if(trim(pl%imaterial)=='soil')then 
                   if(pl%stress_integration==1)then 
          pl%str%x%r(i) = pl%str%x%r(i) + pl%dt*pl%dstr%x%r(i)
@@ -910,14 +1024,15 @@ type(p2r) vxi(3), dvxi(3), v_mini(3)
         
          if(pl%itype(i)<0)cycle
          vxi = pl%vx%cmpt(i); dvxi = pl%dvx%cmpt(i) ; v_mini = pl%v_min%cmpt(i)
-         avi = pl%av%cmpt(i)
+         avi = pl%av%cmpt(i); psi = pl%ps%cmpt(i)
          do d = 1, pl%dim                   
             !pl%vx(d, i) = pl%v_min(d, i) + dt * pl%dvx(d, i)   &
             !            + pl%av(d, i)
             !pl%x(d, i) = pl%x(d, i) + dt * pl%vx(d, i)
             vxi(d)%p = v_mini(d)%p + pl%dt * dvxi(d)%p   &
                         + avi(d)%p
-            pl%x(d, i) = pl%x(d, i) + pl%dt * vxi(d)%p
+            !pl%x(d, i) = pl%x(d, i) + pl%dt * vxi(d)%p
+            pl%x(d, i) = pl%x(d, i) + pl%dt * (vxi(d)%p + psi(d)%p)
          !if(i>4160)write(*,*) i,vxi(2)%p
          enddo
             !pl%vx(1, i) = pl%v_min(1, i) + dt * pl%dvx%x%r(i)   &
@@ -1413,6 +1528,8 @@ do it = 1, parts%maxtimestep
       call output
    endif 
 
+
+
 enddo
 
 return
@@ -1449,6 +1566,7 @@ pl%dvx%x = 0.d0; pl%dvx%y = 0.d0; pl%drho = 0.d0
 if(trim(pl%imaterial)=='water')pl%dvof = 0.d0
 if(trim(pl%imaterial)=='soil')then
    pl%dstr%x = 0.d0; pl%dstr%xy = 0.d0; pl%dstr%y = 0.d0; pl%dp = 0.d0
+   if(pl%critical_state==1) pl%dvof = 0.d0
 endif
 
 !if(trim(pl%imaterial)=='water') call inlet_boundary2
@@ -1469,6 +1587,8 @@ else if (pl%nnps.eq.3) then
 !        call tree_search(itimestep, ntotal+nvirt,hsml,x,niac,pair_i,
 !     &       pair_j,w,dwdx,ns)
 endif         
+
+call count_interaction(pl)   ! Added for particle shifting
 
 if(mod(pl%itimestep,pl%print_step).eq.0.and.pl%int_stat) then
    call pl%interaction_statistics
@@ -1513,6 +1633,14 @@ pl%tab%x = 2.d0/3.d0*(2.d0*pl%df4(pl%vx%x,'x')-pl%df4(pl%vx%y,'y'))
 pl%tab%xy = pl%df4(pl%vx%x,'y')+pl%df4(pl%vx%y,'x')
 pl%tab%y = 2.d0/3.d0*(2.d0*pl%df4(pl%vx%y,'y')-pl%df4(pl%vx%x,'x'))
 
+if(trim(pl%imaterial)=='soil'.and.pl%critical_state==1)then
+   call volume_fraction_soil_critical_state(pl)
+   !write(*,*) 'sdfa'
+   !write(*,*) pl%vof%r(1:10)
+   !write(*,*) pl%psi%r(1:10)
+   !write(*,*) pl%dvof%r(1:10)
+endif
+
 if(trim(pl%imaterial)=='soil') pl%vcc = pl%div_omp(pl%vx)
 !call velocity_divergence(pl)
 
@@ -1525,7 +1653,11 @@ elseif(trim(pl%imaterial)=='soil')then
    if(pl%yield_criterion == 1)then
       call mohr_coulomb_failure_criterion(pl)
    elseif(pl%yield_criterion == 2)then
+           if(pl%critical_state==0)then
       call drucker_prager_failure_criterion(pl)
+           else
+      call drucker_prager_failure_criterion_critical_state(pl)
+           endif
    endif
 
    if(mod(pl%itimestep,pl%print_step).eq.0)    &
@@ -1578,9 +1710,21 @@ if(trim(pl%imaterial)=='soil')then
    elseif(pl%plasticity==2)then     
       call plastic_flow_rule2(pl)
    elseif(pl%plasticity==3)then
+
+           if(pl%critical_state==0)then
       call plastic_or_not(pl)
-!      call plastic_flow_rule3(pl)
-   call non_associated_plastic_flow_rule3(pl)
+           else
+      call plastic_or_not_critical_state(pl)
+           endif
+
+      if(pl%flow_rule==1) call plastic_flow_rule3(pl)
+      if(pl%flow_rule==2)then
+         if(pl%critical_state==0)then
+              call non_associated_plastic_flow_rule3(pl)
+         else
+              call non_associated_flow_rule_critical_state(pl)
+         endif
+      endif        
    endif
 endif
 
@@ -1624,6 +1768,7 @@ pl%dvx%y = pl%dvx%y + pl%gravity
 !     Calculating average velocity of each partile for avoiding penetration
 
 if (pl%average_velocity) call av_vel_omp(pl) !!!!!!!##########
+call particle_shifting(pl)
 
 !---  Convert velocity, force, and energy to f and dfdt  
       
@@ -1659,13 +1804,21 @@ endif
       endif    
 
       call darcy_law_omp(parts,soil)          
-      !call pore_water_pressure_omp(parts,soil) 
-      soil%dvx%y = soil%dvx%y - pl%gravity*(1./2.7)
+      if(parts%water_pressure==1)then 
+         call pore_water_pressure_omp(parts,soil)
+      else  !!Hydrostatic pressure
+         soil%dvx%y = soil%dvx%y - pl%gravity*(1./2.7)
+      endif
 
       if(parts%volume_fraction)then
+              if(parts%critical_state==0)then
          call volume_fraction_soil_omp(soil)
+              else
+         !call volume_fraction_soil_critical_state(soil)             
+              endif
          call volume_fraction_water2_omp(parts,soil)
          call volume_fraction_water_omp(parts,soil)  ! phi_f = 1- phi_s
+         !call volume_fraction_water_omp_with_filter(parts,soil)  ! phi_f = 1- phi_s
          if(parts%volume_fraction_renorm)then
             if(mod(parts%itimestep,40).eq.0) then
                ntotal = parts%ntotal+parts%nvirt
@@ -1855,6 +2008,7 @@ implicit none
 
 type(particles), pointer :: pl
 type(material), pointer :: property
+integer i
 
 pl => parts
 property => pl%material
@@ -1862,15 +2016,20 @@ property => pl%material
 pl%dvx%x = 0.d0; pl%dvx%y = 0.d0; pl%drho = 0.d0
 pl%dstr%x = 0.d0; pl%dstr%xy = 0.d0; pl%dstr%y = 0.d0
 pl%dp = 0.d0
- 
 !---  Interaction parameters, calculating neighboring particles
 !     and optimzing smoothing length
-  
+
 call pl%find_pairs
 
 if(mod(pl%itimestep,pl%print_step).eq.0.and.pl%int_stat) then
    call pl%interaction_statistics
-endif   
+endif  
+
+! For USAW
+if(pl%usaw)then
+   call Sherpard_filter(pl)
+   call get_boundary_field(pl,pl%rho)
+endif
 
 !---  Density approximation or change rate
      
@@ -1878,14 +2037,20 @@ if (pl%summation_density) then
     call sum_density(pl)
 else             
     !call con_density(pl)
-    pl%drho = -pl%rho*pl%div2(pl%vx)    
+    pl%drho = -pl%rho*pl%div2_USAW(pl%vx)    
 endif
+
+
+
       
 if(pl%artificial_density)then
    !if(trim(pl%imaterial)=='water')then
       !!call renormalize_density_gradient(pl)
       !call art_density(pl)
+      !if(.not.pl%usaw)then
       call delta_sph_omp(pl,pl%rho,pl%drho)
+!      call diffusive_sph_omp(pl,pl%rho,pl%drho)
+      !endif
    !endif
 endif
 
@@ -1905,7 +2070,23 @@ pl%tab%y = 2.d0/3.d0*(2.d0*pl%df4_omp(pl%vx%y,'y')-pl%df4_omp(pl%vx%x,'x'))
 
 pl%vcc = pl%div_omp(pl%vx)
 
+if(pl%usaw)then
+   call get_boundary_field(pl,pl%tab%x)
+   call get_boundary_field(pl,pl%tab%xy)
+   call get_boundary_field(pl,pl%tab%y)
+   call get_boundary_field(pl,pl%vcc)
+endif
+
+
 call pressure(pl)
+
+if(pl%usaw)then
+   call get_boundary_field(pl,pl%str%x)
+   call get_boundary_field(pl,pl%str%xy)
+   call get_boundary_field(pl,pl%str%y)
+   call get_boundary_field(pl,pl%p)
+endif
+
 
 if(pl%yield_criterion == 1)then
    call mohr_coulomb_failure_criterion(pl)
@@ -1918,8 +2099,20 @@ endif
 pl%dvx%x = -pl%df3_omp(pl%p,'x') + pl%df3_omp(pl%str%x,'x') + pl%df3_omp(pl%str%xy,'y')
 pl%dvx%y = -pl%df3_omp(pl%p,'y') + pl%df3_omp(pl%str%xy,'x') + pl%df3_omp(pl%str%y,'y')
 
+     if(pl%usaw)then
+
+do i = 1, pl%ntotal + pl%nvirt
+   if(pl%itype(i)<0)cycle
+   pl%dvx%x%r(i) = pl%dvx%x%r(i)/pl%rho%r(i)
+   pl%dvx%y%r(i) = pl%dvx%y%r(i)/pl%rho%r(i)
+enddo
+
+     else
+
 pl%dvx%x = pl%dvx%x/pl%rho
-pl%dvx%y = pl%dvx%y/pl%rho       
+pl%dvx%y = pl%dvx%y/pl%rho     
+
+     endif
 
 ! --- Plasticity flow rule   ! This was done before Jaummann_rate, because we 
 !     we need txx,tyy,tzz, which was destroyed in Jaumann_rate!
@@ -1930,24 +2123,36 @@ elseif(pl%plasticity==2)then
    call plastic_flow_rule2(pl)
 elseif(pl%plasticity==3)then
    call plastic_or_not(pl)
-   call plastic_flow_rule3(pl)
-!!   call non_associated_plastic_flow_rule3(pl)
+!   call plastic_flow_rule3(pl)
+   call non_associated_plastic_flow_rule3(pl)
 endif
 
 ! --- Jaumann rate  !When???
 
 call Jaumann_rate(pl)
 
+!                                 if(.not.pl%usaw)then
+
 !---  Artificial viscosity:
 
 if (pl%visc_artificial) call pl%art_visc_omp
 
+
 !if(soil_artificial_stress) call art_stress(pl)
+
+if(pl%soil_artificial_stress) call artificial_stress(pl)   ! LU Shi Yang
+
+!                                 endif
+
 if(pl%soil_artificial_stress)then
    call pl%delta_sph_omp(pl%p,pl%dp)
    call pl%delta_sph_omp(pl%str%x,pl%dstr%x)
    call pl%delta_sph_omp(pl%str%xy,pl%dstr%xy)
    call pl%delta_sph_omp(pl%str%y,pl%dstr%y)
+!   call pl%diffusive_sph_omp(pl%p,pl%dp)
+!   call pl%diffusive_sph_omp(pl%str%x,pl%dstr%x)
+!   call pl%diffusive_sph_omp(pl%str%xy,pl%dstr%xy)
+!   call pl%diffusive_sph_omp(pl%str%y,pl%dstr%y)
 endif   
 
 !--- Damping
@@ -1962,14 +2167,15 @@ endif
 !      endif
 
 pl%dvx%y = pl%dvx%y + pl%gravity
-
 ! Calculating the neighboring particles and undating HSML
       
 !if (sle.ne.0) call h_upgrade(pl)
      
 ! Calculating average velocity of each partile for avoiding penetration
 
+!                                                if(.not.pl%usaw)then
 if (pl%average_velocity) call av_vel_omp(pl) 
+!                                                endif
 
 !---  Convert velocity, force, and energy to f and dfdt  
       
@@ -2080,7 +2286,7 @@ matt => soil%material
    write(f_other,*) 'porosity, permeability = '
    write(f_other,*) matt%porosity, matt%permeability
    write(f_other,*) 'Cohesion, phi = '
-   write(f_other,*) matt%cohesion, matt%phi
+   write(f_other,*) matt%cohesion, matt%phi, matt%psi
 
 return
 end subroutine
@@ -2135,7 +2341,7 @@ end subroutine
 
       write(f_xv,*) 'VARIABLES="X","Y","Pressure", "VoF", "ep",' 
       write(f_xv,*) '"sxy", "sxx","syy","vx","vy", "rho", "mass", '
-      write(f_xv,*) '"sigma_yy", "zone" '
+      write(f_xv,*) '"sigma_yy", "zone","filter " '
       write(f_xv,*) 'ZONE I=', ntotal, ' F=BLOCK'
  
       write(f_xv,*)  (parts%x(1,i),i=1,ntotal)
@@ -2158,6 +2364,7 @@ end subroutine
       write(f_xv,*)  (parts%mass%r(i),i=1,ntotal)
       write(f_xv,*)  (-parts%p%r(i) + parts%str%y%r(i),i=1,ntotal)
       write(f_xv,*)  (parts%zone(i),i=1,ntotal)
+      write(f_xv,*)  (parts%wi%r(i),i=1,ntotal)
       write(f_other,*) parts%time, -parts%p%r(395)+parts%str%y%r(395)
 
              endif
@@ -2167,6 +2374,7 @@ end subroutine
       write(f_state,*) 'VARIABLES="X","Y","Pressure", "VoF", "ep", '
       write(f_state,*) '"sxy", "sxx","syy","vx","vy", "rho","mass" '
       write(f_state,*) '"sigma_yy", "zone" '
+      if(soil%critical_state==1) write(f_state,*) ' "psi" '
       write(f_state,*) 'ZONE I=', ntotal2, ' F=BLOCK'
  
       write(f_state,*)  (soil%x(1,i),i=1,ntotal2)
@@ -2193,6 +2401,8 @@ end subroutine
       !write(f_other,*) time, -soil%p(395)+soil%syy(395)
       !write(f_other,*) time, -parts%p(420)+parts%syy(420)
 
+      if(soil%critical_state==1) write(f_state,*) (soil%psi%r(i), i= 1, ntotal2)
+      !write(*,*) soil%psi%r(1:10)
       return
       end subroutine
 

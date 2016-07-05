@@ -13,16 +13,18 @@ double precision element_size, soil_submerged_depth
 
 ! Set nozzle and tank geometry parameters
 
-call tank%set(xl=0.2d0,yl=0.3d0,m=80,n=120)
+call tank%set(xl=0.2d0,yl=0.3d0,m=160,n=240)
 npoint = tank%m*tank%n
+tank%np= npoint
 allocate(tank%x(npoint),tank%y(npoint),tank%zone(npoint))
 call tank%cell_center
 tank%x = tank%x - 0.1
 !      write(*,*) 'x=', tank%x
 !      write(*,*) 'y=', tank%y
 
-call nozzle%set(xl=0.02d0,yl=0.1d0,m=8,n=40)
+call nozzle%set(xl=0.02d0,yl=0.1d0,m=16,n=80)
 npoint = nozzle%m*nozzle%n
+nozzle%np = npoint
 allocate(nozzle%x(npoint),nozzle%y(npoint),nozzle%zone(npoint))
 call nozzle%cell_center
 nozzle%x = nozzle%x - 0.01
@@ -68,8 +70,8 @@ call soil%take_virtual(tank,1)
 call soil%take_virtual(tank,3)
 call soil%take_virtual(tank,7)
 
-call parts%setup_ndim1
-call soil%setup_ndim1
+!call parts%setup_ndim1
+!call soil%setup_ndim1
 
 ! Basic settings for particles (vol,hsml,itype)
 ! vol means the volume of a cell. We calculate the mass of each particle according to mass = rho*vol
@@ -77,7 +79,7 @@ call soil%setup_ndim1
 parts%vol = tank%dx*tank%dy
 parts%hsml = tank%dx*1.2
 parts%dspp = tank%dx
-parts%dt   = dt
+!parts%dt   = dt
 
 ! itype is positive for real particles, negative for virtual particles.
  
@@ -97,7 +99,7 @@ enddo
 water_surface = 0.2
 wass => parts%material
 do i = 1,parts%ntotal+parts%nvirt
-   parts%p%r(i) = wass%rho0*gravity*(parts%x(2,i)-water_surface)
+   parts%p%r(i) = wass%rho0*parts%gravity*(parts%x(2,i)-water_surface)
    !if(parts%zone(i)==3.or.parts%zone(i)==4)parts%p%r(i)=0.0
    if(parts%p%r(i)<0.d0) parts%p%r(i) =0.d0
    if(parts%zone(i)==4) parts%p%r(i) = 0.d0
@@ -116,8 +118,8 @@ do i = 1, parts%ntotal + parts%nvirt
    if(parts%zone(i)==8)parts%vof%r(i) = 1.d0
    !if(parts%zone(i)==10)parts%vof%r(i) = 1.d0
 enddo
-if(single_phase) parts%vof = 1.0
-if(.not.volume_fraction)  parts%vof = 1.0
+if(parts%single_phase) parts%vof = 1.0
+if(.not.parts%volume_fraction)  parts%vof = 1.0
 
 ! Density and Mass
 
@@ -132,7 +134,7 @@ parts%mass = parts%vol * parts%rho
 soil%vol = tank%dx*tank%dy
 soil%hsml = tank%dx*1.2
 soil%dspp = tank%dx
-soil%dt = dt
+soil%dt = parts%dt
 
 ! itype is positive for real particles, negative for virtual particles.
  
@@ -147,7 +149,7 @@ soil%vx%x = 0.d0; soil%vx%y = 0.d0
 soil_surface = 0.10
 sand => soil%material
 do i = 1,soil%ntotal+soil%nvirt
-   soil%p%r(i) = (sand%rho0-wass%rho0)*gravity*(soil%x(2,i)-soil_surface)
+   soil%p%r(i) = (sand%rho0-wass%rho0)*soil%gravity*(soil%x(2,i)-soil_surface)
    !if(soil%zone(i)==3)soil%p%r(i)=0.0
    if(soil%x(2,i)>0.1)soil%p%r(i) = 0.d0
 enddo
@@ -166,7 +168,7 @@ soil%vof = 0.5d0
 !do i = 1, soil%ntotal+soil%nvirt
 !   if(soil%x(2,i)>0.1)soil%vof%r(i) = 0.d0
 !enddo
-if(.not.volume_fraction)soil%vof = 1.0
+if(.not.soil%volume_fraction)soil%vof = 1.0
 
 ! Density and Mass
 
