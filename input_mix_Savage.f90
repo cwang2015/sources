@@ -10,18 +10,18 @@ type(block) nozzle, tank
 type(material), pointer :: wass,sand
 double precision soil_surface,water_surface,initial_water_volume_fraction
 logical :: dbg = .false.
-double precision element_size, soil_submerged_depth    
+double precision element_size, soil_submerged_depth, column_length    
 
 ! Set nozzle and tank geometry parameters
 
 !call tank%set(xl=0.2d0,yl=0.1d0,m=80,n=40)
 !call tank%set(xl=0.25d0,yl=0.125d0,m=100,n=50)
-call tank%set(xl=0.26d0,yl=0.13d0,m=52,n=26)
-!if(parts%particle_size==1)then
-!  call tank%set(xl=0.26d0,yl=0.13d0,m=104,n=52)     !0.0025
-!elseif(parts%particle_size==2)then
-!  call tank%set(xl=0.26d0,yl=0.13d0,m=208,n=104)     !0.00125
-!endif
+!call tank%set(xl=0.26d0,yl=0.13d0,m=52,n=26)
+if(parts%particle_size==1)then
+  call tank%set(xl=0.26d0,yl=0.13d0,m=104,n=52)     !0.0025
+elseif(parts%particle_size==2)then
+  call tank%set(xl=0.26d0,yl=0.13d0,m=208,n=104)     !0.00125
+endif
 !call tank%set(xl=0.26d0,yl=0.13d0,m=208,n=104)
 !call tank%set(xl=0.26d0,yl=0.13d0,m=416,n=208)
 !call tank%set(xl=0.26d0,yl=0.13d0,m=832,n=416)
@@ -39,18 +39,19 @@ tank%x = tank%x-0.01; tank%y = tank%y - 0.01
 
 ! Loose or Dense packing:
 
-soil_surface = 0.048 !0.048
-initial_water_volume_fraction = 0.45 !0.45
+soil_surface = 0.08 !0.048
+column_length = 0.02
+initial_water_volume_fraction = 0.40 !0.45
 
 tank%zone = 2
 do i = 1, tank%m*tank%n
    if(tank%x(i)<0.d0.or.tank%x(i)>0.24.or.tank%y(i)<0.d0) tank%zone(i) = 1
 !   if(tank%x(i)<0.025.or.tank%x(i)>0.475.or.tank%y(i)<0.025) tank%zone(i) = 1
-   if(tank%zone(i)==1.and.tank%x(i)>0.06)tank%zone(i)=3
+   if(tank%zone(i)==1.and.tank%x(i)>column_length)tank%zone(i)=3
    if(tank%zone(i)==1.and.tank%y(i)>soil_surface)tank%zone(i)=5    !0.08 !0.048
    if(tank%zone(i)==5.and.tank%y(i)>0.1)tank%zone(i)=6      !0.1
    if(tank%zone(i)==3.and.tank%y(i)>0.1)tank%zone(i)=6      !0.1
-   if(tank%zone(i)==2.and.tank%x(i)>0.06)tank%zone(i)=4
+   if(tank%zone(i)==2.and.tank%x(i)>column_length)tank%zone(i)=4
    if(tank%zone(i)==2.and.tank%y(i)>soil_surface)tank%zone(i)=4     !0.08  !0.048
    if(tank%zone(i)==4.and.tank%y(i)>0.1)tank%zone(i)=7      !0.1
 enddo
@@ -65,6 +66,8 @@ call parts%take_virtual(tank,6)
 !call parts%take_virtual(tank,7)   !!! Rigid lip assumption!
 
 call soil%take_real(tank,2)
+
+!! If Slip boundary, comment these.
 call soil%take_virtual(tank,1)
 call soil%take_virtual(tank,3)
 call soil%take_virtual(tank,5)
@@ -173,4 +176,176 @@ return
 end subroutine
 
 
+!----------------------------------------
+    subroutine inlet_boundary2  
+!----------------------------------------
+use declarations_sph
+implicit none
 
+
+return
+end subroutine
+
+
+!----------------------------------------
+    subroutine symmetry_boundary(parts)  
+!----------------------------------------
+use m_particles
+implicit none
+type(particles) parts
+
+return
+end subroutine
+
+!----------------------------------------
+    subroutine slip_boundary(parts)  ! Verticle symmetry plane
+!----------------------------------------
+use m_particles
+implicit none
+type(particles) parts 
+integer i, k,ntotal
+
+ntotal = parts%ntotal + parts%nvirt
+k = 0 
+do i = 1, parts%ntotal + parts%nvirt
+   if(parts%x(1,i)<0.01)then
+      k = k + 1 
+      parts%x(1,ntotal+k) = -parts%x(1,i)
+      parts%x(2,ntotal+k) =  parts%x(2,i)
+      parts%vx%x%r(ntotal+k)= -parts%vx%x%r(i)
+      parts%vx%y%r(ntotal+k)=  parts%vx%y%r(i)
+      parts%p%r(ntotal+k)   = parts%p%r(i)
+      parts%vof%r(ntotal+k) = parts%vof%r(i)
+      if(associated(parts%vof2))parts%vof2%r(ntotal+k) = parts%vof2%r(i)
+      parts%vol%r(ntotal+k) = parts%vol%r(i)
+      parts%hsml(ntotal+k) =  parts%hsml(i)
+      parts%rho%r(ntotal+k) = parts%rho%r(i)
+      parts%mass%r(ntotal+k)  = parts%mass%r(i)
+      parts%itype(ntotal+k) = parts%itype(i)
+      parts%zone(ntotal+k) = parts%zone(i)
+      parts%c%r(ntotal+k) =  parts%c%r(i)
+      if(associated(parts%psi)) parts%psi%r(ntotal+k) =  parts%psi%r(i)
+
+      !parts%rho_min%r(ntotal+k) = parts%rho_min%r(i)
+      !parts%p_min%r(ntotal+k)   = parts%p_min%r(i)
+      !parts%vof_min%r(ntotal+k) = parts%vof_min%r(i)
+      !parts%v_min%x%r(ntotal+k) =  parts%v_min%x%r(i)
+      !parts%v_min%y%r(ntotal+k) = -parts%v_min%y%r(i)
+
+      if(associated(parts%str))then
+      parts%str%x%r(ntotal+k) =  parts%str%x%r(i)    !!! -?
+      parts%str%y%r(ntotal+k) =  parts%str%y%r(i)
+      parts%str%xy%r(ntotal+k)=  -parts%str%xy%r(i)
+      endif
+
+      !parts%str_min%x%r(ntotal+k) = -parts%str_min%x%r(i)
+      !parts%str_min%y%r(ntotal+k) =  parts%str_min%y%r(i)
+      !parts%str_min%xy%r(ntotal+k)= -parts%str_min%xy%r(i)
+      
+      if(associated(parts%epsilon_p)) parts%epsilon_p%r(ntotal+k)= -parts%epsilon_p%r(i)  !!!+-?
+   endif
+enddo
+
+parts%nsymm = k
+
+parts%nvirt = parts%nvirt + k
+
+! Bottom wall
+ntotal = parts%ntotal + parts%nvirt
+k = 0 
+do i = 1, parts%ntotal + parts%nvirt
+   if(parts%x(2,i)<0.01)then
+      k = k + 1 
+      parts%x(1,ntotal+k) = parts%x(1,i)
+      parts%x(2,ntotal+k) = -parts%x(2,i)
+      parts%vx%x%r(ntotal+k)= parts%vx%x%r(i)
+      parts%vx%y%r(ntotal+k)=  -parts%vx%y%r(i)
+      parts%p%r(ntotal+k)   = parts%p%r(i)
+      parts%vof%r(ntotal+k) = parts%vof%r(i)
+      if(associated(parts%vof2))parts%vof2%r(ntotal+k) = parts%vof2%r(i)
+      parts%vol%r(ntotal+k) = parts%vol%r(i)
+      parts%hsml(ntotal+k) =  parts%hsml(i)
+      parts%rho%r(ntotal+k) = parts%rho%r(i)
+      parts%mass%r(ntotal+k)  = parts%mass%r(i)
+      parts%itype(ntotal+k) = parts%itype(i)
+      parts%zone(ntotal+k) = parts%zone(i)
+      parts%c%r(ntotal+k) =  parts%c%r(i)
+      if(associated(parts%psi)) parts%psi%r(ntotal+k) =  parts%psi%r(i)
+
+      !parts%rho_min%r(ntotal+k) = parts%rho_min%r(i)
+      !parts%p_min%r(ntotal+k)   = parts%p_min%r(i)
+      !parts%vof_min%r(ntotal+k) = parts%vof_min%r(i)
+      !parts%v_min%x%r(ntotal+k) =  parts%v_min%x%r(i)
+      !parts%v_min%y%r(ntotal+k) = -parts%v_min%y%r(i)
+
+      if(associated(parts%str))then
+      parts%str%x%r(ntotal+k) =  parts%str%x%r(i)    !!! -?
+      parts%str%y%r(ntotal+k) =  parts%str%y%r(i)
+      parts%str%xy%r(ntotal+k)=  -parts%str%xy%r(i)
+      endif
+
+      !parts%str_min%x%r(ntotal+k) = -parts%str_min%x%r(i)
+      !parts%str_min%y%r(ntotal+k) =  parts%str_min%y%r(i)
+      !parts%str_min%xy%r(ntotal+k)= -parts%str_min%xy%r(i)
+      
+      if(associated(parts%epsilon_p)) parts%epsilon_p%r(ntotal+k)= -parts%epsilon_p%r(i)  !!!+-?
+   endif
+enddo
+
+parts%nsymm = parts%nsymm + k
+
+parts%nvirt = parts%nvirt + k
+
+!! Right wall
+
+ntotal = parts%ntotal + parts%nvirt
+k = 0 
+do i = 1, parts%ntotal + parts%nvirt
+   if(parts%x(1,i)>0.23)then
+      k = k + 1 
+      parts%x(1,ntotal+k) = parts%x(1,ntotal+k)+2*(0.24-parts%x(1,i))
+      parts%x(2,ntotal+k) =  parts%x(2,i)
+      parts%vx%x%r(ntotal+k)= -parts%vx%x%r(i)
+      parts%vx%y%r(ntotal+k)=  parts%vx%y%r(i)
+      parts%p%r(ntotal+k)   = parts%p%r(i)
+      parts%vof%r(ntotal+k) = parts%vof%r(i)
+      if(associated(parts%vof2))parts%vof2%r(ntotal+k) = parts%vof2%r(i)
+      parts%vol%r(ntotal+k) = parts%vol%r(i)
+      parts%hsml(ntotal+k) =  parts%hsml(i)
+      parts%rho%r(ntotal+k) = parts%rho%r(i)
+      parts%mass%r(ntotal+k)  = parts%mass%r(i)
+      parts%itype(ntotal+k) = parts%itype(i)
+      parts%zone(ntotal+k) = parts%zone(i)
+      parts%c%r(ntotal+k) =  parts%c%r(i)
+      if(associated(parts%psi)) parts%psi%r(ntotal+k) =  parts%psi%r(i)
+
+      !parts%rho_min%r(ntotal+k) = parts%rho_min%r(i)
+      !parts%p_min%r(ntotal+k)   = parts%p_min%r(i)
+      !parts%vof_min%r(ntotal+k) = parts%vof_min%r(i)
+      !parts%v_min%x%r(ntotal+k) =  parts%v_min%x%r(i)
+      !parts%v_min%y%r(ntotal+k) = -parts%v_min%y%r(i)
+
+      if(associated(parts%str))then
+      parts%str%x%r(ntotal+k) =  parts%str%x%r(i)    !!! -?
+      parts%str%y%r(ntotal+k) =  parts%str%y%r(i)
+      parts%str%xy%r(ntotal+k)= -parts%str%xy%r(i)
+      endif
+
+      !parts%str_min%x%r(ntotal+k) = -parts%str_min%x%r(i)
+      !parts%str_min%y%r(ntotal+k) =  parts%str_min%y%r(i)
+      !parts%str_min%xy%r(ntotal+k)= -parts%str_min%xy%r(i)
+      
+      if(associated(parts%epsilon_p)) parts%epsilon_p%r(ntotal+k)= -parts%epsilon_p%r(i)  !!!+-?
+   endif
+enddo
+
+parts%nsymm = parts%nsymm + k
+
+parts%nvirt = parts%nvirt + k
+
+!!-------------------------------------
+
+call parts%setup_ndim1
+
+return
+end subroutine

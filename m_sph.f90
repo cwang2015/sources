@@ -6,7 +6,7 @@ implicit none
 
 ! Logic unit of files
 
-integer f_xv,f_state,f_other
+integer f_xv,f_state,f_other,f_tmp
 integer xv_vp,state_vp,other_vp
 
 ! Files
@@ -387,6 +387,11 @@ contains
           write(*,*) parts%usaw
           soil%usaw = parts%usaw
 
+      case('PARTICLE SHIFT')
+          read(pvalu,*) parts%particle_shift
+          write(*,*) 'Particle shift = ', parts%particle_shift
+          !soil%usaw = parts%usaw          
+
       case DEFAULT
 
                  write(*,*) "Error: No such keyword -- ", pname
@@ -498,6 +503,10 @@ allocate(soil%grid(soil%maxngx,soil%maxngy,soil%maxngz)); soil%grid = 0
 allocate(soil%xgcell(dim,maxn)); soil%xgcell = 0
 allocate(soil%celldata(maxn)); soil%celldata = 0
 
+allocate(soil%wi); call soil%wi%set(rank=0,parts=soil,name = ' ')
+call soil%wi%max_alloc
+soil%wi%r = 0.d0
+
 ! Fields variables
 call allocate_particles_fields(soil)
 
@@ -527,7 +536,9 @@ if(soil%critical_state==1)then
    call soil%vof_min%max_alloc; soil%vof_min%r = 0.d0   
 
    allocate(soil%psi); call soil%psi%set(rank=0,parts=soil,name='psi')
-   call soil%psi%max_alloc; soil%psi%r = 0.d0   
+   call soil%psi%max_alloc; soil%psi%r = 0.d0  
+   allocate(soil%rho0); call soil%rho0%set(rank=0,parts=soil,name='rho0')
+   call soil%rho0%max_alloc; soil%rho0%r = 0.d0      
 endif
 
 return
@@ -848,6 +859,7 @@ end subroutine
 !        cycle
   
         parts%time = parts%time + parts%dt
+        soil%time = parts%time
 
 !	if (itimestep>=save_step_from.and.mod(itimestep,save_step).eq.0) then
 !          call output
@@ -1032,7 +1044,7 @@ type(p2r) vxi(3), dvxi(3), v_mini(3)
             vxi(d)%p = v_mini(d)%p + pl%dt * dvxi(d)%p   &
                         + avi(d)%p
             !pl%x(d, i) = pl%x(d, i) + pl%dt * vxi(d)%p
-            pl%x(d, i) = pl%x(d, i) + pl%dt * (vxi(d)%p + psi(d)%p)
+             pl%x(d, i) = pl%x(d, i) + pl%dt * (vxi(d)%p + psi(d)%p) !!!Shifting
          !if(i>4160)write(*,*) i,vxi(2)%p
          enddo
             !pl%vx(1, i) = pl%v_min(1, i) + dt * pl%dvx%x%r(i)   &
@@ -1256,8 +1268,9 @@ type(p2r) vxi(3), dvxi(3), v_mini(3)
       return
       end subroutine
       end subroutine
-      
-!DEC$IF(.FALSE.)
+
+#ifdef REMOVE      
+!!DEC$IF(.FALSE.)
 !----------------------------------------------------------------------      
       subroutine time_integration_for_water_by_verlet
 !----------------------------------------------------------------------
@@ -1354,7 +1367,8 @@ deallocate(temp2)
 return
 end subroutine      
          
-!DEC$ENDIF
+!!DEC$ENDIF
+#endif
 
 !----------------------------------------------------------------------
              subroutine time_integration_for_soil
@@ -1569,8 +1583,9 @@ if(trim(pl%imaterial)=='soil')then
    if(pl%critical_state==1) pl%dvof = 0.d0
 endif
 
-!if(trim(pl%imaterial)=='water') call inlet_boundary2
-
+if(trim(pl%imaterial)=='water') call inlet_boundary2
+call symmetry_boundary(pl)   !!! subjetting
+!if(iphase==2) call slip_boundary(pl)   !!! submerged column collapse
 !---  Interaction parameters, calculating neighboring particles
 !     and optimzing smoothing length
   
@@ -1593,6 +1608,8 @@ call count_interaction(pl)   ! Added for particle shifting
 if(mod(pl%itimestep,pl%print_step).eq.0.and.pl%int_stat) then
    call pl%interaction_statistics
 endif   
+!write(*,*) associated(pl%wi)
+call Sherpard_filter(pl)
 
 !--- Added by Wang
 !if(nor_density) call norm_density(pl)
@@ -1604,16 +1621,21 @@ endif
 !call sum_density(pl)
 !else             
     !call con_density(pl)         
-    pl%drho = -pl.rho*pl.div2(pl.vx)
+    pl%drho = -pl%rho*pl%div2(pl%vx)
 !endif
-      
+    
+
 if(pl%artificial_density)then
    !if(trim(pl%imaterial)=='water')then
       !!call renormalize_density_gradient(pl)
       !call art_density(pl)
       call delta_sph_omp(pl,pl%rho,pl%drho)
+      !call output_field(pl,pl%rho)
+      !call output_field(pl,pl%drho)
+      !pause
    !endif
 endif
+
 
 !---  Dynamic viscosity:
 
@@ -1686,6 +1708,15 @@ if(pl%imaterial=='water')then
    !where (pl%rho%r.gt.0.0) pl%dvx%y%r = pl%dvx%y%r/pl%rho%r
    pl%dvx%x = pl%dvx%x/pl%rho
    pl%dvx%y = pl%dvx%y/pl%rho
+
+!   call output_field(pl,pl%df(pl%p,'x'))
+!   call output_field(pl,pl%df(pl%p,'y'))
+!   call output_field(pl,pl%lap_omp(mat%viscosity,pl%vof*pl%vx%x))
+!   call output_field(pl,pl%lap_omp(mat%viscosity,pl%vof*pl%vx%y))
+!   call output_field(pl,pl%dvx%x)
+!   call output_field(pl,pl%dvx%y)
+!   pause
+
    !write(*,*) pl%dvx%x%r(1:50),pl%dvx%y%r(1:50)
 else      
    !call int_force(pl)
@@ -1695,7 +1726,9 @@ else
    !where (pl%rho%r.gt.0.0) pl%dvx%y%r = pl%dvx%y%r/pl%rho%r 
    pl%dvx%x = pl%dvx%x/pl%rho
    pl%dvx%y = pl%dvx%y/pl%rho 
-
+!   call output_field(pl,pl%dvx%x)
+!   call output_field(pl,pl%dvx%y)
+!   pause
 endif      
 
 !if(trim(pl%imaterial)=='water'.and.water_tension_instability==2) &
@@ -1730,7 +1763,16 @@ endif
 
 ! --- Jaumann rate  !When???
 
-if(trim(pl%imaterial)=='soil')call Jaumann_rate(pl)
+if(trim(pl%imaterial)=='soil')then
+   call Jaumann_rate(pl)
+!   call output_field(pl,pl%dstr%x)
+!   call output_field(pl,pl%dstr%y)
+!   call output_field(pl,pl%dstr%xy)
+!   call output_field(pl,pl%dp)
+!   call output_field(pl,pl%vcc)
+!   call output_field(pl,pl%wxy)
+!   pause
+endif
 
 !---  Artificial viscosity:
 
@@ -1738,14 +1780,24 @@ if (pl%visc_artificial) call pl%art_visc_omp
 
 if(trim(pl%imaterial)=='soil'.and.pl%soil_artificial_stress)then
         !call art_stress(pl)
-   call pl%delta_sph_omp(pl%p,pl%dp)
-   call pl%delta_sph_omp(pl%str%x,pl%dstr%x)
-   call pl%delta_sph_omp(pl%str%xy,pl%dstr%xy)
-   call pl%delta_sph_omp(pl%str%y,pl%dstr%y)
+   call pl%delta_sph_omp(pl%p,pl%dp)             !! Jump
+   call pl%delta_sph_omp(pl%str%x,pl%dstr%x)     !! Jump
+   call pl%delta_sph_omp(pl%str%xy,pl%dstr%xy)   !! No jump
+   call pl%delta_sph_omp(pl%str%y,pl%dstr%y)     !! Jump
+   !call output_field(pl,pl%dstr%x)
+   !call output_field(pl,pl%dstr%y)
+   !call output_field(pl,pl%dstr%xy)
+   !call output_field(pl,pl%dp)
+   !call output_field(pl,pl%wi)
+   !pause   
 endif        
-if(trim(pl%imaterial)=='water'.and.pl%water_artificial_volume)  &
+if(trim(pl%imaterial)=='water'.and.pl%water_artificial_volume)then
         !call art_volume_fraction_water2(pl)
+        !call output_field(pl,pl%vof)
         call pl%delta_sph_omp(pl%vof,pl%dvof)
+!        call output_field(pl,pl%dvof)
+!        pause
+endif        
 
 !--- Damping
 !       if(trim(pl%imaterial)=='soil') call damping_stress(pl)
@@ -1768,7 +1820,9 @@ pl%dvx%y = pl%dvx%y + pl%gravity
 !     Calculating average velocity of each partile for avoiding penetration
 
 if (pl%average_velocity) call av_vel_omp(pl) !!!!!!!##########
-call particle_shifting(pl)
+if(iphase==1.and.pl%particle_shift)then
+   call particle_shifting(pl)
+endif   
 
 !---  Convert velocity, force, and energy to f and dfdt  
       
@@ -1805,6 +1859,9 @@ endif
 
       call darcy_law_omp(parts,soil)          
       if(parts%water_pressure==1)then 
+         call interpolation(parts,parts%p,soil,soil%spp)
+         !call output_field(soil,soil%spp)
+         !pause
          call pore_water_pressure_omp(parts,soil)
       else  !!Hydrostatic pressure
          soil%dvx%y = soil%dvx%y - pl%gravity*(1./2.7)
@@ -1814,10 +1871,10 @@ endif
               if(parts%critical_state==0)then
          call volume_fraction_soil_omp(soil)
               else
-         !call volume_fraction_soil_critical_state(soil)             
+         !call volume_fraction_soil_critical_state(soil)   !!! Put forward! 
               endif
-         call volume_fraction_water2_omp(parts,soil)
-         call volume_fraction_water_omp(parts,soil)  ! phi_f = 1- phi_s
+         call volume_fraction_water2_omp(parts,soil)  !! water%dvof
+         call volume_fraction_water_omp(parts,soil)  ! phi_f = 1- phi_s, vof2
          !call volume_fraction_water_omp_with_filter(parts,soil)  ! phi_f = 1- phi_s
          if(parts%volume_fraction_renorm)then
             if(mod(parts%itimestep,40).eq.0) then
@@ -1838,6 +1895,9 @@ endif
          mod(parts%itimestep,parts%save_step).eq.0)then
          call output
       endif 
+
+      parts%nvirt = parts%nvirt - parts%nsymm
+      soil%nvirt = soil%nvirt - soil%nsymm
 
 return
 end subroutine
@@ -1897,7 +1957,7 @@ endif
 !if(mod(pl%itimestep,30)==0) call sum_density(pl)
 !else             
 !    call con_density(pl)         
-    pl%drho = -pl.rho*pl.div2(pl.vx)
+    pl%drho = -pl%rho*pl%div2(pl%vx)
 !endif
       
 if(pl%artificial_density)then
@@ -2209,6 +2269,9 @@ call get_unit(f_other)
 !open(f_other,file="../f_other.dat") 
 open(f_other,file=trim(res_other)) 
 
+call get_unit(f_tmp)
+open(f_tmp,file="tmp.dat")
+
 !call get_unit(xv_vp)
 !open(xv_vp,file="../xv_vp.dat")
 !call get_unit(state_vp)
@@ -2227,6 +2290,7 @@ implicit none
 close(f_xv)
 close(f_state)
 close(f_other)
+close(f_tmp)
 
 return
 end subroutine
@@ -2317,7 +2381,9 @@ end subroutine
 
       write(f_xv,*) 'VARIABLES="X","Y","Pressure","VoF",'     
       write(f_xv,*) '"vx","vy","rho","zone","VoF2","mass" '
-      write(f_xv,*) 'ZONE I=', ntotal, ' F=BLOCK'
+!      write(f_xv,*) 'ZONE I=', ntotal, ' F=BLOCK'
+      write(f_xv,*) 'ZONE T="time ', parts%time, '"', ' I=', ntotal, ' F=BLOCK'
+      
       write(f_xv,*) (x(1,i),i=1,ntotal) !, soil%x(1,1:ntotal2)
       write(f_xv,*) (x(2,i),i=1,ntotal) !, soil%x(2,1:ntotal2)
 !      write(f_xv,*) vx(1,1:ntotal)
@@ -2342,7 +2408,8 @@ end subroutine
       write(f_xv,*) 'VARIABLES="X","Y","Pressure", "VoF", "ep",' 
       write(f_xv,*) '"sxy", "sxx","syy","vx","vy", "rho", "mass", '
       write(f_xv,*) '"sigma_yy", "zone","filter " '
-      write(f_xv,*) 'ZONE I=', ntotal, ' F=BLOCK'
+!      write(f_xv,*) 'ZONE I=', ntotal, ' F=BLOCK'
+      write(f_xv,*) 'ZONE T="time ', parts%time, '"', ' I=', ntotal, ' F=BLOCK'
  
       write(f_xv,*)  (parts%x(1,i),i=1,ntotal)
       write(f_xv,*)  (parts%x(2,i),i=1,ntotal)
@@ -2375,7 +2442,8 @@ end subroutine
       write(f_state,*) '"sxy", "sxx","syy","vx","vy", "rho","mass" '
       write(f_state,*) '"sigma_yy", "zone" '
       if(soil%critical_state==1) write(f_state,*) ' "psi" '
-      write(f_state,*) 'ZONE I=', ntotal2, ' F=BLOCK'
+!      write(f_state,*) 'ZONE I=', ntotal2, ' F=BLOCK'
+      write(f_state,*) 'ZONE T="time ', soil%time, '"', ' I=', ntotal2, ' F=BLOCK'
  
       write(f_state,*)  (soil%x(1,i),i=1,ntotal2)
       write(f_state,*)  (soil%x(2,i),i=1,ntotal2)
@@ -2405,6 +2473,26 @@ end subroutine
       !write(*,*) soil%psi%r(1:10)
       return
       end subroutine
+
+!--------------------------------------------------
+    subroutine output_field(this,field)
+!--------------------------------------------------
+implicit none
+type(particles) this
+type(array) field
+integer i, ntotal
+
+ntotal = this%ntotal+this%nvirt
+
+      write(f_tmp,*) 'VARIABLES="X","Y","field" '     
+      write(f_tmp,*) 'ZONE I=', ntotal, ' F=BLOCK'
+      write(f_tmp,*) (this%x(1,i),i=1,ntotal) 
+      write(f_tmp,*) (this%x(2,i),i=1,ntotal)
+      write(f_tmp,*) (field%r(i),i=1,ntotal) 
+
+
+return
+end subroutine
 
 !---------------------------------------------------------------------
 !      subroutine output_cas
@@ -2441,21 +2529,21 @@ end subroutine
    end subroutine
 
 !------------------------------
-   subroutine time_elapsed(s)
+!   subroutine time_elapsed(s)
 !------------------------------
-    use ifport
-    implicit none
+!    use ifport
+!    implicit none
 
-    real(8) :: s
+!    real(8) :: s
 
-   s = rtc()
+!   s = rtc()
 
-   end subroutine
+!   end subroutine
 
 end module
     
-    
-!DEC$IF(.FALSE.)
+#ifdef REMOVE    
+!!DEC$IF(.FALSE.)
 !----------------------------------------------------------------------      
                    subroutine single_step_VOF
 !----------------------------------------------------------------------
@@ -2755,4 +2843,5 @@ endif
 return
 end subroutine
 
-!DEC$ENDIF
+!!DEC$ENDIF
+#endif

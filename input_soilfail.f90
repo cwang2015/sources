@@ -85,4 +85,23 @@ return
 end subroutine
 
 
+!----------------------------------------
+    subroutine inlet_boundary2  
+!----------------------------------------
+use declarations_sph
+implicit none
 
+
+return
+end subroutine
+
+
+!----------------------------------------
+    subroutine symmetry_boundary(parts)  
+!----------------------------------------
+use m_particles
+implicit none
+type(particles) parts
+
+return
+end subroutine

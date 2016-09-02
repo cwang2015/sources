@@ -1,5 +1,5 @@
-      program SPH
-!     subroutine beham
+!      program SPH
+     subroutine beham
 
 use constants
 !use param
@@ -20,7 +20,8 @@ double precision s1, s2
 !stop
 
 call time_print
-call time_elapsed(s1)
+!call time_elapsed(s1)
+call cpu_time(s1)
 
 call getarg(1,cas_file)
 write(*,*) 'cas_file:', cas_file
@@ -69,7 +70,8 @@ do while (.true.)
       call time_integration_for_water
    endif
 
-   call time_elapsed(s2)
+!   call time_elapsed(s2)
+call cpu_time(s2)
 
    write (*,*)'        Elapsed CPU time = ', s2-s1
    s1 = s2
@@ -84,7 +86,8 @@ enddo
 call close_files 
   
 call time_print
-call time_elapsed(s2)
+!call time_elapsed(s2)
+call cpu_time(s2)
 
 write (*,*)'        Elapsed CPU time = ', s2-s1
                            

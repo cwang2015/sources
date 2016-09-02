@@ -114,7 +114,7 @@ real(dp) mingridx(3),maxgridx(3),dgeomx(3)
 
 !maxn: Maximum number of particles
 !max_interation : Maximum number of interaction pairs
-integer :: maxn = 50000, max_interaction = 20 * 50000
+integer :: maxn = 200000, max_interaction = 20 * 200000
 
 !SPH algorithm
 
@@ -172,6 +172,7 @@ logical :: volume_fraction_renorm = .true.
 
 integer :: critical_state = 0
 logical :: usaw = .false.
+logical :: particle_shift = .false.
 
 ! 0 ignor; 1 negative pressure to zero; 2 artficial stress
 !integer :: water_tension_instability = 0
@@ -203,7 +204,11 @@ integer :: skf = 4
 
 !Material parameters
 character(len=32) :: imaterial
-class(*), pointer :: material => null()
+
+!PGI FORTRAN doesn't support *
+class(material), pointer :: material => null()
+
+!class(*), pointer :: material => null()
 
 !Numerical parameters
 class(numerical), pointer :: numeric => null()
@@ -234,6 +239,9 @@ integer, pointer, dimension(:) :: niac_start, niac_end
 
 integer :: niac  = 0
 integer :: ntotal = 0, nvirt = 0
+
+! For symmetry boundary
+integer  :: nsymm = 0 
 
 ! Particle interaction pair
 integer :: maxp = 0, minp = 0
@@ -270,6 +278,7 @@ type(array), pointer :: psi => null()
 
 ! Field variables
 type(array), pointer :: rho  => null()  ! Density
+type(array), pointer :: rho0 => null()  ! True density, for critical state
 type(array), pointer :: vx   => null()  ! Velocity
 type(array), pointer :: p => null()     ! Pressure
 type(array), pointer :: c => null()     ! Sound speed
@@ -401,21 +410,27 @@ contains
       procedure :: plastic_flow_rule3
 !      procedure :: particle_shifting
 
+
       procedure :: get_num_threads
       procedure :: get_niac_start_end
 
 end type 
 
+!PGI fortran compiler doesn't support ::
+
 interface write_field
-   module procedure :: write_scalar_field
-   module procedure :: write_vector2d_field
+  !module procedure ::  write_scalar_field
+   module procedure  write_scalar_field
+   module procedure  write_vector2d_field
 end interface
 
 !=======
 contains
 !=======
 
-!DEC$IF(.FALSE.)
+#ifdef REMOVE
+!#if(.false.)
+!!DEC$IF(.FALSE.)
 !---------------------------------------------------------------------------------
    subroutine set_geo_sub(this,dl,dr,dh,ds,dj,D,L,H,immerse,       &
                               mdl,mdr,mdh,mds,mdj,mD,mL,mH)
@@ -446,8 +461,10 @@ contains
   
    return
    end subroutine
+ 
+!!DEC$ENDIF
+#endif
 
-!DEC$ENDIF
 !--------------------------------------------
    subroutine set_block_sub(this,xl,yl,m,n)
 !--------------------------------------------
@@ -967,8 +984,8 @@ end subroutine
 !return
 !end subroutine
 
-
-!DEC$IF(.FALSE.)
+#ifdef REMOVE
+!!DEC$IF(.FALSE.)
 !-----------------------------------------------
       subroutine take_real_points(this,tank)
 !-----------------------------------------------
@@ -997,7 +1014,8 @@ this%ntotal = k
 return
 end subroutine
 
-!DEC$ENDIF
+!!DEC$ENDIF
+#endif
 
 !--------------------------------------------------
       subroutine take_real_points1(this,tank,zone)
@@ -1029,7 +1047,8 @@ this%ntotal = k
 return
 end subroutine
 
-!DEC$IF(.FALSE.)
+#ifdef REMOVE
+!!DEC$IF(.FALSE.)
 !-----------------------------------------------------
       subroutine take_virtual_points(this,tank)
 !-----------------------------------------------------
@@ -1058,7 +1077,8 @@ this%nvirt = k-this%ntotal
 return
 end subroutine
 
-!DEC$ENDIF
+!!DEC$ENDIF
+#endif
 
 !-----------------------------------------------------
       subroutine take_virtual_points1(this,tank,zone)
@@ -1471,7 +1491,7 @@ end function
 !   the interaction parameters used by the SPH algorithm. Interaction 
 !   pairs are determined by using a sorting grid linked list  
 !----------------------------------------------------------------------
-      use ifport
+!      use ifport
       implicit none
 
       class(particles) parts
@@ -1647,7 +1667,7 @@ do it = 1, nthreads
 !--------------------------------------------
       subroutine link_list2(parts,part2)
 !--------------------------------------------
-      use ifport
+!      use ifport
       implicit none
       
       class(particles) parts,part2
@@ -1855,7 +1875,7 @@ end subroutine
 !--------------------------------------------
       subroutine link_list2_omp(parts,part2)
 !--------------------------------------------
-      use ifport
+!      use ifport
       implicit none
       
       class(particles) parts,part2
@@ -2666,8 +2686,10 @@ endif
 
 if(x=='x')dwdx=>parts%dwdx(1,:)
 if(x=='y')dwdx=>parts%dwdx(2,:)
-if(x=='x')bn=>parts%bn%x%r
-if(x=='y')bn=>parts%bn%y%r
+if(parts%usaw)then
+   if(x=='x')bn=>parts%bn%x%r
+   if(x=='y')bn=>parts%bn%y%r
+endif
 
 !$omp parallel
 !$omp do private(i,j,k,fwx)
@@ -2781,10 +2803,10 @@ endif
 
 if(x=='x')dwdx=>parts%dwdx(1,:)
 if(x=='y')dwdx=>parts%dwdx(2,:)
-
+   if(parts%usaw)then
 if(x=='x')bn=>parts%bn%x%r
 if(x=='y')bn=>parts%bn%y%r
-
+   endif
 !$omp parallel
 !$omp do private(i,j,k,fwx) 
 do it = 1, parts%nthreads
@@ -3417,6 +3439,51 @@ end subroutine
  
       end subroutine
 
+!Subroutine to interpolate fields between two particle systems
+!----------------------------------------------------------------------
+      subroutine interpolation(water,fwater,soil,fsoil) 
+!----------------------------------------------------------------------
+implicit none
+
+type(particles) water,soil
+type(array) fwater, fsoil
+real(dp), allocatable, dimension(:,:) :: local
+integer ntotal, i, j, k, d, it, nthreads      
+
+nthreads = water%nthreads
+ntotal = soil%ntotal + soil%nvirt
+allocate(local(ntotal,nthreads))
+call water%get_niac_start_end
+
+!$omp parallel
+!$omp do private(i,j,k) 
+do it =1,nthreads
+   do j = 1,ntotal
+      local(j,it) = 0.d0
+   enddo 
+   do k = water%niac_start(it),water%niac_end(it)
+         i = water%pair_i(k)   ! water
+         j = water%pair_j(k)   ! soil
+         local(j,it) = local(j,it) + water%mass%r(i)*fwater%r(i)  &  
+                                     *water%w(k)/water%rho%r(i)
+   enddo  
+enddo
+!$omp end do
+!$omp barrier
+
+!$omp do private(it)
+do j = 1,soil%ntotal+soil%nvirt
+   fsoil%r(j) = 0.d0
+   do it = 1,water%nthreads
+      fsoil%r(j) = fsoil%r(j) + local(j,it)
+   enddo  
+enddo   
+!$omp end do
+!$omp end parallel
+return
+end subroutine 
+
+
 
 !!DEC$IF(.FALSE.)
 !----------------------------------------------------------------------
@@ -3821,7 +3888,7 @@ end subroutine
       type(array) f
       type(array) df
       real(dp), allocatable, dimension(:,:) :: local
-      real(dp) dx(3),delta, muv, rr, h, small
+      real(dp) dx(3),delta, muv, rr, h, small,sum_vof
       integer i,j,k,d,ntotal,niac,dim,it,nthreads
 
 !      write(*,*) 'In art_density...'
@@ -3837,7 +3904,7 @@ end subroutine
       endif   
 
      !$omp parallel 
-     !$omp do private(i,j,d,k,rr,muv,dx,h)
+     !$omp do private(i,j,d,k,rr,muv,dx,h,sum_vof)
      do it = 1, nthreads 
         do i =1,ntotal
            local(i,it) = 0.d0
@@ -3845,6 +3912,12 @@ end subroutine
         do k = parts%niac_start(it),parts%niac_end(it)
            i = parts%pair_i(k)
            j = parts%pair_j(k)
+
+           sum_vof = parts%vof%r(i) + parts%vof%r(j)  !!! Jump condition
+           if(sum_vof<1.8.and.sum_vof>1.2) cycle      !!! remedied except dstr
+
+           !if(parts%wi%r(i)<1.017.or.parts%wi%r(j)<1.017)cycle !!! boundary parts
+
            rr = 0.e0
            do d=1,dim
               dx(d)  =  parts%x(d,i) -  parts%x(d,j)
@@ -3877,6 +3950,9 @@ end subroutine
 
      !$omp do private(it)
      do i = 1,ntotal
+
+        !if(parts%wi%r(i)<1.017)cycle  !!! remedy dstr of soil
+
         do it = 1,nthreads
              !df%r(i) =  df%r(i) + local(i,it)   ! Original
              if(parts%usaw.and.parts%itype(i)>0)df%r(i)=df%r(i)+local(i,it)/parts%wi%r(i) !!??
@@ -4821,8 +4897,8 @@ enddo
 
       class(particles) parts
       double precision :: small_value = 1.d-10
-      double precision :: rij,xij1,xij2,vmax = 25
-      double precision :: beta = 0.1
+      double precision :: rij,xij1,xij2,vmax = 2.d0
+      double precision :: beta = 0.01
       integer i,j,k, ntotal
 
       ntotal = parts%ntotal + parts%nvirt
@@ -4866,6 +4942,13 @@ enddo
 
       do i = 1, ntotal
          if(parts%countiac(i)==0)cycle
+
+         if(parts%zone(i)/=100)then    !!! Only particles near nozzle shift
+                 parts%ps%x%r(i)=0.d0
+                 parts%ps%y%r(i)=0.d0
+                 cycle
+         endif
+
          parts%ps%x%r(i) = beta*parts%ps%x%r(i)*parts%r0%r(i)**2.0*vmax/parts%mt%r(i)
          parts%ps%y%r(i) = beta*parts%ps%y%r(i)*parts%r0%r(i)**2.0*vmax/parts%mt%r(i)
       enddo
@@ -4992,7 +5075,11 @@ enddo
 
       !G = parts%eta(i)
 !!      dlambda = (3.*alpha*K*vcc(i)+G/sqrt(J2)*sde)/(9.*alpha**2.*K+G)
-      dlambda = (3.*alpha*K*vcc(i)+G/sqrt(J2)*sde)/(27.*alpha*K*sin(psi)+G)
+
+!      dlambda = (3.*alpha*K*vcc(i)+G/sqrt(J2)*sde)/(27.*alpha*K*sin(psi)+G)
+      dlambda = (3.*alpha*K*vcc(i)+G/sqrt(J2)*sde)/(27.*alpha*K*sin(parts%psi%r(i))+G)
+
+
       !if(dlambda<0)write(*,*) 'dlambda = ',dlambda,i,parts%itimestep
       if(dlambda<0)cycle
       !dsxx(i) = dsxx(i)-dlambda*(3.*alpha*K+G/sqrt(J2)*sxx(i))
@@ -5003,7 +5090,9 @@ enddo
 
       !parts%p(i) = parts%p(i) + 3.*k*alpha*dlambda*0.000005   !!! simultaneous pressure
 !!      parts%dp%r(i) = parts%dp%r(i) + 3.*k*alpha*dlambda
-      parts%dp%r(i) = parts%dp%r(i) + 9.*K*sin(psi)*dlambda
+
+!      parts%dp%r(i) = parts%dp%r(i) + 9.*K*sin(psi)*dlambda
+      parts%dp%r(i) = parts%dp%r(i) + 9.*K*sin(parts%psi%r(i))*dlambda
 
 ! Accumulative deviatoric strain
  
@@ -5261,7 +5350,12 @@ do it =1,nthreads
    do k = water%niac_start(it),water%niac_end(it)
          i = water%pair_i(k)   ! water
          j = water%pair_j(k)   ! soil
-         mprr = water%mass%r(i)*water%p%r(i)/(water%rho%r(i)*soil%rho%r(j))
+
+!mprr = water%mass%r(i)*water%p%r(i)/(water%rho%r(i)*soil%rho%r(j)) !!! Original
+
+! Symmetric form, Added on 25 July 2016.
+mprr = water%mass%r(i)*(water%p%r(i)-soil%spp%r(j))/(water%rho%r(i)*soil%rho%r(j)) ! Bui2011
+
 !         mprr = water%mass(i)*(water%p(i)+soil%p(j))/       &      Bui2014
 !                (water%rho(i)*soil%rho(j))
          do d = 1, dim
@@ -5355,7 +5449,9 @@ do it = 1, nthreads
          i = water%pair_i(k)
          j = water%pair_j(k)
 !         water%vof2%r(i) = water%vof2%r(i)+soil%mass%r(j)*water%w(k)
-         local(i,it) = local(i,it)+soil%mass%r(j)*water%w(k)
+!         local(i,it) = local(i,it)+soil%mass%r(j)*water%w(k) ! due to critical
+!         state
+         local(i,it) = local(i,it)+soil%mass%r(j)*soil%vof%r(j)*water%w(k)/soil%rho%r(j)
      enddo
 enddo
 !$omp end do
@@ -5367,7 +5463,10 @@ enddo
          do it= 1, nthreads 
             water%vof2%r(k) = water%vof2%r(k) + local(k,it)
          enddo 
-         water%vof2%r(k) = 1.d0 - water%vof2%r(k)/sio2%rho0
+         !water%vof2%r(k) = 1.d0 - water%vof2%r(k)/sio2%rho0 ! due to critical
+         !state
+         water%vof2%r(k) = 1.d0 - water%vof2%r(k)
+
       enddo
 !$omp end do
 !$omp end parallel
@@ -5512,7 +5611,10 @@ do it = 1, nthreads
          enddo 
          tmp = dvx(1)*water%dwdx(1,k)+dvx(2)*water%dwdx(2,k)
 !         water%dvof%r(i) = water%dvof%r(i)-soil%mass%r(j)*tmp/sio2%rho0
-         local(i,it) = local(i,it)-soil%mass%r(j)*tmp/sio2%rho0
+!         local(i,it) = local(i,it)-soil%mass%r(j)*tmp/sio2%rho0  ! due to
+!         critical state
+local(i,it) = local(i,it)-soil%mass%r(j)*soil%vof%r(i)*tmp/soil%rho%r(j)
+
       enddo
 enddo
 !$omp end do
@@ -5586,6 +5688,9 @@ enddo
       integer i,j,k, ntotal
       real(dp) J2, phi_eq
       type(array), pointer :: tab
+      type(material), pointer :: sio2
+
+      sio2 => parts%material      
 
       ntotal = parts%ntotal + parts%nvirt
       tab => parts%tab
@@ -5594,18 +5699,23 @@ enddo
       do i = 1, ntotal
 
          !parts%psi%r(i) = atan(15.09d0*(parts%vof%r(i)-0.60))    !!! 4.09
+
          J2 = tab%x%r(i)**2.+2.*tab%xy%r(i)**2.+tab%y%r(i)**2.+(tab%x%r(i)+tab%y%r(i))**2.
          J2 = sqrt(J2/2)
-         if(parts%p%r(i)>1.d-3)then
-            phi_eq = 0.58 - 25.d0*0.012*J2/parts%p%r(i)         !!! 0.60
-         else
+         !if(parts%p%r(i)>1.d-3)then
+         !   phi_eq = 0.58 - 25.d0*0.012*J2/parts%p%r(i)         !!! 0.60
+         !else
             phi_eq = 0.58
-         endif   
-!         parts%psi%r(i) = atan(15.09d0*(parts%vof%r(i)-phi_eq))    !!! 4.09
-!         parts%dvof%r(i) = -parts%vof%r(i)*tan(parts%psi%r(i))*J2
+         !endif
 
-         parts%psi%r(i) = -0.35    !!! 4.09
-         parts%dvof%r(i) = -parts%vof%r(i)*tan(parts%psi%r(i))*J2
+parts%psi%r(i) = atan(2.09d0*(parts%vof%r(i)-phi_eq))  !!!K3=4.09,Pouliquen
+parts%dvof%r(i) = -parts%vof%r(i)*tan(parts%psi%r(i))*J2
+
+
+!if only theta replaced by theta+psi, i.e. original idea, not critical_state
+!theory
+!         parts%psi%r(i) = -0.35    
+!         parts%dvof%r(i) = -parts%vof%r(i)*tan(parts%psi%r(i))*J2
 
       enddo
 !$omp end parallel do 
@@ -5696,6 +5806,8 @@ enddo
 !enddo
 
 !end function
+
+
 
 
 !--------------------------------------------------

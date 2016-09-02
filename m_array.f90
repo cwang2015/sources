@@ -70,42 +70,45 @@ type array
        final :: array_final
 end type
 
+!PGI fortran doesn't support ::
+
 interface assignment(=)
-  module procedure :: array_equal_array
-  module procedure :: array_equal_double_real
-  module procedure :: array_equal_real
+  !module procedure :: array_equal_array
+  module procedure  array_equal_array
+  module procedure  array_equal_double_real
+  module procedure  array_equal_real
 end interface
 
 interface operator(+)
-   module procedure :: array_add_array 
-   module procedure :: array_add_double_real 
-   module procedure :: double_real_add_array 
+   module procedure  array_add_array 
+   module procedure  array_add_double_real 
+   module procedure  double_real_add_array 
 end interface
 
 interface operator(-)
-   module procedure :: array_sub_array
-   module procedure :: array_sub_real
-   module procedure :: array_sub_double_real
-   module procedure :: array_minus
+   module procedure  array_sub_array
+   module procedure  array_sub_real
+   module procedure  array_sub_double_real
+   module procedure  array_minus
 end interface
 
 interface operator(*)
-   module procedure :: array_mul_array
-   module procedure :: array_mul_real
-   module procedure :: array_mul_double_real
-   module procedure :: double_real_mul_array
-   module procedure :: real_mul_array
+   module procedure  array_mul_array
+   module procedure  array_mul_real
+   module procedure  array_mul_double_real
+   module procedure  double_real_mul_array
+   module procedure  real_mul_array
 end interface
 
 interface operator(/)
-   module procedure :: array_div_array
-   module procedure :: array_div_real
-   module procedure :: array_div_double_real
+   module procedure  array_div_array
+   module procedure  array_div_real
+   module procedure  array_div_double_real
 end interface
 
 interface operator(**)
-   module procedure :: array_pow_real
-   module procedure :: array_pow_double_real
+   module procedure  array_pow_real
+   module procedure  array_pow_double_real
 end interface
 
 !=======
@@ -317,7 +320,7 @@ end function
        subroutine array_final(this)
 !--------------------------------------------
 implicit none
-type(array) this
+type(array) :: this
 
 if(associated(this%r))deallocate(this%r)
 
