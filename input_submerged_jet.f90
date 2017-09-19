@@ -7,13 +7,13 @@ integer  ntotal, bntotal, npoint
 integer i, j, d, k
 type(block) nozzle, tank
 type(material), pointer :: wass,sand
-double precision soil_surface,water_surface,nozzle_height
+double precision soil_surface,water_surface,nozzle_height,nozzle_width
 logical :: dbg = .false.
 double precision element_size, soil_submerged_depth    
 
 ! Set nozzle and tank geometry parameters
 
-call tank%set(xl=0.6d0,yl=0.4d0,m=240,n=160)
+call tank%set(xl=0.6d0,yl=0.4d0,m=480,n=320)
 npoint = tank%m*tank%n
 tank%np= npoint
 allocate(tank%x(npoint),tank%y(npoint),tank%zone(npoint))
@@ -33,7 +33,8 @@ tank%x = tank%x - 0.3
 
 water_surface = 0.3
 soil_surface = 0.10
-nozzle_height=0.2
+nozzle_height=0.20
+nozzle_width=0.02
 
 write(*,*) 'Geometry generated!'
 ! Zoning
@@ -47,10 +48,10 @@ do i = 1, tank%m*tank%n
    if(tank%zone(i)==1.and.tank%y(i)>water_surface)tank%zone(i)=3
    if(tank%zone(i)==1.and.tank%y(i)>soil_surface)tank%zone(i)=7
 !   if(tank%zone(i)==2.and.dabs(tank%x(i))<0.005.and.dabs(tank%x(i))>0.0025.and.tank%y(i)>0.12)tank%zone(i)=8
-   if(tank%zone(i)==2.and.dabs(tank%x(i))<0.015.and.dabs(tank%x(i))>0.01.and.tank%y(i)>nozzle_height)tank%zone(i)=8
+   if(tank%zone(i)==2.and.dabs(tank%x(i))<0.015.and.dabs(tank%x(i))>nozzle_width/2.and.tank%y(i)>nozzle_height)tank%zone(i)=8
    !if(tank%zone(i)==2.and.dabs(tank%x(i))<0.005.and.tank%y(i)>0.12.and.tank%y(i)<0.2)tank%zone(i)=10
    !if(tank%zone(i)==2.and.dabs(tank%x(i))<0.005.and.tank%y(i)>0.2)tank%zone(i)=4
-   if(tank%zone(i)==2.and.dabs(tank%x(i))<0.01.and.tank%y(i)>nozzle_height)tank%zone(i)=4
+   if(tank%zone(i)==2.and.dabs(tank%x(i))<nozzle_width/2.and.tank%y(i)>nozzle_height)tank%zone(i)=4
    if(tank%zone(i)==2.and.tank%y(i)>water_surface)tank%zone(i)=5
    if(tank%zone(i)==2.and.tank%y(i)>soil_surface)tank%zone(i)=6
    !if(tank%zone(i)==6.and.dabs(tank%x(i))<0.01.and.tank%y(i)>0.15.and.tank%y(i)<0.20)tank%zone(i)=9
@@ -125,7 +126,7 @@ parts%c = wass%c
 ! ...Volume fraction
 
 do i = 1, parts%ntotal + parts%nvirt
-   parts%vof%r(i) = 0.5
+   parts%vof%r(i) = 0.45
    if(parts%zone(i)==4)parts%vof%r(i) = 1.d0
    if(parts%zone(i)==6)parts%vof%r(i) = 1.d0
    if(parts%zone(i)==8)parts%vof%r(i) = 1.d0
@@ -177,7 +178,7 @@ soil%c = sand%c
 
 ! Volume fraction
 
-soil%vof = 0.5d0
+soil%vof = 0.55d0
 !do i = 1, soil%ntotal+soil%nvirt
 !   if(soil%x(2,i)>0.1)soil%vof%r(i) = 0.d0
 !enddo
@@ -218,8 +219,8 @@ implicit none
 integer i, k, ntotal
 double precision nozzle_height,nozzle_length
 
-nozzle_height = 0.2
-nozzle_length = 0.2
+nozzle_height = 0.2 !0.16  !0.2
+nozzle_length = 0.2 !0.2 !0.24  !0.2
 
 ntotal = parts%ntotal + parts%nvirt
 k = 0 
@@ -252,6 +253,7 @@ do i = 1, parts%ntotal+parts%nvirt
 if(parts%zone(i)==4.and.parts%x(2,i)>nozzle_height)then
    parts%vx%x%r(i) = 0.d0; parts%vx%y%r(i) = inlet_velocity
    parts%p%r(i) = 0.d0
+   !parts%p%r(i) = h2o%rho0*(-9.8)*(parts%x(2,i)-0.3)
    parts%vof%r(i) = 1.d0
    parts%rho%r(i) = h2o%rho0*parts%vof%r(i)
 endif
@@ -319,3 +321,101 @@ call parts%setup_ndim1
 
 return
 end subroutine
+
+!----------------------------------------
+subroutine over_flow(parts)  ! Outlet boundary condition  !Doesn't work!
+!----------------------------------------
+use m_particles
+implicit none
+type(particles) parts 
+integer i, j, k,ntotal,last
+
+ntotal = parts%ntotal + parts%nvirt
+
+k=0
+do i = 1, ntotal
+   if(parts%x(2,i)>0.3.and.(parts%zone(i)==6.or.parts%zone(i)==100)) k = k + 1     
+enddo
+!if(k>0) write(*,*) k, trim(parts%imaterial), i
+
+k = 0 
+last = ntotal
+do while(.true.)
+   if(parts%x(2,last)>0.3.and.(parts%zone(last)==6.or.parts%zone(last)==100))then
+   k = k + 1
+   last = last - 1
+   else
+           exit
+   endif        
+enddo
+
+i=1
+do while(i<last)
+!   write(*,*) 'i=',i
+   if(parts%x(2,i)>0.3.and.(parts%zone(i)==6.or.parts%zone(i)==100))then
+      k = k + 1
+      write(*,*) i, last, ntotal
+      parts%x(1,i) = parts%x(1,last)
+      parts%x(2,i) = parts%x(2,last)
+      parts%vx%x%r(i)= parts%vx%x%r(last)
+      parts%vx%y%r(i)=  parts%vx%y%r(last)
+      parts%p%r(i)   = parts%p%r(last)
+      parts%vof%r(i) = parts%vof%r(last)
+      if(associated(parts%vof2))parts%vof2%r(i) = parts%vof2%r(last)
+      parts%vol%r(i) = parts%vol%r(last)
+      parts%hsml(i) =  parts%hsml(last)
+      parts%rho%r(i) = parts%rho%r(last)
+      parts%mass%r(i)  = parts%mass%r(last)
+      parts%itype(i) = parts%itype(last)
+      parts%zone(i) = parts%zone(last)
+      parts%c%r(i) =  parts%c%r(last)
+      if(associated(parts%psi)) parts%psi%r(i) =  parts%psi%r(last)
+
+      !parts%rho_min%r(ntotal+k) = parts%rho_min%r(i)
+      !parts%p_min%r(ntotal+k)   = parts%p_min%r(i)
+      !parts%vof_min%r(ntotal+k) = parts%vof_min%r(i)
+      !parts%v_min%x%r(ntotal+k) =  parts%v_min%x%r(i)
+      !parts%v_min%y%r(ntotal+k) = -parts%v_min%y%r(i)
+
+      if(associated(parts%str))then
+      parts%str%x%r(i) = parts%str%x%r(last)    !!! -?
+      parts%str%y%r(i) = parts%str%y%r(last)
+      parts%str%xy%r(i)= parts%str%xy%r(last)
+      endif
+
+      !parts%str_min%x%r(ntotal+k) = -parts%str_min%x%r(i)
+      !parts%str_min%y%r(ntotal+k) =  parts%str_min%y%r(i)
+      !parts%str_min%xy%r(ntotal+k)= -parts%str_min%xy%r(i)
+      
+      if(associated(parts%epsilon_p)) parts%epsilon_p%r(i)= parts%epsilon_p%r(last)
+
+      last = last - 1
+
+do while(.true.)
+   if(parts%x(2,last)>0.3.and.(parts%zone(last)==6.or.parts%zone(last)==100))then
+   last = last - 1
+   k = k + 1
+   else
+           exit
+   endif        
+enddo
+
+      !do while(parts%x(2,last)>0.3.and.parts%zone(last)/=4)
+      !   last = last - 1
+      !enddo
+   endif
+
+   i = i + 1
+
+enddo
+
+
+parts%ntotal = parts%ntotal - k
+
+call parts%setup_ndim1
+
+return
+end subroutine
+
+
+

@@ -21,7 +21,7 @@ double precision s1, s2
 
 call time_print
 !call time_elapsed(s1)
-call cpu_time(s1)
+!call cpu_time(s1)
 
 call getarg(1,cas_file)
 write(*,*) 'cas_file:', cas_file
@@ -47,7 +47,11 @@ call input
       write(*,*) 'Total number of real soil particles:', soil%ntotal
       write(*,*) 'Total number of virtual particles:  ', soil%nvirt
    endif
-      
+
+!openacc   
+call update_device(parts)
+call update_device(soil)
+
 call output
 
 call parts%minimum_time_step
@@ -59,7 +63,8 @@ do while (.true.)
    write(*,*)'          Please input the maximal time steps '
    write(*,*)'  ***************************************************'
    read(*,*) parts%maxtimestep
-      !maxtimestep = 400000      
+   !   parts%maxtimestep = 100000     
+call cpu_time(s1)
 
    if(parts%integrate_scheme==1)then
       if(parts%single_phase.and.parts%imaterial=='water') call time_integration_for_water
@@ -70,11 +75,9 @@ do while (.true.)
       call time_integration_for_water
    endif
 
-!   call time_elapsed(s2)
 call cpu_time(s2)
 
    write (*,*)'        Elapsed CPU time = ', s2-s1
-   s1 = s2
 
    write(*,*)'  ***************************************************'
    write(*,*) 'Are you going to run more time steps ? (0=No, 1=yes)'
@@ -87,8 +90,8 @@ call close_files
   
 call time_print
 !call time_elapsed(s2)
-call cpu_time(s2)
+!call cpu_time(s2)
 
-write (*,*)'        Elapsed CPU time = ', s2-s1
+!write (*,*)'        Elapsed CPU time = ', s2-s1
                            
 end

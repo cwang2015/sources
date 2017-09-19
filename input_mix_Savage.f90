@@ -39,9 +39,9 @@ tank%x = tank%x-0.01; tank%y = tank%y - 0.01
 
 ! Loose or Dense packing:
 
-soil_surface = 0.08 !0.048
-column_length = 0.02
-initial_water_volume_fraction = 0.40 !0.45
+soil_surface = 0.08 !0.042 !0.048
+column_length = 0.06
+initial_water_volume_fraction = 0.40 !0.45 0.40
 
 tank%zone = 2
 do i = 1, tank%m*tank%n
@@ -63,11 +63,13 @@ call parts%take_virtual(tank,1)
 call parts%take_virtual(tank,3)
 call parts%take_virtual(tank,5)
 call parts%take_virtual(tank,6)
+
 !call parts%take_virtual(tank,7)   !!! Rigid lip assumption!
 
 call soil%take_real(tank,2)
 
-!! If Slip boundary, comment these.
+!! If Slip boundary used, comment these.
+
 call soil%take_virtual(tank,1)
 call soil%take_virtual(tank,3)
 call soil%take_virtual(tank,5)
@@ -156,6 +158,7 @@ do i = 1, soil%ntotal+soil%nvirt
    soil%str%xy%r(i) = 0.d0
    soil%str%x%r(i) =  0.1905*soil%p%r(i)
    soil%str%y%r(i) = -0.381*soil%p%r(i)
+   soil%str%z%r(i) =  0.1905*soil%p%r(i)
    soil%p%r(i)   =  0.619*soil%p%r(i)
 enddo
 !soil%p%ndim1 = bntotal
@@ -171,6 +174,14 @@ if(.not.soil%volume_fraction)soil%vof%r = 1.0
 ! Density and Mass
 soil%rho  = sand%rho0*soil%vof
 soil%mass = soil%vol*soil%rho
+
+! Pore water pressure at soil particles
+do i = 1, soil%ntotal + soil%nvirt
+soil%spp0%r(i) = wass%rho0*parts%gravity*(soil%x(2,i)-water_surface)   
+if(soil%zone(i)==3.or.soil%zone(i)==5.or.soil%zone(i)==6)soil%spp0%r(i)=0.0
+enddo
+
+call soil%cambridge_ini
 
 return
 end subroutine

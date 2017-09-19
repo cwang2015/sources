@@ -181,14 +181,16 @@ elseif(dimrank==2)then
   this%x%name = trim(this%name)//'.x'
   this%y%name = trim(this%name)//'.y'
 elseif(dimrank==4)then
-  allocate(this%x,this%y,this%xy)
-  allocate(this%x%r(maxn),this%y%r(maxn),this%xy%r(maxn))
+  allocate(this%x,this%y,this%xy,this%z)
+  allocate(this%x%r(maxn),this%y%r(maxn),this%xy%r(maxn),this%z%r(maxn))
   this%x%parts=>this%parts
   this%y%parts=>this%parts
   this%xy%parts=>this%parts  
+  this%z%parts=>this%parts
   this%x%name = trim(this%name)//'.x'
   this%y%name = trim(this%name)//'.y'
   this%xy%name = trim(this%name)//'.xy'
+  this%z%name = trim(this%name)//'.z'
 endif  
 
 end subroutine
@@ -238,7 +240,7 @@ if(.not.associated(a%parts,b%parts))stop 'Error: inequal length arrays!'
 !ndim1 = a%ndim1
 ndim1 = a%get_size()
 
-!$omp parallel do
+!$omp parallel do 
 do i = 1, ndim1
    a%r(i) = b%r(i)
 enddo

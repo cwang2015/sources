@@ -1,10 +1,6 @@
 !-----------------------------
     module declarations_sph
 !-----------------------------
-#ifdef _OPENACC
-  use openacc
-#endif
-
 use m_particles
 implicit none
 
@@ -23,7 +19,7 @@ type(material), target :: H2O, SiO2
 
 ! Particles 
 type(particles), target :: parts, soil
-!$acc declare create(parts,soil)
+
 
 contains
 
@@ -361,32 +357,6 @@ contains
           write(*,*) parts%critical_state
           soil%critical_state = parts%critical_state
 
-      case('SOIL MODEL')
-          read(pvalu,*) parts%soil_model
-          write(*,*) 'Soil model: '
-          write(*,*) parts%soil_model
-          soil%soil_model = parts%soil_model
-
-      case('CAMBRIDGE MODEL1')
-          !read(pvalu,*) sio2%zramda,sio2%zkapa,sio2%eps0,sio2%poi,sio2%zm, &
-          !              sio2%zms,sio2%zbr,sio2%zmb,sio2%zmf,sio2%sig00,    &
-          !              sio2%ocr,sio2%rs0,sio2%zeta0
-          read(pvalu,*) sio2%zramda,sio2%zkapa,sio2%eps0,sio2%poi,sio2%zm, &
-                        sio2%zms
-
-          write(*,*) 'Cambridge model1: '
-          write(*,*) sio2%zramda,sio2%zkapa,sio2%eps0,sio2%poi,sio2%zm, &
-                        sio2%zms
-
-      case('CAMBRIDGE MODEL2')
-          read(pvalu,*) sio2%zbr,sio2%zmb,sio2%zmf,sio2%sig00,    &
-                        sio2%ocr,sio2%rs0,sio2%zeta0
-
-          write(*,*) 'Cambridge model2: '
-          write(*,*) sio2%zbr,sio2%zmb,sio2%zmf,sio2%sig00,    &
-                        sio2%ocr,sio2%rs0,sio2%zeta0          
-
-
       case('TIME STEP SIZE')
                   ndim = 1
                   if(ncoma>=ndim) call trim_pvalu(trim(pvalu),',',ndim)
@@ -437,7 +407,7 @@ contains
 !-------------------------------
 implicit none
 integer dim,maxn,max_interaction
-!!$acc enter data create(parts,soil)
+
 !---------------------Real particles (water)---------------------
 !parts%dim  = dim
 !parts%maxn = maxn
@@ -449,7 +419,6 @@ max_interaction = parts%max_interaction
 call allocate_particles(parts)
 
 allocate(parts%zone(maxn)); parts%zone = 0
-!$acc enter data create(parts%zone)
 
 allocate(parts%w(max_interaction));             parts%w   = 0.d0
 allocate(parts%dwdx(dim,max_interaction));      parts%dwdx= 0.d0
@@ -461,14 +430,10 @@ allocate(parts%xgcell(dim,maxn)); parts%xgcell = 0
 allocate(parts%celldata(maxn)); parts%celldata = 0
 allocate(parts%norm(2,10000))
 
-!$acc enter data create(parts%grid(parts%maxngx,parts%maxngy,parts%maxngz))
-!$acc enter data create(parts%celldata(maxn))
-
 ! Sherpard Filter
 allocate(parts%wi); call parts%wi%set(rank=0,parts=parts,name = ' ')
 call parts%wi%max_alloc
 parts%wi%r = 0.d0
-!$acc enter data create(parts%wi,parts%wi%r)
 
 ! Boundary information
 allocate(parts%bn); call parts%bn%set(rank=1,parts=parts,name='bn')
@@ -485,12 +450,12 @@ call allocate_particles_fields(parts)
 
 ! Working arrays outside particles type
 allocate(parts%tab); call parts%tab%set(rank=2,parts=parts,name = 'tab')
+!allocate(parts%tab%x, parts%tab%y, parts%tab%xy)
+!allocate(parts%tab%x%r(maxn),parts%tab%y%r(maxn),parts%tab%xy%r(maxn))
 call parts%tab%max_alloc
 parts%tab%x%r = 0.d0; parts%tab%y%r = 0.d0; parts%tab%xy%r = 0.d0
-parts%tab%z%r = 0.d0
 
-!$acc enter data create(parts%tab,parts%tab%x, parts%tab%y, parts%tab%xy)
-!$acc enter data create(parts%tab%x%r(maxn),parts%tab%y%r(maxn),parts%tab%xy%r(maxn))
+!parts%tab => tab
 
 if(trim(parts%imaterial)=='water')then
 !   allocate(parts%sxx,parts%sxy,parts%syy)
@@ -500,18 +465,7 @@ if(trim(parts%imaterial)=='water')then
 !    parts%str%xy%r => parts%tab%xy%r
    parts%str => parts%tab
 elseif(trim(parts%imaterial)=='soil')then
-
-!Changed according to Wu Hao:
-!-----------------------------
-!parts%wxy => parts%tab%xy
-
-allocate(parts%wxy); call parts%wxy%set(rank=0,parts=parts,name = 'wxy ')
-call parts%wxy%max_alloc
-parts%wxy%r = 0.d0
-!------------------------------------------------------------------        
-
-!$acc enter data create(parts%wxy,parts%wxy%r(maxn))
-
+   parts%wxy => parts%tab%xy
 endif   
 
 ! Material assignment
@@ -537,7 +491,6 @@ soil%max_interaction = max_interaction
 call allocate_particles(soil)
 
 allocate(soil%zone(maxn)); soil%zone = 0
-!$acc enter data create(soil%zone)
 
 soil%w      => parts%w
 soil%dwdx   => parts%dwdx
@@ -550,13 +503,9 @@ allocate(soil%grid(soil%maxngx,soil%maxngy,soil%maxngz)); soil%grid = 0
 allocate(soil%xgcell(dim,maxn)); soil%xgcell = 0
 allocate(soil%celldata(maxn)); soil%celldata = 0
 
-!$acc enter data create(soil%grid(soil%maxngx,soil%maxngy,soil%maxngz))
-!$acc enter data create(soil%celldata(maxn))
-
 allocate(soil%wi); call soil%wi%set(rank=0,parts=soil,name = ' ')
 call soil%wi%max_alloc
 soil%wi%r = 0.d0
-!$acc enter data create(soil%wi,soil%wi%r)
 
 ! Fields variables
 call allocate_particles_fields(soil)
@@ -565,20 +514,8 @@ call allocate_particles_fields(soil)
 allocate(soil%tab); call soil%tab%set(rank=2, parts=soil, name='tab')
 call soil%tab%max_alloc
 soil%tab%x%r = 0.d0; soil%tab%y%r = 0.d0; soil%tab%xy%r = 0.d0
-soil%tab%z%r = 0.d0
 
-!$acc enter data create(soil%tab,soil%tab%x,soil%tab%y,soil%tab%xy,soil%tab%z)
-!$acc enter data create(soil%tab%x%r(maxn),soil%tab%y%r(maxn),soil%tab%xy%r(maxn),soil%tab%z%r(maxn))
-
-!Changed according to Wu Hao:
-!-----------------------------
-!soil%wxy => soil%tab%xy
-
-allocate(soil%wxy); call soil%wxy%set(rank=0,parts=soil,name = 'wxy ')
-call soil%wxy%max_alloc
-soil%wxy%r = 0.d0
-!------------------------------------------------------------------
-!$acc enter data create(soil%wxy,soil%wxy%r(maxn))
+soil%wxy => soil%tab%xy
 
 soil%material => SiO2
 soil%numeric => parts%numeric
@@ -597,17 +534,11 @@ if(soil%critical_state==1)then
    allocate(soil%vof_min)
    call soil%vof_min%set(rank=0,parts=soil,name='vof_min')
    call soil%vof_min%max_alloc; soil%vof_min%r = 0.d0   
-!$acc enter data create(soil%dvof,soil%vof_min)
-!$acc enter data create(soil%dvof%r(:),soil%vof_min%r(:))
-
 
    allocate(soil%psi); call soil%psi%set(rank=0,parts=soil,name='psi')
    call soil%psi%max_alloc; soil%psi%r = 0.d0  
    allocate(soil%rho0); call soil%rho0%set(rank=0,parts=soil,name='rho0')
    call soil%rho0%max_alloc; soil%rho0%r = 0.d0      
-!$acc enter data create(soil%psi,soil%rho0)
-!$acc enter data create(soil%psi%r(:),soil%rho0%r(:))
-
 endif
 
 return
@@ -626,11 +557,7 @@ maxn = parts%maxn
 max_interaction = parts%max_interaction 
 
 if(.not.associated(parts%itype)) allocate(parts%itype(maxn))
-!$acc enter data create(parts%itype(:))
-
 if(.not.associated(parts%x))     allocate(parts%x(dim,maxn))
-!$acc enter data create(parts%x(dim,maxn))
-
 !if(.not.associated(parts%vol))   allocate(parts%vol(maxn))
 if(.not.associated(parts%vol))then
     allocate(parts%vol); 
@@ -638,15 +565,11 @@ if(.not.associated(parts%vol))then
     call parts%vol%set(rank=0,parts=parts,name='vol')
     call parts%vol%max_alloc
 endif
-
 if(.not.associated(parts%mass)) then
     allocate(parts%mass); call parts%mass%set(rank=0,parts=parts,name='mass')
     !allocate(parts%mass%r(maxn))
     call parts%mass%max_alloc
-!$acc enter data create(parts%mass)
-!$acc enter data create(parts%mass%r(:))
 endif
-
 if(.not.associated(parts%hsml))  allocate(parts%hsml(maxn))
 
 return
@@ -668,20 +591,12 @@ maxn = parts%maxn
 allocate(parts%vx); call parts%vx%set(rank=1,parts=parts,name='vx')
 call parts%vx%max_alloc
 parts%vx%x%r = 0.d0; parts%vx%y%r = 0.d0
-!$acc enter data create(parts%vx,parts%vx%x,parts%vx%y)
-!$acc enter data create(parts%vx%x%r(:),parts%vx%y%r(:))
-
-
 allocate(parts%rho); call parts%rho%set(rank=0,parts=parts,name='rho')
 call parts%rho%max_alloc
 parts%rho%r = 0.d0
-!$acc enter data create(parts%rho, parts%rho%r(:))
-
 allocate(parts%p); call parts%p%set(rank=0,parts=parts,name='p')
 call parts%p%max_alloc
 parts%p%r = 0.d0
-!$acc enter data create(parts%p,parts%p%r(:))
-
 allocate(parts%c); call parts%c%set(rank=0,parts=parts,name='c')
 call parts%c%max_alloc
 parts%c%r = 0.d0
@@ -690,33 +605,20 @@ parts%c%r = 0.d0
 allocate(parts%v_min); call parts%v_min%set(rank=1,parts=parts,name='v_min')
 call parts%v_min%max_alloc
 parts%v_min%x%r = 0.d0; parts%v_min%y%r = 0.d0
-!$acc enter data create(parts%v_min,parts%v_min%x,parts%v_min%y)
-!$acc enter data create(parts%v_min%x%r(:),parts%v_min%y%r(:))
 
 allocate(parts%rho_min); call parts%rho_min%set(rank=0,parts=parts,name='rho_min')
 call parts%rho_min%max_alloc
 parts%rho_min%r = 0.d0
-!$acc enter data create(parts%rho_min)
-!$acc enter data create(parts%rho_min%r(:))
-
 
 ! Accelerations
 allocate(parts%drho);call parts%drho%set(rank=0,parts=parts,name='drho')
 call parts%drho%max_alloc; parts%drho%r = 0.d0
-!$acc enter data create(parts%drho,parts%drho%r(:))
-
 allocate(parts%dvx); call parts%dvx%set(rank=1,parts=parts,name='dvx')
 call parts%dvx%max_alloc
 parts%dvx%x%r = 0.d0; parts%dvx%y%r = 0.d0  
-!$acc enter data create(parts%dvx,parts%dvx%x,parts%dvx%y)
-!$acc enter data create(parts%dvx%x%r(:),parts%dvx%y%r(:))
-
 allocate(parts%av); call parts%av%set(rank=1,parts=parts,name='av')
 call parts%av%max_alloc
 parts%av%x%r  = 0.d0; parts%av%y%r  = 0.d0
-
-!$acc enter data create(parts%av,parts%av%x,parts%av%y)
-!$acc enter data create(parts%av%x%r(:),parts%av%y%r(:))
 
 ! For particle shifting
 allocate(parts%r0);call parts%r0%set(rank=0,parts=parts,name='r0')
@@ -727,14 +629,9 @@ allocate(parts%ps); call parts%ps%set(rank=1,parts=parts,name='ps')
 call parts%ps%max_alloc
 parts%ps%x%r  = 0.d0; parts%ps%y%r  = 0.d0
 
-!$acc enter data create(parts%ps,parts%ps%x,parts%ps%y)
-!$acc enter data create(parts%ps%x%r(:),parts%ps%y%r(:))
-
 ! Volume Fraction
 allocate(parts%vof); call parts%vof%set(rank=0,parts=parts,name='vof')
 call parts%vof%max_alloc; parts%vof%r = 0.d0
-!$acc enter data create(parts%vof)
-!$acc enter data create(parts%vof%r(:))
 
 if(trim(parts%imaterial)=='water')then
    ! phi_f = 1- phi_s
@@ -744,10 +641,7 @@ if(trim(parts%imaterial)=='water')then
    call parts%dvof%max_alloc; parts%dvof%r = 0.d0   
    allocate(parts%vof_min)
    call parts%vof_min%set(rank=0,parts=parts,name='vof_min')
-   call parts%vof_min%max_alloc; parts%vof_min%r = 0.d0
-!$acc enter data create(parts%vof2,parts%vof2%r)   
-!$acc enter data create(parts%dvof,parts%vof_min)
-!$acc enter data create(parts%dvof%r(:),parts%vof_min%r(:))
+   call parts%vof_min%max_alloc; parts%vof_min%r = 0.d0   
 endif
 
 if(trim(parts%imaterial)=='soil')then
@@ -757,12 +651,6 @@ if(trim(parts%imaterial)=='soil')then
 !   allocate(parts%str%x%r(maxn), parts%str%y%r(maxn), parts%str%xy%r(maxn))
    call parts%str%set(rank=2,parts=parts,name='str'); call parts%str%max_alloc
    parts%str%x%r = 0.d0; parts%str%xy%r = 0.d0; parts%str%y%r = 0.d0   !!! %r
-   parts%str%z%r = 0.d0
-
-!$acc enter data create(parts%str)
-!$acc enter data create(parts%str%x,parts%str%xy,parts%str%y,parts%str%z)
-!$acc enter data create(parts%str%x%r(:),parts%str%xy%r,parts%str%y%r,       &
-!$acc parts%str%z%r)
    
    
     !artificial stress
@@ -770,17 +658,14 @@ if(trim(parts%imaterial)=='soil')then
     call parts%strp%set(rank=2,parts=parts,name='strp')
     call parts%strp%max_alloc
     parts%strp%x%r = 0.d0; parts%strp%y%r = 0.d0; parts%strp%xy%r = 0.d0
-    parts%strp%z%r = 0.d0
     
     allocate(parts%ast); call parts%ast%set(rank=2,parts=parts,name='ast')
     call parts%ast%max_alloc
     parts%ast%x%r = 0.d0; parts%ast%y%r = 0.d0; parts%ast%xy%r = 0.d0
-    parts%ast%z%r = 0.d0
     
     allocate(parts%astp); call parts%astp%set(rank=2,parts=parts,name='astp')
     call parts%astp%max_alloc
     parts%astp%x%r = 0.d0; parts%astp%y%r = 0.d0; parts%astp%xy%r = 0.d0
-    parts%astp%z%r = 0.d0
     
     allocate(parts%thetai); call parts%thetai%set(rank=0,parts=parts,name='thetai')
     call parts%thetai%max_alloc
@@ -788,39 +673,30 @@ if(trim(parts%imaterial)=='soil')then
    
 
    allocate(parts%str_min)
+   !allocate(parts%str_min%x,parts%str_min%y,parts%str_min%xy)
+   !allocate(parts%str_min%x%r(maxn),parts%str_min%y%r(maxn),parts%str_min%xy%r(maxn))
    call parts%str_min%set(rank=2,parts=parts,name='str_min')
    call parts%str_min%max_alloc
    parts%str_min%x%r = 0.d0; parts%str_min%xy%r = 0.d0; parts%str_min%y%r = 0.d0 !!!%r
-   parts%str_min%z%r = 0.d0
- !$acc enter data create(parts%str_min)  
- !$acc enter data create(parts%str_min%x,parts%str_min%y,parts%str_min%xy)
- !$acc enter data create(parts%str_min%x%r(:),parts%str_min%y%r(:),parts%str_min%xy%r(:))
 
    allocate(parts%p_min); call parts%p_min%set(rank=0,parts=parts,name='p_min')
    call parts%p_min%max_alloc
-   parts%p_min%r = 0.d0
-!$acc enter data create(parts%p_min,parts%p_min%r(:))
 
    allocate(parts%vcc); call parts%vcc%set(rank=0,parts=parts,name='vcc')
-   call parts%vcc%max_alloc 
-   parts%vcc%r = 0.d0
-!$acc enter data create(parts%vcc,parts%vcc%r(:))
-
+   call parts%vcc%max_alloc  
    !allocate(parts%szz(maxn))    !!! Intel Fortran Compiler is shit!!!
 
+   parts%p_min%r = 0.d0
+   parts%vcc%r = 0.d0
+
    allocate(parts%dstr)
+   !allocate(parts%dstr%x, parts%dstr%y, parts%dstr%xy)
+   !allocate(parts%dstr%x%r(maxn),parts%dstr%y%r(maxn),parts%dstr%xy%r(maxn))
    call parts%dstr%set(rank=2,parts=parts,name='dstr'); call parts%dstr%max_alloc
    parts%dstr%x%r = 0.d0; parts%dstr%xy%r = 0.d0; parts%dstr%y%r = 0.d0  !!!%r
-   parts%dstr%z%r = 0.d0
-
-!$acc enter data create(parts%dstr)   
-!$acc enter data create(parts%dstr%x, parts%dstr%y, parts%dstr%xy, parts%dstr%z)
-!$acc enter data create(parts%dstr%x%r(:),parts%dstr%y%r(:),   &
-!$acc parts%dstr%xy%r(:),parts%dstr%z%r(:))
 
    allocate(parts%dp); call parts%dp%set(rank=0,parts=parts,name='dp')
    call parts%dp%max_alloc; parts%dp%r = 0.d0 !!!%r
-!$acc enter data create(parts%dp,parts%dp%r(:))
 
 ! For return mapping algorithm
    allocate(parts%dstr2)
@@ -828,7 +704,6 @@ if(trim(parts%imaterial)=='soil')then
    !,parts%dstr2%x,parts%dstr2%y,parts%dstr2%xy)
    !allocate(parts%dstr2%x%r(maxn),parts%dstr2%y%r(maxn),parts%dstr2%xy%r(maxn))
    parts%dstr2%x%r = 0.d0; parts%dstr2%xy%r = 0.d0; parts%dstr2%y%r = 0.d0 !!!%r
-   parts%dstr2%z%r = 0.d0
    allocate(parts%dp2); call parts%dp2%set(rank=0,parts=parts,name='dp2')
    !allocate(parts%dp2%r(maxn))
    call parts%dp2%max_alloc
@@ -841,96 +716,15 @@ if(trim(parts%imaterial)=='soil')then
    !allocate(parts%epsilon_p%r(maxn))
    call parts%epsilon_p%max_alloc
    parts%epsilon_p%r = 0.d0  !!!%r
-!$acc enter data create(parts%epsilon_p,parts%epsilon_p%r(:))   
-  
-   allocate(parts%epsilon_p_min)
-   call parts%epsilon_p_min%set(rank=0,parts=parts,name='ep_min')
-   !allocate(parts%epsilon_p_min%r(maxn))
-   call parts%epsilon_p_min%max_alloc
-   parts%epsilon_p_min%r = 0.d0  !!!%r
-!$acc enter data create(parts%epsilon_p_min,parts%epsilon_p_min%r(:))   
-
-   allocate(parts%depsilon_p)
-   call parts%depsilon_p%set(rank=0,parts=parts,name='dep')
-   !allocate(parts%depsilon_p%r(maxn))
-   call parts%depsilon_p%max_alloc
-   parts%depsilon_p%r = 0.d0  !!!%r
-!$acc enter data create(parts%depsilon_p,parts%depsilon_p%r(:))   
-
+   
    allocate(parts%spp)   !!! VOF
    call parts%spp%set(rank=0,parts=parts,name='spp'); call parts%spp%max_alloc
    parts%spp%r = 0.d0
-!$acc enter data create(parts%spp,parts%spp%r(:))   
-
-   allocate(parts%spp0)   !!! VOF
-   call parts%spp0%set(rank=0,parts=parts,name='spp0'); call parts%spp0%max_alloc
-   parts%spp0%r = 0.d0
-!$acc enter data create(parts%spp0,parts%spp0%r(:))   
-
 
 endif
 
 !allocate(parts%drhodx); allocate(parts%drhodx%r(maxn))
 !parts%drhodx = 0.d0
-
-if(trim(parts%imaterial)=='soil'.and.parts%soil_model==1)then
-   allocate(parts%zr,parts%zrs,parts%zzeta,parts%zharbeta,parts%tnone,parts%vp0,parts%evi,parts%vp)
-   call parts%zr%set(rank=0,parts=parts,name='zr '); call parts%zr%max_alloc
-   parts%zr%r = 0.d0
-   call parts%zrs%set(rank=0,parts=parts,name='zrs '); call parts%zrs%max_alloc
-   parts%zrs%r = 0.d0
-   call parts%zzeta%set(rank=0,parts=parts,name='zzeta '); call parts%zzeta%max_alloc
-   parts%zzeta%r = 0.d0
-   call parts%zharbeta%set(rank=2,parts=parts,name='zharbeta '); call parts%zharbeta%max_alloc
-   parts%zharbeta%x%r = 0.d0;    parts%zharbeta%y%r =0.d0
-   parts%zharbeta%xy%r =  0.d0;  parts%zharbeta%z%r =0.d0
-   call parts%tnone%set(rank=0,parts=parts,name='tnone '); call parts%tnone%max_alloc
-   parts%tnone%r = 0.d0   
-   call parts%vp0%set(rank=0,parts=parts,name='vp0 '); call parts%vp0%max_alloc
-   parts%vp0%r = 0.d0
-   call parts%vp%set(rank=0,parts=parts,name='vp '); call parts%vp%max_alloc
-   parts%vp%r = 0.d0   
-   call parts%evi%set(rank=0,parts=parts,name='evi '); call parts%evi%max_alloc
-   parts%evi%r = 0.d0
-
-
-   allocate(parts%DRS,parts%DVP)
-   allocate(parts%dharbeta1,parts%dharbeta2,parts%dharbeta3,parts%dharbeta4)
-
-   call parts%DRS%set(rank=0,parts=parts,name='DRS ')
-   call parts%DRS%max_alloc; parts%DRS%r = 0.d0
-
-   call parts%dharbeta1%set(rank=0,parts=parts,name='dharbeta1 ')
-   call parts%dharbeta1%max_alloc; parts%dharbeta1%r = 0.d0
-
-   call parts%dharbeta2%set(rank=0,parts=parts,name='dharbeta2 ')
-   call parts%dharbeta2%max_alloc; parts%dharbeta2%r = 0.d0
-
-   call parts%dharbeta3%set(rank=0,parts=parts,name='dharbeta3 ')
-   call parts%dharbeta3%max_alloc; parts%dharbeta3%r = 0.d0
-
-   call parts%dharbeta4%set(rank=0,parts=parts,name='dharbeta4 ')
-   call parts%dharbeta4%max_alloc; parts%dharbeta4%r = 0.d0   
-
-   call parts%DVP%set(rank=0,parts=parts,name='DVP '); call parts%DVP%max_alloc
-   parts%DVP%r = 0.d0   
-
-
-   allocate(parts%ZRS_min,parts%zharbeta_min,parts%VP_min)
-
-   call parts%ZRS_min%set(rank=0,parts=parts,name='ZRS_min ')
-   call parts%ZRS_min%max_alloc; parts%ZRS_min%r = 0.d0
-
-   call parts%zharbeta_min%set(rank=2,parts=parts,name='zharbeta_min ')
-   call parts%zharbeta_min%max_alloc
-   parts%zharbeta_min%x%r = 0.d0;    parts%zharbeta_min%y%r =0.d0
-   parts%zharbeta_min%xy%r =  0.d0;  parts%zharbeta_min%z%r =0.d0   
-
-   call parts%vp_min%set(rank=0,parts=parts,name='vp_min '); call parts%vp_min%max_alloc
-   parts%vp_min%r = 0.d0   
-
-
-endif
 
 return
 end subroutine
@@ -944,7 +738,9 @@ end subroutine
 !
       integer :: i, j, k, d, ntotal, it
       type(particles), pointer :: pl
-     
+      
+      !call parts%setup_ndim1; call soil%setup_ndim1
+
       do it = 1, parts%maxtimestep   
   
         parts%itimestep = parts%itimestep+1
@@ -968,9 +764,20 @@ end subroutine
            call first_half
         
                              ! For soil
+                             !if(.not.single_phase)then
                                 pl => soil
                                 call first_half
-                                if(pl%soil_model==0)call pl%scaling_back
+
+                                if(pl%critical_state==0)then
+                                call drucker_prager_failure_criterion(pl)
+                                else
+                        call  drucker_prager_failure_criterion_critical_state(pl)
+                                endif
+
+                                !call volume_fraction_soil(soil)
+                                !call volume_fraction_water(parts, soil)
+                             !endif  
+
         endif
 
 !---  Definition of variables out of the function vector:    
@@ -979,31 +786,72 @@ end subroutine
         call single_step
 
 !****************************************************************        
-!        do i = 1, parts%ntotal + parts%nvirt
-!           if(parts%zone(i)==4)then
-!              parts%dvx%x%r(i)=0.d0; parts%dvx%y%r(i)=0.d0
-!              parts%av%x%r(i)=0.d0; parts%av%y%r(i)=0.d0
-!              parts%dvof%r(i)=0.d0
-!              parts%drho%r(i)=0.d0
-!           endif   
-!        enddo
+        do i = 1, parts%ntotal + parts%nvirt
+           if(parts%zone(i)==4)then
+              parts%dvx%x%r(i)=0.d0; parts%dvx%y%r(i)=0.d0
+              parts%av%x%r(i)=0.d0; parts%av%y%r(i)=0.d0
+              parts%dvof%r(i)=0.d0
+              parts%drho%r(i)=0.d0
+           endif   
+        enddo
 !***************************************************************
 
         if (parts%itimestep .eq. 1) then
            pl => parts
            call first_step
 
+                                !if(.not.single_phase)then
                                     pl => soil
                                     call first_step
+
+                                    if(pl%plasticity==2)then
+                                       call plastic_or_not(pl)
+                                       call return_mapping
+                                    endif
+                                    
+                                    if(pl%critical_state==0)then
+                                    call drucker_prager_failure_criterion(pl)
+                                    else
+                   call drucker_prager_failure_criterion_critical_state(pl)
+                                    endif
+
+                                    !call volume_fraction_soil(soil)
+                                    !call volume_fraction_water(parts, soil)
+                                !endif
         else
    
            pl => parts
            call second_half          
 
+                                !if(.not.single_phase)then
                                    pl => soil
                                    call second_half
-                                   if(pl%soil_model==0)call pl%scaling_back
+
+                                   if(pl%plasticity==2)then
+                                      call plastic_or_not(pl)
+                                      call return_mapping
+                                   endif
+
+                                    if(pl%critical_state==0)then
+                                    call drucker_prager_failure_criterion(pl)
+                                    else
+                   call drucker_prager_failure_criterion_critical_state(pl)
+                                    endif
+
+                                   
+                                   !call volume_fraction_soil(soil)
+                                   !call volume_fraction_water(parts, soil)
+                                !endif
+
         endif 
+
+
+! For saturated flow
+
+!        if(.not.single_phase)then
+!           call volume_fraction_soil(soil)
+!           call volume_fraction_water(parts, soil)
+!        endif        
 
 !--------------------Velocity Inlet-----------------------
 
@@ -1057,25 +905,6 @@ type(p2r) vxi(3), dvxi(3), v_mini(3)
             pl%vof = pl%vof+(pl%dt/2.)*pl%dvof 
          endif
 
-!Cambridge model         
-         if(trim(pl%imaterial)=='soil'.and.pl%soil_model==1)then
-            pl%ZRS_min = pl%ZRS
-            pl%ZRS = pl%ZRS+(pl%dt/2.)*pl%DRS
-
-            pl%zharbeta_min%x = pl%zharbeta%x
-            pl%zharbeta_min%y = pl%zharbeta%y
-            pl%zharbeta_min%z = pl%zharbeta%z
-            pl%zharbeta_min%xy = pl%zharbeta%xy
-
-            pl%zharbeta%x = pl%zharbeta%x + pl%dt/2.*pl%dharbeta1
-            pl%zharbeta%y = pl%zharbeta%y + pl%dt/2.*pl%dharbeta2
-            pl%zharbeta%z = pl%zharbeta%z + pl%dt/2.*pl%dharbeta3
-            pl%zharbeta%xy = pl%zharbeta%xy + pl%dt/2.*pl%dharbeta4
-
-            pl%VP_min = pl%VP
-            pl%VP = pl%VP + pl%dt/2.*pl%DVP
-
-         endif         
 
          if(trim(pl%imaterial)=='soil')then
                   if(pl%stress_integration==1)then
@@ -1087,26 +916,18 @@ type(p2r) vxi(3), dvxi(3), v_mini(3)
          pl%str_min%xy = pl%str%xy
          pl%str_min%y = pl%str%y
          pl%p_min   = pl%p
-         pl%epsilon_p_min = pl%epsilon_p
-
          pl%str%x = pl%str%x + (pl%dt/2.)*pl%dstr%x
          pl%str%xy = pl%str%xy + (pl%dt/2.)*pl%dstr%xy
          pl%str%y = pl%str%y + (pl%dt/2.)*pl%dstr%y
          !pl%str = pl%str + (dt/2.) * pl%dstr
          pl%p = pl%p + (pl%dt/2.)*pl%dp      !!!simultaneous pressure
-         pl%epsilon_p = pl%epsilon_p + (pl%dt/2.)*pl%depsilon_p
-
                   endif
          endif
       !write(*,*) pl%ntotal + pl%nvirt    
-
-!!!!! Here we need parallization!      
-!$omp parallel do private(d,vxi,dvxi,v_mini)
       do i = 1, pl%ntotal +pl%nvirt    ! originally only pl%ntotal       
          if(pl%itype(i)<0)cycle
-!         if(pl%x(2,i)>0.3.and.(pl%zone(i)==6.or.pl%zone(i)==100))cycle           
+         if(pl%x(2,i)>0.3.and.(pl%zone(i)==6.or.pl%zone(i)==100))cycle           
          vxi = pl%vx%cmpt(i); dvxi = pl%dvx%cmpt(i); v_mini = pl%v_min%cmpt(i)
-
          do d = 1, pl%dim
          !   pl%v_min(d, i) = pl%vx(d, i)
          !   pl%vx(d, i) = pl%vx(d, i) + (dt/2.)*pl%dvx(d, i)
@@ -1119,7 +940,6 @@ type(p2r) vxi(3), dvxi(3), v_mini(3)
             !pl%v_min(2, i) = pl%vx%y%r(i)
             !pl%vx%y%r(i) = pl%vx%y%r(i) + (dt/2.)*pl%dvx%y%r(i)
       enddo
-!$omp end parallel do
 
       return
       end subroutine
@@ -1143,17 +963,6 @@ type(p2r) vxi(3), dvxi(3), v_mini(3)
             pl%vof = pl%vof+(pl%dt/2.)*pl%dvof
          endif
 
-         if(trim(pl%imaterial)=='soil'.and.pl%soil_model==1)then
-            pl%ZRS = pl%ZRS+(pl%dt/2.)*pl%DRS
-
-            pl%zharbeta%x = pl%zharbeta%x + pl%dt/2.*pl%dharbeta1
-            pl%zharbeta%y = pl%zharbeta%y + pl%dt/2.*pl%dharbeta2
-            pl%zharbeta%z = pl%zharbeta%z + pl%dt/2.*pl%dharbeta3
-            pl%zharbeta%xy = pl%zharbeta%xy + pl%dt/2.*pl%dharbeta4
-
-            pl%VP = pl%VP + pl%dt/2.*pl%DVP            
-         endif
-
 
          if(trim(pl%imaterial)=='soil')then
                   if(pl%stress_integration==1)then
@@ -1161,26 +970,17 @@ type(p2r) vxi(3), dvxi(3), v_mini(3)
          pl%str%xy = pl%str%xy + pl%dt*pl%dstr%xy
          pl%str%y = pl%str%y + pl%dt*pl%dstr%y
          pl%p   = pl%p   + pl%dt*pl%dp       !!! simultaneous pressure
-         pl%epsilon_p = pl%epsilon_p + pl%dt*pl%depsilon_p
                   elseif(pl%stress_integration==2)then
          pl%str%x = pl%str%x + (pl%dt/2.)*pl%dstr%x
          pl%str%xy = pl%str%xy + (pl%dt/2.)*pl%dstr%xy
          pl%str%y = pl%str%y + (pl%dt/2.)*pl%dstr%y
          pl%p   = pl%p + (pl%dt/2.)*pl%dp    !!! simultaneous pressure
-         pl%epsilon_p = pl%epsilon_p + (pl%dt/2.)*pl%depsilon_p
-            !write(*,*) 'first step, soil%str'
-            !write(*,*) pl%str%x%r(1:10)                             
-            !write(*,*) pl%str%xy%r(1:10)                             
-            !write(*,*) pl%str%y%r(1:10)                             
-            !write(*,*) pl%p%r(1:10)                             
                   endif
          endif
         
-!!!!! Here we need parallization!      
-!$omp parallel do private(d,vxi,dvxi,avi,psi)
       do i=1,pl%ntotal +pl%nvirt     ! origionally pl%ntotal
          if(pl%itype(i)<0)cycle
-!         if(pl%x(2,i)>0.3.and.(pl%zone(i)==6.or.pl%zone(i)==100))cycle           
+         if(pl%x(2,i)>0.3.and.(pl%zone(i)==6.or.pl%zone(i)==100))cycle           
          vxi = pl%vx%cmpt(i); dvxi = pl%dvx%cmpt(i); avi = pl%av%cmpt(i)
          psi = pl%ps%cmpt(i)
          do d = 1, pl%dim        
@@ -1197,11 +997,8 @@ type(p2r) vxi(3), dvxi(3), v_mini(3)
             !pl%vx(2, i) = pl%vx(2, i) + (dt/2.) * pl%dvx%y%r(i)   &
             !            + pl%av(2, i)
             !pl%x(2, i) = pl%x(2, i) + dt * pl%vx(2, i)
-
-            !if(i<=10)write(*,*) i, vxi(1)%p,vxi(2)%p
-            !if(i<=10)write(*,*) i, pl%x(1,i),pl%x(2,i)
       enddo 
-      !$omp end parallel do     
+      
       return
       end subroutine
 
@@ -1209,9 +1006,7 @@ type(p2r) vxi(3), dvxi(3), v_mini(3)
 ! ------------------------------------------------------------------
       implicit none
       type(p2r) vxi(3), dvxi(3), v_mini(3),avi(3), psi(3)
-
-
-!$omp parallel do private(d,vxi,dvxi,v_mini,avi,psi)
+      !$omp parallel do private(d,vxi,dvxi,v_mini,avi)
       do i=1,pl%ntotal +pl%nvirt  ! origionally pl%ntotal            
             
          if (.not.pl%summation_density ) then 
@@ -1226,16 +1021,6 @@ type(p2r) vxi(3), dvxi(3), v_mini(3)
             pl%vof%r(i) = pl%vof_min%r(i)+pl%dt*pl%dvof%r(i) 
          endif
 
-         if(trim(pl%imaterial)=='soil'.and.pl%soil_model==1)then
-            pl%ZRS%r(i) = pl%ZRS%r(i)+(pl%dt)*pl%DRS%r(i)
-
-            pl%zharbeta%x%r(i) = pl%zharbeta%x%r(i) + pl%dt*pl%dharbeta1%r(i)
-            pl%zharbeta%y%r(i) = pl%zharbeta%y%r(i) + pl%dt*pl%dharbeta2%r(i)
-            pl%zharbeta%z%r(i) = pl%zharbeta%z%r(i) + pl%dt*pl%dharbeta3%r(i)
-            pl%zharbeta%xy%r(i) = pl%zharbeta%xy%r(i) + pl%dt*pl%dharbeta4%r(i)
-
-            pl%VP%r(i) = pl%VP%r(i) + pl%dt*pl%DVP%r(i)                        
-         endif
 
          if(trim(pl%imaterial)=='soil')then 
                   if(pl%stress_integration==1)then 
@@ -1243,18 +1028,16 @@ type(p2r) vxi(3), dvxi(3), v_mini(3)
          pl%str%xy%r(i) = pl%str%xy%r(i) + pl%dt*pl%dstr%xy%r(i)
          pl%str%y%r(i) = pl%str%y%r(i) + pl%dt*pl%dstr%y%r(i)
          pl%p%r(i)   = pl%p%r(i)   + pl%dt*pl%dp%r(i)       !!! simultaneous pressure
-         pl%epsilon_p%r(i) = pl%epsilon_p%r(i) + pl%dt*pl%depsilon_p%r(i)
                   elseif(pl%stress_integration==2)then
          pl%str%x%r(i) = pl%str_min%x%r(i) + pl%dt*pl%dstr%x%r(i)
          pl%str%xy%r(i) = pl%str_min%xy%r(i) + pl%dt*pl%dstr%xy%r(i)
          pl%str%y%r(i) = pl%str_min%y%r(i) + pl%dt*pl%dstr%y%r(i)
          pl%p%r(i)   = pl%p_min%r(i) + pl%dt*pl%dp%r(i)     !!! simultaneous pressure
-         pl%epsilon_p%r(i) = pl%epsilon_p_min%r(i) + pl%dt*pl%depsilon_p%r(i)
                   endif
          endif
         
          if(pl%itype(i)<0)cycle
-!         if(pl%x(2,i)>0.3.and.(pl%zone(i)==6.or.pl%zone(i)==100))cycle           
+         if(pl%x(2,i)>0.3.and.(pl%zone(i)==6.or.pl%zone(i)==100))cycle           
 
          vxi = pl%vx%cmpt(i); dvxi = pl%dvx%cmpt(i) ; v_mini = pl%v_min%cmpt(i)
          avi = pl%av%cmpt(i); psi = pl%ps%cmpt(i)
@@ -1262,7 +1045,8 @@ type(p2r) vxi(3), dvxi(3), v_mini(3)
             !pl%vx(d, i) = pl%v_min(d, i) + dt * pl%dvx(d, i)   &
             !            + pl%av(d, i)
             !pl%x(d, i) = pl%x(d, i) + dt * pl%vx(d, i)
-            vxi(d)%p = v_mini(d)%p + pl%dt * dvxi(d)%p + avi(d)%p
+            vxi(d)%p = v_mini(d)%p + pl%dt * dvxi(d)%p   &
+                        + avi(d)%p
             !pl%x(d, i) = pl%x(d, i) + pl%dt * vxi(d)%p
              pl%x(d, i) = pl%x(d, i) + pl%dt * (vxi(d)%p + psi(d)%p) !!!Shifting
          !if(i>4160)write(*,*) i,vxi(2)%p
@@ -1278,349 +1062,34 @@ type(p2r) vxi(3), dvxi(3), v_mini(3)
       return
       end subroutine
 
-      end subroutine
-
-
-!----------------------------------------------------------------------
-      subroutine time_integration_GPU
-!----------------------------------------------------------------------
-      implicit none     
-!
-      integer :: i, j, k, d, ntotal, it
-     
-      do it = 1, parts%maxtimestep   
-  
-        parts%itimestep = parts%itimestep+1
-
-        !parts%itimestep = itimestep
-        soil%itimestep  = parts%itimestep
-
-        if (mod(parts%itimestep,parts%print_step).eq.0) then
-         write(*,*)'______________________________________________'
-         write(*,*)'  current number of time step =',              &
-                   parts%itimestep,'     current time=', real(parts%time+parts%dt)
-         write(*,*)'______________________________________________'
-        endif  
-        
-!     If not first time step, then update thermal energy, density and 
-!     velocity half a time step  
-
-        if (parts%itimestep .ne. 1) then
-           call first_half_GPU(parts)
-           call first_half_GPU(soil)
-           call scaling_back(soil)
-        endif
-
-!---  Definition of variables out of the function vector:    
-         call single_step_GPU
-        !call single_step_water_GPU
-        !call single_step_soil_GPU
-
-!****************************************************************        
-!        do i = 1, parts%ntotal + parts%nvirt
-!           if(parts%zone(i)==4)then
-!              parts%dvx%x%r(i)=0.d0; parts%dvx%y%r(i)=0.d0
-!              parts%av%x%r(i)=0.d0; parts%av%y%r(i)=0.d0
-!              parts%dvof%r(i)=0.d0
-!              parts%drho%r(i)=0.d0
-!           endif   
-!        enddo
-!***************************************************************
-
-        if (parts%itimestep .eq. 1) then
-           call first_step_GPU(parts)
-           call first_step_GPU(soil)
-        else
-           call second_half_GPU(parts)
-           call second_half_GPU(soil)
-           call scaling_back(soil)
-        endif 
-
-!--------------------Velocity Inlet-----------------------
-
-!        call vof_sph
-!        cycle
-  
-        parts%time = parts%time + parts%dt
-        soil%time = parts%time
-
-!	if (itimestep>=save_step_from.and.mod(itimestep,save_step).eq.0) then
-!          call output
-!	endif 
-
-!        if (mod(itimestep,print_step).eq.0) then
-!          write(*,*)
-!          write(*,101)'x','velocity', 'dvx'    
-!          write(*,100)x(1,moni_particle), vx(1,moni_particle), 
-!     &                dvx(1,moni_particle)    
-!        endif
-        
-!101     format(1x,3(2x,a12))	 
-!100     format(1x,3(2x,e13.6))
-
-      enddo
-
-      return
-
-! -------------------
-      contains
-! -------------------
-
-      subroutine first_half_GPU(pl)
-! ---------------------------------------------------------------------
-implicit none
-type(particles) pl
-integer i, ntotal
-real(dp) dt
-
-ntotal = pl%ntotal + pl%nvirt
-dt = pl%dt
-
-         if (.not.pl%summation_density) then
-!$omp parallel do                 
-!$acc kernels loop independent vector
-            do i = 1, ntotal 
-               pl%rho_min%r(i) = pl%rho%r(i) 
-               pl%rho%r(i) = pl%rho%r(i)+(dt/2.)*pl%drho%r(i)
-            enddo
-!$omp end parallel do
-!$omp barrier
-         endif
-
-         if(trim(pl%imaterial)=='water'.and.pl%volume_fraction)then
-!$omp parallel do                
-!$acc kernels loop independent vector
-             do i = 1, ntotal
-                pl%vof_min%r(i) = pl%vof%r(i)
-                pl%vof%r(i)  = pl%vof%r(i) + dt/2.*pl%dvof%r(i)
-             enddo
-!$omp end parallel do
-!$omp barrier
-         endif
-
-         if(trim(pl%imaterial)=='soil'.and.pl%critical_state==1)then
-!$omp parallel do                 
-!$acc kernels loop independent vector
-             do i = 1, ntotal 
-                pl%vof_min%r(i) = pl%vof%r(i)
-                pl%vof%r(i)  = pl%vof%r(i) + dt/2.*pl%dvof%r(i)
-             enddo   
-!$omp end parallel do
-!$omp barrier
-
-         endif
-
-
-         if(trim(pl%imaterial)=='soil')then
-!$omp parallel do                 
-!$acc kernels loop independent vector
-         do i = 1, ntotal                   
-         pl%str_min%x%r(i) = pl%str%x%r(i)
-         pl%str_min%xy%r(i) = pl%str%xy%r(i)
-         pl%str_min%y%r(i) = pl%str%y%r(i)
-         pl%p_min%r(i)   = pl%p%r(i)
-         pl%epsilon_p_min%r(i) = pl%epsilon_p%r(i)
-
-         pl%str%x%r(i) = pl%str%x%r(i) + (dt/2.)*pl%dstr%x%r(i)
-         pl%str%xy%r(i) = pl%str%xy%r(i) + (dt/2.)*pl%dstr%xy%r(i)
-         pl%str%y%r(i) = pl%str%y%r(i) + (dt/2.)*pl%dstr%y%r(i)
-         !pl%str = pl%str + (dt/2.) * pl%dstr
-         pl%p%r(i) = pl%p%r(i) + (dt/2.)*pl%dp%r(i)      
-         pl%epsilon_p%r(i) = pl%epsilon_p%r(i) + (dt/2.)*pl%depsilon_p%r(i)
-         enddo
-!$omp end parallel do
-!$omp barrier
-         endif
-
-!$omp parallel do                 
-!$acc kernels loop independent vector present(pl%itype)
-      do i = 1, ntotal     
-         if(pl%itype(i)<0)cycle
-!         if(pl%x(2,i)>0.3.and.(pl%zone(i)==6.or.pl%zone(i)==100))cycle           
-
-            pl%v_min%x%r(i) =  pl%vx%x%r(i)         
-            pl%v_min%y%r(i) =  pl%vx%y%r(i)         
-            pl%vx%x%r(i) = pl%vx%x%r(i) + dt/2.d0*pl%dvx%x%r(i)         
-            pl%vx%y%r(i) = pl%vx%y%r(i) + dt/2.d0*pl%dvx%y%r(i)         
-
-      enddo
-!$omp end parallel do
-!$omp barrier
-      return
-      end subroutine
-
-
-      subroutine first_step_GPU(pl)
-! -------------------------------------------------------------------
-      implicit none
-      type(particles) pl
-      integer i,ntotal
-      real(dp) dt
-
-      ntotal = pl%ntotal+pl%nvirt
-      dt = pl%dt
-
-         if (.not.pl%summation_density ) then
-!$omp parallel do                 
-!$acc kernels loop independent vector  
-            do i = 1, ntotal
-               pl%rho%r(i) = pl%rho%r(i) + (dt/2.)* pl%drho%r(i)
-            enddo
-!$omp end parallel do
-!$omp barrier
-         endif
-
-         if(trim(pl%imaterial)=='water'.and.pl%volume_fraction)then
-!$omp parallel do                 
-!$acc kernels loop independent 
-            do i = 1, ntotal
-               pl%vof%r(i) = pl%vof%r(i)+(dt/2.)*pl%dvof%r(i)
-            enddo
-!$omp end parallel do
-!$omp barrier
-         endif
-
-         if(trim(pl%imaterial)=='soil'.and.pl%critical_state==1)then
-!$omp parallel do                 
-!$acc kernels loop independent vector
-            do i = 1, ntotal
-               pl%vof%r(i) = pl%vof%r(i)+(dt/2.)*pl%dvof%r(i)
-            enddo   
-!$omp end parallel do
-!$omp barrier
-         endif
-
-
-         if(trim(pl%imaterial)=='soil')then
-                  if(pl%stress_integration==1)then
-         pl%str%x = pl%str%x + pl%dt*pl%dstr%x
-         pl%str%xy = pl%str%xy + pl%dt*pl%dstr%xy
-         pl%str%y = pl%str%y + pl%dt*pl%dstr%y
-         pl%p   = pl%p   + pl%dt*pl%dp       !!! simultaneous pressure
-         pl%epsilon_p = pl%epsilon_p + pl%dt*pl%depsilon_p
-                  elseif(pl%stress_integration==2)then
-
-!$omp parallel do                 
-!$acc kernels loop independent vector 
-         do i = 1, ntotal
-         pl%str%x%r(i) = pl%str%x%r(i) + (dt/2.)*pl%dstr%x%r(i)
-         pl%str%xy%r(i) = pl%str%xy%r(i) + (dt/2.)*pl%dstr%xy%r(i)
-         pl%str%y%r(i) = pl%str%y%r(i) + (dt/2.)*pl%dstr%y%r(i)
-         pl%p%r(i)   = pl%p%r(i) + (dt/2.)*pl%dp%r(i)    !!! simultaneous pressure
-         pl%epsilon_p%r(i) = pl%epsilon_p%r(i) + (dt/2.)*pl%depsilon_p%r(i)
-         enddo
-!$omp end parallel do
-!$omp barrier
-                  endif
-         endif
-
-!$omp parallel do                 
-!$acc kernels loop independent vector present(pl%itype,pl%x) 
-      do i=1,ntotal    
-         if(pl%itype(i)<0)cycle
-!         if(pl%x(2,i)>0.3.and.(pl%zone(i)==6.or.pl%zone(i)==100))cycle           
-
-          pl%vx%x%r(i) = pl%vx%x%r(i) + (dt/2.) * pl%dvx%x%r(i)   &
-                       + pl%av%x%r(i)
-          pl%vx%y%r(i) = pl%vx%y%r(i) + (dt/2.) * pl%dvx%y%r(i)   &
-                       + pl%av%y%r(i)            
-          pl%x(1, i) = pl%x(1, i) + dt * (pl%vx%x%r(i)+pl%ps%x%r(i)) 
-          pl%x(2, i) = pl%x(2, i) + dt * (pl%vx%y%r(i)+pl%ps%y%r(i))
-      enddo 
-!$omp end parallel do
-!$omp barrier
-
-      return
-      end subroutine
-
-      subroutine second_half_GPU(pl)
+      subroutine return_mapping
 ! ------------------------------------------------------------------
       implicit none
-      type(particles) pl
-      integer i,ntotal
-      real(dp) dt
 
-      ntotal = pl%ntotal+pl%nvirt
-      dt = pl%dt
-
-            
-         if (.not.pl%summation_density ) then 
+      do i=1,pl%ntotal+pl%nvirt  ! origionally pl%ntotal            
                  
-!$omp parallel do                 
-!$acc kernels loop independent vector
-            do i=1,ntotal              
-               pl%rho%r(i) = pl%rho_min%r(i) + dt*pl%drho%r(i)
-            enddo   
-!$omp end parallel do
-!$omp barrier
-         endif
-   
-         if(trim(pl%imaterial)=='water'.and.pl%volume_fraction)then
-!$omp parallel do                 
-!$acc kernels loop independent vector
-            do i=1,ntotal             
-               pl%vof%r(i) = pl%vof_min%r(i)+dt*pl%dvof%r(i) 
-            enddo   
-!$omp end parallel do
-!$omp barrier
-         endif
-                 
-         if(trim(pl%imaterial)=='soil'.and.pl%critical_state==1)then
-!$omp parallel do                 
-!$acc kernels loop independent vector
-            do i=1,ntotal
-               pl%vof%r(i) = pl%vof_min%r(i)+dt*pl%dvof%r(i) 
-            enddo   
-!$omp end parallel do
-!$omp barrier
-         endif
-
-
-         if(trim(pl%imaterial)=='soil')then 
+         !if(trim(pl%imaterial)=='soil')then
+         if(pl%fail(i)==1)then 
                   if(pl%stress_integration==1)then 
-      do i=1,ntotal              
-         pl%str%x%r(i) = pl%str%x%r(i) + pl%dt*pl%dstr%x%r(i)
-         pl%str%xy%r(i) = pl%str%xy%r(i) + pl%dt*pl%dstr%xy%r(i)
-         pl%str%y%r(i) = pl%str%y%r(i) + pl%dt*pl%dstr%y%r(i)
-         pl%p%r(i)   = pl%p%r(i)   + pl%dt*pl%dp%r(i)       !!! simultaneous pressure
-         pl%epsilon_p%r(i) = pl%epsilon_p%r(i) + pl%dt*pl%depsilon_p%r(i)
-      enddo   
+         pl%str%x%r(i) = pl%str%x%r(i) + pl%dt*pl%dstr2%x%r(i)
+         pl%str%xy%r(i) = pl%str%xy%r(i) + pl%dt*pl%dstr2%xy%r(i)
+         pl%str%y%r(i) = pl%str%y%r(i) + pl%dt*pl%dstr2%y%r(i)
+         pl%p%r(i)   = pl%p%r(i)   + pl%dt*pl%dp2%r(i)       !!! simultaneous pressure
                   elseif(pl%stress_integration==2)then
-!$omp parallel do                 
-!$acc kernels loop independent vector
-      do i=1,ntotal              
-         pl%str%x%r(i) = pl%str_min%x%r(i) + dt*pl%dstr%x%r(i)
-         pl%str%xy%r(i) = pl%str_min%xy%r(i) + dt*pl%dstr%xy%r(i)
-         pl%str%y%r(i) = pl%str_min%y%r(i) + dt*pl%dstr%y%r(i)
-         pl%p%r(i)   = pl%p_min%r(i) + dt*pl%dp%r(i)     !!! simultaneous pressure
-         pl%epsilon_p%r(i) = pl%epsilon_p_min%r(i) + dt*pl%depsilon_p%r(i)
-      enddo    
-!$omp end parallel do
-!$omp barrier
+         pl%str%x%r(i) = pl%str_min%x%r(i) + pl%dt*pl%dstr%x%r(i)
+         pl%str%xy%r(i) = pl%str_min%xy%r(i) + pl%dt*pl%dstr%xy%r(i)
+         pl%str%y%r(i) = pl%str_min%y%r(i) + pl%dt*pl%dstr%y%r(i)
+         pl%p%r(i)   = pl%p_min%r(i) + pl%dt*pl%dp%r(i)     !!! simultaneous pressure
                   endif
          endif
-
-!$omp parallel do                 
-!$acc kernels loop independent vector present(pl%itype,pl%x)
-      do i=1,ntotal              
-         if(pl%itype(i)<0)cycle
-!         if(pl%x(2,i)>0.3.and.(pl%zone(i)==6.or.pl%zone(i)==100))cycle           
-
-          pl%vx%x%r(i) = pl%v_min%x%r(i) + dt * pl%dvx%x%r(i)   &
-                       + pl%av%x%r(i)
-          pl%vx%y%r(i) = pl%v_min%y%r(i) + dt * pl%dvx%y%r(i)   &
-                       + pl%av%y%r(i)
-            
-          pl%x(1, i) = pl%x(1, i) + dt * (pl%vx%x%r(i)+pl%ps%x%r(i))                  
-          pl%x(2, i) = pl%x(2, i) + dt * (pl%vx%y%r(i)+pl%ps%y%r(i))                              
+         !endif
+         
       enddo
-!$omp end parallel do
-!$omp barrier
-      return
-      end subroutine      
 
+      return
       end subroutine
 
+      end subroutine
 
 !----------------------------------------------------------------------      
       subroutine time_integration_for_water
@@ -2115,16 +1584,17 @@ pl%dvx%x = 0.d0; pl%dvx%y = 0.d0; pl%drho = 0.d0
 if(trim(pl%imaterial)=='water')pl%dvof = 0.d0
 if(trim(pl%imaterial)=='soil')then
    pl%dstr%x = 0.d0; pl%dstr%xy = 0.d0; pl%dstr%y = 0.d0; pl%dp = 0.d0
-   pl%depsilon_p = 0.d0; pl%dstr%z =0.d0
    if(pl%critical_state==1) pl%dvof = 0.d0
 endif
 
-!if(trim(pl%imaterial)=='water') call inlet_boundary2
+if(trim(pl%imaterial)=='water') call inlet_boundary2
 !call over_flow(pl)  ! Outlet boundary !Doesn't work!
-!call symmetry_boundary(pl)   !!! subjetting
-!if(iphase==2) call slip_boundary(pl)   !!! submerged column collapse, take_virtual 
+call symmetry_boundary(pl)   !!! subjetting
+!if(iphase==2) call slip_boundary(pl)   !!! submerged column collapse
 !---  Interaction parameters, calculating neighboring particles
 !     and optimzing smoothing length
+
+
 
 if (pl%nnps.eq.1) then 
    call direct_find(pl)
@@ -2157,16 +1627,19 @@ call Sherpard_filter(pl)
 !if(mod(pl%itimestep,30)==0) call sum_density(pl)
 !call sum_density(pl)
 !else             
-    !call con_density(pl)     
+    !call con_density(pl)         
     pl%drho = -pl%rho*pl%div2(pl%vx)
 !endif
-
+    
 
 if(pl%artificial_density)then
    !if(trim(pl%imaterial)=='water')then
       !!call renormalize_density_gradient(pl)
       !call art_density(pl)
       call delta_sph_omp(pl,pl%rho,pl%drho)
+      !call output_field(pl,pl%rho)
+      !call output_field(pl,pl%drho)
+      !pause
    !endif
 endif
 
@@ -2182,14 +1655,19 @@ endif
 !---  Internal forces:
 
 !call shear_strain_rate(pl)
+!pl%tab%x%ndim1 = pl%ntotal+pl%nvirt
+!pl%tab%xy%ndim1 = pl%tab%x%ndim1; pl%tab%y%ndim1 = pl%tab%x%ndim1
+!write(*,*) pl%tab%x%ndim1,pl%vx%x%ndim1
 pl%tab%x = 2.d0/3.d0*(2.d0*pl%df4(pl%vx%x,'x')-pl%df4(pl%vx%y,'y'))
 pl%tab%xy = pl%df4(pl%vx%x,'y')+pl%df4(pl%vx%y,'x')
 pl%tab%y = 2.d0/3.d0*(2.d0*pl%df4(pl%vx%y,'y')-pl%df4(pl%vx%x,'x'))
 
-! Calculate dilatancy angle 'psi' and volume fraction rate of change 'dvof' with critical
-! state theory
 if(trim(pl%imaterial)=='soil'.and.pl%critical_state==1)then
-   call soil_critical_state(pl)
+   call volume_fraction_soil_critical_state(pl)
+   !write(*,*) 'sdfa'
+   !write(*,*) pl%vof%r(1:10)
+   !write(*,*) pl%psi%r(1:10)
+   !write(*,*) pl%dvof%r(1:10)
 endif
 
 if(trim(pl%imaterial)=='soil') pl%vcc = pl%div_omp(pl%vx)
@@ -2197,17 +1675,24 @@ if(trim(pl%imaterial)=='soil') pl%vcc = pl%div_omp(pl%vx)
 
 call pressure(pl)
 
+
+
 if(trim(pl%imaterial)=='water')then
    call newtonian_fluid(pl)
-endif   
+elseif(trim(pl%imaterial)=='soil')then
 
-if(trim(pl%imaterial)=='soil')then
+   if(pl%yield_criterion == 1)then
+      call mohr_coulomb_failure_criterion(pl)
+   elseif(pl%yield_criterion == 2)then
+           if(pl%critical_state==0)then
+      call drucker_prager_failure_criterion(pl)
+           else
+      call drucker_prager_failure_criterion_critical_state(pl)
+           endif
+   endif
 
-!Modified by Wu Hao:--------------------
-    if(pl%soil_model==0)call stress_rate(pl)
-    if(pl%soil_model==1) call KISUPERCAM(pl) 
-!-----------------------------------------------------------------   
-
+   if(mod(pl%itimestep,pl%print_step).eq.0)    &
+            write(*,*) 'Failured points: ', pl%nfail
 endif
 
 !Calculate internal force for water phase !! -phi_f Grad(p)
@@ -2227,11 +1712,21 @@ if(pl%imaterial=='water')then
    !pl%dvx%x = -pl%vof*pl%df_omp(pl%p,'x') + pl%df_omp(pl%vof*pl%str%x,'x') + pl%df_omp(pl%vof*pl%str%xy,'y')
    !pl%dvx%y = -pl%vof*pl%df_omp(pl%p,'y') + pl%df_omp(pl%vof*pl%str%xy,'x') + pl%df_omp(pl%vof*pl%str%y,'y')  
    !endif        
+   !write(*,*) pl%dvx%x%r(1:50),pl%dvx%y%r(1:50)
    !where (pl%rho%r.gt.0.0) pl%dvx%x%r = pl%dvx%x%r/pl%rho%r
    !where (pl%rho%r.gt.0.0) pl%dvx%y%r = pl%dvx%y%r/pl%rho%r
    pl%dvx%x = pl%dvx%x/pl%rho
    pl%dvx%y = pl%dvx%y/pl%rho
 
+!   call output_field(pl,pl%df(pl%p,'x'))
+!   call output_field(pl,pl%df(pl%p,'y'))
+!   call output_field(pl,pl%lap_omp(mat%viscosity,pl%vof*pl%vx%x))
+!   call output_field(pl,pl%lap_omp(mat%viscosity,pl%vof*pl%vx%y))
+!   call output_field(pl,pl%dvx%x)
+!   call output_field(pl,pl%dvx%y)
+!   pause
+
+   !write(*,*) pl%dvx%x%r(1:50),pl%dvx%y%r(1:50)
 else      
    !call int_force(pl)
    pl%dvx%x = -pl%df3_omp(pl%vof*pl%p,'x') + pl%df3_omp(pl%vof*pl%str%x,'x') + pl%df3_omp(pl%vof*pl%str%xy,'y')
@@ -2239,28 +1734,78 @@ else
    !where (pl%rho%r.gt.0.0) pl%dvx%x%r = pl%dvx%x%r/pl%rho%r
    !where (pl%rho%r.gt.0.0) pl%dvx%y%r = pl%dvx%y%r/pl%rho%r 
    pl%dvx%x = pl%dvx%x/pl%rho
-   pl%dvx%y = pl%dvx%y/pl%rho
-
+   pl%dvx%y = pl%dvx%y/pl%rho 
+!   call output_field(pl,pl%dvx%x)
+!   call output_field(pl,pl%dvx%y)
+!   pause
 endif      
 
 !if(trim(pl%imaterial)=='water'.and.water_tension_instability==2) &
 !   call tension_instability(pl) 
 
+! --- Plasticity flow rule   ! This was done before Jaummann_rate, because we 
+!     we need txx,tyy,tzz, which was destroyed in Jaumann_rate!
+
+if(trim(pl%imaterial)=='soil')then   
+   if(pl%plasticity==1)then 
+      call plastic_flow_rule(pl)
+   elseif(pl%plasticity==2)then     
+      call plastic_flow_rule2(pl)
+   elseif(pl%plasticity==3)then
+
+           if(pl%critical_state==0)then
+      call plastic_or_not(pl)
+           else
+      call plastic_or_not_critical_state(pl)
+           endif
+
+      if(pl%flow_rule==1) call plastic_flow_rule3(pl)
+      if(pl%flow_rule==2)then
+         if(pl%critical_state==0)then
+              call non_associated_plastic_flow_rule3(pl)
+         else
+              call non_associated_flow_rule_critical_state(pl)
+         endif
+      endif        
+   endif
+endif
+
+! --- Jaumann rate  !When???
+
+if(trim(pl%imaterial)=='soil')then
+   call Jaumann_rate(pl)
+!   call output_field(pl,pl%dstr%x)
+!   call output_field(pl,pl%dstr%y)
+!   call output_field(pl,pl%dstr%xy)
+!   call output_field(pl,pl%dp)
+!   call output_field(pl,pl%vcc)
+!   call output_field(pl,pl%wxy)
+!   pause
+endif
 
 !---  Artificial viscosity:
+
 if (pl%visc_artificial) call pl%art_visc_omp
 
 if(trim(pl%imaterial)=='soil'.and.pl%soil_artificial_stress)then
         !call art_stress(pl)
-        ! call artificial_stress(pl)             ! Added by Lu Shiyang
-    call pl%delta_sph_omp(pl%p,pl%dp)             !! Jump
-    call pl%delta_sph_omp(pl%str%x,pl%dstr%x)     !! Jump
-    call pl%delta_sph_omp(pl%str%xy,pl%dstr%xy)   !! No jump
-    call pl%delta_sph_omp(pl%str%y,pl%dstr%y)     !! Jump
+   call pl%delta_sph_omp(pl%p,pl%dp)             !! Jump
+   call pl%delta_sph_omp(pl%str%x,pl%dstr%x)     !! Jump
+   call pl%delta_sph_omp(pl%str%xy,pl%dstr%xy)   !! No jump
+   call pl%delta_sph_omp(pl%str%y,pl%dstr%y)     !! Jump
+   !call output_field(pl,pl%dstr%x)
+   !call output_field(pl,pl%dstr%y)
+   !call output_field(pl,pl%dstr%xy)
+   !call output_field(pl,pl%dp)
+   !call output_field(pl,pl%wi)
+   !pause   
 endif        
 if(trim(pl%imaterial)=='water'.and.pl%water_artificial_volume)then
         !call art_volume_fraction_water2(pl)
-         call pl%delta_sph_omp(pl%vof,pl%dvof)   !!! Important!
+        !call output_field(pl,pl%vof)
+        call pl%delta_sph_omp(pl%vof,pl%dvof)
+!        call output_field(pl,pl%dvof)
+!        pause
 endif        
 
 !--- Damping
@@ -2272,7 +1817,7 @@ endif
 !      if (ex_force)then
 !          if(self_gravity) call gravity_force(pl)
 !          call repulsive_force(pl)
-          call pl%repulsive_force_omp           !!!!!!!#### Not important!
+          call pl%repulsive_force_omp           !!!!!!!#########
 !      endif
 
 pl%dvx%y = pl%dvx%y + pl%gravity
@@ -2283,7 +1828,7 @@ pl%dvx%y = pl%dvx%y + pl%gravity
 
 !     Calculating average velocity of each partile for avoiding penetration
 
-if (pl%average_velocity) call av_vel_omp(pl) !!!!!!!#### Not important!
+if (pl%average_velocity) call av_vel_omp(pl) !!!!!!!##########
 if(iphase==1.and.pl%particle_shift)then
    call particle_shifting(pl)
 endif   
@@ -2308,7 +1853,7 @@ endif
 
 !---  Interaction parameters, calculating neighboring particles
 !     and optimzing smoothing length
-
+  
       if (parts%nnps.eq.1) then 
          call direct_find_2(parts,soil)
       else if (parts%nnps.eq.2) then
@@ -2322,17 +1867,17 @@ endif
 
       if(mod(parts%itimestep,parts%print_step).eq.0.and.parts%int_stat) then
          call parts%interaction_statistics
-      endif   
+      endif    
 
       call darcy_law_omp(parts,soil)          
-
       if(parts%water_pressure==1)then 
-         call interpolation(parts,parts%p,soil,soil%spp)  !!!important
-         call pore_water_pressure_omp(parts,soil)         !!!for instability
+         call interpolation(parts,parts%p,soil,soil%spp)
+         !call output_field(soil,soil%spp)
+         !pause
+         call pore_water_pressure_omp(parts,soil)
       else  !!Hydrostatic pressure
          soil%dvx%y = soil%dvx%y - pl%gravity*(1./2.7)
       endif
-
 
       if(parts%volume_fraction)then
               if(parts%critical_state==0)then
@@ -2340,14 +1885,12 @@ endif
               else
          !call volume_fraction_soil_critical_state(soil)   !!! Put forward! 
               endif
-
          call volume_fraction_water2_omp(parts,soil)  !! water%dvof
-
          call volume_fraction_water_omp(parts,soil)  ! phi_f = 1- phi_s, vof2
          !call volume_fraction_water_omp_with_filter(parts,soil)  ! phi_f = 1- phi_s
          if(parts%volume_fraction_renorm)then
-            if(mod(parts%itimestep,40).eq.0) then  !!without this, no
-               ntotal = parts%ntotal+parts%nvirt   !!transitional zone
+            if(mod(parts%itimestep,40).eq.0) then
+               ntotal = parts%ntotal+parts%nvirt
                parts%rho = parts%rho/parts%vof 
                parts%vof = parts%vof2
                parts%rho = parts%rho*parts%vof 
@@ -2370,1365 +1913,7 @@ endif
 
 return
 end subroutine
-                 
-!----------------------------------------------------------------------      
-                   subroutine single_step_test
-!----------------------------------------------------------------------
-!   Subroutine to determine the right hand side of a differential 
-!   equation in a single step for performing time integration 
-!----------------------------------------------------------------------
-!use param 
-!use declarations_sph
-!use m_sph_fo
-implicit none
-
-integer  nphase, iphase
-type(particles), pointer :: pl
-type(material), pointer :: mat
-logical :: dbg = .false.
-integer i, j,k,ntotal,it
-                 
-if(dbg) write(*,*) 'In single_step...'
-
-                                      nphase = 2
-                                      it = parts%itimestep
-     if(mod(it,10000)==0)then
-
-                                      write(*,*) 'it = ', it
-                                      if(parts%single_phase) nphase=1
-                                      
-
-                                      do iphase = 1, nphase
-                                         if(iphase==1) pl => parts  !!!
-                                         if(iphase==2) pl => soil   !!!
-
-
-call direct_find(pl)     
-
-if(iphase==1)then
-        write(*,*) 'sss', parts%get_scale_k()*parts%hsml(1)
-do k=1,pl%niac
-   i = pl%pair_i(k)
-   j = pl%pair_j(k)
-   if(i==1485) write(*,*) i,j,sqrt((pl%x(1,i)-pl%x(1,j))**2+(pl%x(2,i)-pl%x(2,j))**2) 
-   if(j==1485) write(*,*) j,i,sqrt((pl%x(1,i)-pl%x(1,j))**2+(pl%x(2,i)-pl%x(2,j))**2) 
-enddo
-endif
-write(*,*) '------------------'
-
-
-if(iphase==2)then
-do k=1,pl%niac
-   i = pl%pair_i(k)
-   j = pl%pair_j(k)
-   if(i==703) write(*,*) i,j,sqrt((pl%x(1,i)-pl%x(1,j))**2+(pl%x(2,i)-pl%x(2,j))**2) 
-   if(j==703) write(*,*) j,i,sqrt((pl%x(1,i)-pl%x(1,j))**2+(pl%x(2,i)-pl%x(2,j))**2) 
-enddo
-endif
-write(*,*) '---------------'
-
-                                            enddo ! iphase
-
-
-                if(.not.parts%single_phase)then
-
-         call direct_find_2(parts,soil)
-
-do k=1,parts%niac
-   i = parts%pair_i(k)
-   j = parts%pair_j(k)
-   if(i==1485) write(*,*) i,j 
-   if(j==703) write(*,*) 's',j,i 
-enddo
-write(*,*) '------------------'
-     
-             endif ! .not.single_phase
-
-    endif !mod
-
-return
-end subroutine
-
-
-!----------------------------------------------------------------------      
-      subroutine single_step_GPU
-!----------------------------------------------------------------------
-!   Subroutine to calculate the smoothing funciton for each particle and
-!   the interaction parameters used by the SPH algorithm. Interaction 
-!   pairs are determined by using a sorting grid linked list  
-!----------------------------------------------------------------------
-implicit none
-
-integer i, j, d, dim,scale_k, ntotal, niac, ntotal2    
-real(dp) hsml,dr,r,dx(3),tdwdx(3),x(3),dvx(3),tmp(5)
-real(dp) :: t1,t2,t3, tw, small = 1.0d-8, miu
-integer, parameter :: max_neibor = 30
-integer :: nneibor, neibor_j, neibor(max_neibor)
-real(dp) :: dudx, dudy, dvdx, dvdy
-real(dp) :: rrw,cf,sp,mprr,gravity
-real(dp) :: delta, water_c, soil_c
-real(dp) :: alpha,beta,etq,epsilon
-real(dp), parameter :: pi = 3.14159265358979323846
-real(dp) :: factor,q
-real(dp) :: phi_eq,J2
-real(dp) :: drho,dvx_x,dvx_y,dvof
-
-      integer xgcell(3),xcell, ycell,zcell,minxcell(3),maxxcell(3)
-      integer dnxgcell(3),dpxgcell(3)
-
-integer itmod
-itmod = mod(parts%itimestep,10000)
-
-dim = parts%dim
-scale_k = parts%get_scale_k()
-hsml = parts%hsml(1)             !!! hsml is same for all particles!
-gravity = parts%gravity
-ntotal = parts%ntotal + parts%nvirt
-ntotal2= soil%ntotal+soil%nvirt
-delta = parts%numeric%delta
-water_c  = parts%material%c
-soil_c = soil%material%c
-alpha = parts%numeric%alpha; beta = parts%numeric%beta; etq=parts%numeric%etq
-epsilon = parts%numeric%epsilon
-
-phi_eq = 0.58d0
-
-!$acc update self(parts%x(1:2,ntotal))
-!$acc update self(soil%x(1:2,ntotal2))
-
-call create_link_list(parts)
-call create_link_list(soil)
-
-!$acc update device(parts%grid,parts%celldata(1:ntotal),parts%maxgridx,parts%mingridx) 
-!$acc update device(parts%ngridx,parts%dgeomx,parts%ghsmlx,parts%dim)
-!$acc update device(soil%grid, soil%celldata(1:ntotal2),soil%maxgridx,soil%mingridx)
-!$acc update device(soil%ngridx,soil%dgeomx,soil%ghsmlx,soil%dim)
-
-ntotal  = parts%ntotal + parts%nvirt
-
-!$omp parallel do private(i) shared(ntotal,H2O)
-
-!$acc kernels loop independent vector
-do i = 1, ntotal
-  parts%p%r(i) = H2O%b*((parts%rho%r(i)/(H2O%rho0*parts%vof%r(i)))**H2O%gamma-1.d0)
-enddo
-!$omp end parallel do
-!$omp barrier
-
-!call cpu_time(t2)
-!write(*,*) 'time:', t2-t1
-
-!$omp parallel do &
-!$omp private(i,d,j,dx,dr,nneibor,neibor,neibor_j,tw,tdwdx,miu,dvx,tmp) &
-!$omp private(factor,q) &
-!$omp private(xgcell,minxcell,maxxcell,dnxgcell,dpxgcell,zcell,ycell,xcell) &
-!$omp shared(ntotal,dim,scale_k,hsml,gravity,H2O,alpha,beta,etq,parts,epsilon)
-
-!$acc kernels loop independent vector &
-!$acc private(d,j,dx,dr,nneibor,neibor,neibor_j,tw,tdwdx,miu,dvx,tmp) &
-!$acc private(xgcell,minxcell,maxxcell,dnxgcell,dpxgcell,zcell,ycell,xcell) 
-do i=1,ntotal
-
-parts%drho%r(i) = 0.d0 
-parts%dvx%x%r(i) = 0.d0
-parts%dvx%y%r(i) = 0.d0
-parts%dvof%r(i) = 0.d0
-parts%av%x%r(i) = 0.d0
-parts%av%y%r(i) = 0.d0
-
-call find_neibors(parts,i,scale_k,hsml,nneibor,neibor,max_neibor)
-
-do neibor_j = 1, nneibor
-   dr = 0.d0
-   j = neibor(neibor_j)
-   do d = 1, dim
-      dx(d) = parts%x(d,i) - parts%x(d,j)
-      dr = dr + dx(d)*dx(d)
-   enddo
-   dr = dsqrt(dr)   
-
-   dvx(1) = parts%vx%x%r(i) - parts%vx%x%r(j)
-   dvx(2) = parts%vx%y%r(i) - parts%vx%y%r(j)
-
-!--- Kernel and derivations of kernel
-
-   call kernel_GPU(dr,dx,hsml,tw,tdwdx,2,4)  
- 
-   parts%drho%r(i)=parts%drho%r(i) + (dvx(1)*tdwdx(1)+dvx(2)*tdwdx(2))*parts%mass%r(j)
-
-!---Delta SPH
-
-   tmp(1)=(dx(1)*tdwdx(1)+dx(2)*tdwdx(2))/(dr**2.d0+small)
-
-!Without delta-sph, OK, but particles disordered. With delta-sph, particles well organized,
-!e.g. line by line.
-if(parts%vof%r(i)+parts%vof%r(j)>1.8.or.parts%vof%r(i)+parts%vof%r(j)<1.2)then
-   parts%drho%r(i) = parts%drho%r(i) + 2.d0*delta*hsml*water_c*   &
-                    (parts%rho%r(i)-parts%rho%r(j))*tmp(1)*parts%mass%r(j)/parts%rho%r(j)
-   parts%dvof%r(i) = parts%dvof%r(i) + 2.d0*delta*hsml*water_c*   &
-                    (parts%vof%r(i)-parts%vof%r(j))*tmp(1)*parts%mass%r(j)/parts%rho%r(j)
-endif
-   
-   tmp(2) = -parts%vof%r(i)*parts%mass%r(j)*(parts%p%r(i)+parts%p%r(j))/   &
-            (parts%rho%r(i)*parts%rho%r(j))
-   parts%dvx%x%r(i) = parts%dvx%x%r(i) + tmp(2) * tdwdx(1)
-   parts%dvx%y%r(i) = parts%dvx%y%r(i) + tmp(2) * tdwdx(2)
-
-   tmp(2) = 2.0*H2O%viscosity*tmp(1)*parts%mass%r(j)/(parts%rho%r(i)*parts%rho%r(j))
-   parts%dvx%x%r(i) = parts%dvx%x%r(i) + tmp(2) *                                &
-         (parts%vof%r(i)*parts%vx%x%r(i)-parts%vof%r(j)*parts%vx%x%r(j))
-   parts%dvx%y%r(i) = parts%dvx%y%r(i) + tmp(2) *                                &
-         (parts%vof%r(i)*parts%vx%y%r(i)-parts%vof%r(j)*parts%vx%y%r(j))
-
-!---artifical viscosity----
-   tmp(3) = dx(1)*dvx(1) + dx(2)*dvx(2)
-   if(tmp(3)<0.d0)then
-      tmp(3) = hsml*tmp(3)/(dr**2.d0+hsml*hsml*etq*etq)
-      tmp(3) = 2.d0*(beta*tmp(3)-alpha*water_c)*tmp(3)*parts%mass%r(j)/        &
-              (parts%rho%r(i)+parts%rho%r(j))
-      parts%dvx%x%r(i) = parts%dvx%x%r(i) - tmp(3)*tdwdx(1)
-      parts%dvx%y%r(i) = parts%dvx%y%r(i) - tmp(3)*tdwdx(2)
-
-!------Average velocity---------
-
-      parts%av%x%r(i) = parts%av%x%r(i) - epsilon*2.0*parts%mass%r(j)*dvx(1)*tw/ &
-                        (parts%rho%r(i)+parts%rho%r(j))
-      parts%av%y%r(i) = parts%av%y%r(i) - epsilon*2.0*parts%mass%r(j)*dvx(2)*tw/ &
-                        (parts%rho%r(i)+parts%rho%r(j))
-
-   endif 
-enddo ! neibor
-   
-   parts%dvx%y%r(i) = parts%dvx%y%r(i) + gravity
-
-enddo !i
-!$omp end parallel do
-!$omp barrier
-
-!call cpu_time(t1)
-!write(*,*) 'time2: ', t1-t2
-
-!--------------------------internal force for soil----------------------------------
-
-ntotal = soil%ntotal + soil%nvirt
-
-!$omp parallel do &
-!$omp private(d,i,j,dx,dr,nneibor,neibor,neibor_j,tw,tdwdx,miu,dvx,tmp)  &
-!$omp private(dudx,dudy,dvdx,dvdy) &
-!$omp private(factor,q) &
-!$omp private(xgcell,minxcell,maxxcell,dnxgcell,dpxgcell,zcell,ycell,xcell) &
-!$omp shared(ntotal,dim,scale_k,hsml,alpha,beta,etq,soil,epsilon) &
-!$omp private(J2)
-
-!$acc kernels loop independent vector &
-!$acc private(d,j,dx,dr,nneibor,neibor,neibor_j,tw,tdwdx,miu,dvx,tmp)  &
-!$acc private(dudx,dudy,dvdx,dvdy,J2)
-do i = 1, ntotal
-
-   soil%drho%r(i) = 0.d0
-   soil%dvx%x%r(i) = 0.d0
-   soil%dvx%y%r(i) = 0.d0
-   soil%dp%r(i) = 0.d0
-   soil%dstr%x%r(i) = 0.d0
-   soil%dstr%xy%r(i) = 0.d0
-   soil%dstr%y%r(i) = 0.d0
-   soil%av%x%r(i) = 0.d0
-   soil%av%y%r(i) = 0.d0
-   dudx = 0.d0; dudy = 0.d0; dvdx = 0.d0; dvdy = 0.d0
-
-   call find_neibors(soil,i,scale_k,hsml,nneibor,neibor,max_neibor)
-
-do neibor_j = 1, nneibor
-   dr = 0.d0
-   j = neibor(neibor_j)
-   do d = 1, dim
-      dx(d) = soil%x(d,i) - soil%x(d,j)
-      dr = dr + dx(d)*dx(d)
-   enddo
-   dr = dsqrt(dr)   
-
-   dvx(1) = soil%vx%x%r(i) - soil%vx%x%r(j)
-   dvx(2) = soil%vx%y%r(i) - soil%vx%y%r(j)
-
-!--- Kernel and derivations of kernel
-
-   call kernel_GPU(dr,dx,hsml,tw,tdwdx,2,4)
-
-!---continuous equation
-
-    soil%drho%r(i)=soil%drho%r(i) + (dvx(1)*tdwdx(1)+dvx(2)*tdwdx(2))*soil%mass%r(j)
-
-!---Delta SPH
-
-   tmp(1)=(dx(1)*tdwdx(1)+dx(2)*tdwdx(2))/(dr**2.d0+small)
-
-if(soil%vof%r(i)+soil%vof%r(j)>1.8d0.or.soil%vof%r(i)+soil%vof%r(j)<1.2d0)then
-
-   soil%drho%r(i) = soil%drho%r(i) + 2.d0*delta*hsml*soil_c*   &
-                    (soil%rho%r(i)-soil%rho%r(j))*tmp(1)*soil%mass%r(j)/soil%rho%r(j)    
-   soil%dp%r(i) = soil%dp%r(i) + 2.d0*delta*hsml*soil_c*   &
-                    (soil%p%r(i)-soil%p%r(j))*tmp(1)*soil%mass%r(j)/soil%rho%r(j)   
-   soil%dstr%x%r(i) = soil%dstr%x%r(i) + 2.d0*delta*hsml*soil_c*   &
-              (soil%str%x%r(i)-soil%str%x%r(j))*tmp(1)*soil%mass%r(j)/soil%rho%r(j)    
-   soil%dstr%xy%r(i) = soil%dstr%xy%r(i) + 2.d0*delta*hsml*soil_c*   &
-              (soil%str%xy%r(i)-soil%str%xy%r(j))*tmp(1)*soil%mass%r(j)/soil%rho%r(j)    
-   soil%dstr%y%r(i) = soil%dstr%y%r(i) + 2.d0*delta*hsml*soil_c*   &
-              (soil%str%y%r(i)-soil%str%y%r(j))*tmp(1)*soil%mass%r(j)/soil%rho%r(j)    
-
-endif            
-
-!---momentum equation
-
-    tmp(1) = soil%vof%r(i)*soil%p%r(i)/soil%rho%r(i)**2                  &
-           + soil%vof%r(j)*soil%p%r(j)/soil%rho%r(j)**2
-
-    tmp(2) = soil%vof%r(i)*soil%str%x%r(i)/soil%rho%r(i)**2              &
-           + soil%vof%r(j)*soil%str%x%r(j)/soil%rho%r(j)**2   
-
-    tmp(3) = soil%vof%r(i)*soil%str%xy%r(i)/soil%rho%r(i)**2             &
-           + soil%vof%r(j)*soil%str%xy%r(j)/soil%rho%r(j)**2  
-    
-    tmp(4) = soil%vof%r(i)*soil%str%y%r(i)/soil%rho%r(i)**2              &
-           + soil%vof%r(j)*soil%str%y%r(j)/soil%rho%r(j)**2
-
-           
-    soil%dvx%x%r(i) = soil%dvx%x%r(i) + soil%mass%r(j)*                  &
-                    (-tmp(1)*tdwdx(1)+tmp(2)*tdwdx(1)+tmp(3)*tdwdx(2)) 
-
-    soil%dvx%y%r(i) = soil%dvx%y%r(i) + soil%mass%r(j)*                  &
-                    (-tmp(1)*tdwdx(2)+tmp(3)*tdwdx(1)+tmp(4)*tdwdx(2))
-
-!---artifical viscosity----
-
-   tmp(3) = dx(1)*dvx(1) + dx(2)*dvx(2)
-   if(tmp(3)<0.d0)then
-      tmp(3) = hsml*tmp(3)/(dr**2.d0+hsml*hsml*etq*etq)
-      tmp(3) = 2.d0*(beta*tmp(3)-alpha*soil_c)*tmp(3)*soil%mass%r(j)/        &
-              (soil%rho%r(i)+soil%rho%r(j))
-      soil%dvx%x%r(i) = soil%dvx%x%r(i) - tmp(3)*tdwdx(1)
-      soil%dvx%y%r(i) = soil%dvx%y%r(i) - tmp(3)*tdwdx(2)
-   endif        
-
-!----Average velocity--------
-
-      soil%av%x%r(i) = soil%av%x%r(i) - epsilon*2.0*soil%mass%r(j)*dvx(1)*tw/ &
-                        (soil%rho%r(i)+soil%rho%r(j))
-      soil%av%y%r(i) = soil%av%y%r(i) - epsilon*2.0*soil%mass%r(j)*dvx(2)*tw/ &
-                        (soil%rho%r(i)+soil%rho%r(j))
-
-!---velocity gradient
-
-    dudx = dudx - soil%mass%r(j)*dvx(1)*tdwdx(1)/soil%rho%r(j)
-    dudy = dudy - soil%mass%r(j)*dvx(1)*tdwdx(2)/soil%rho%r(j)
-    dvdx = dvdx - soil%mass%r(j)*dvx(2)*tdwdx(1)/soil%rho%r(j)
-    dvdy = dvdy - soil%mass%r(j)*dvx(2)*tdwdx(2)/soil%rho%r(j)
-enddo !neibor_j
-
-    soil%dvx%y%r(i) = soil%dvx%y%r(i) + gravity
-    
-    soil%tab%x%r(i) = 2.d0/3.d0*(2.d0*dudx-dvdy)
-    soil%tab%xy%r(i)= dudy + dvdx
-    soil%tab%y%r(i) = 2.d0/3.d0*(2.d0*dvdy-dudx)
-
-    soil%vcc%r(i)   = dudx + dvdy
-    soil%wxy%r(i)   = 0.5d0*(dudy-dvdx)
-
-! No critical state    
-!    soil%vof%r(i) = soil%rho%r(i)/sio2%rho0
-
-!Critical state
-    J2 = soil%tab%x%r(i)**2.+2.*soil%tab%xy%r(i)**2.+soil%tab%y%r(i)**2.+  &
-         (soil%tab%x%r(i)+soil%tab%y%r(i))**2.
-    J2 = sqrt(J2/2)
-
-         !if(parts%p%r(i)>1.d-3)then
-         !   phi_eq = 0.58 - 25.d0*0.012*J2/parts%p%r(i)         !!! 0.60
-         !else
-            !phi_eq = 0.58
-         !endif
-
-!parts%psi%r(i) = atan(0.5109d0*(parts%vof%r(i)-phi_eq))  !!!K3=4.09,Pouliquen
-soil%psi%r(i) = atan(4.09d0*(soil%vof%r(i)-phi_eq))  !!!K3=4.09,Pouliquen
-soil%dvof%r(i) = -soil%vof%r(i)*tan(soil%psi%r(i))*J2
-
-enddo  ! i
-!$omp end parallel do
-!$omp barrier
-
-call cpu_time(t1)
-!write(*,*) 'time3: ', t1-t2
-
-call stress_rate_GPU(soil)
-
-!-------------interaction for water---------------------
-!call cpu_time(t1)
-ntotal = parts%ntotal+parts%nvirt
-
-!$omp parallel do &
-!$omp private(d,i,j,dx,dr,nneibor,neibor,neibor_j,tw,tdwdx,miu,dvx,tmp)  &
-!$omp private(rrw,cf,sp)  &
-!$omp private(factor,q) &
-!$omp private(xgcell,minxcell,maxxcell,dnxgcell,dpxgcell,zcell,ycell,xcell) &
-!$omp shared(ntotal,scale_k,hsml,parts,soil)
-
-!$acc kernels loop independent vector &
-!$acc private(d,j,dx,dr,nneibor,neibor,neibor_j,tw,tdwdx,miu,dvx,tmp)  &
-!$acc private(rrw,cf,sp)
-do i = 1, ntotal 
-
-call find_neibors2(parts,i,soil,scale_k,hsml,nneibor,neibor,max_neibor)
-
-do neibor_j = 1, nneibor
-   dr = 0.d0
-   j = neibor(neibor_j)
-   do d = 1, dim
-      dx(d) = parts%x(d,i) - soil%x(d,j)
-      dr = dr + dx(d)*dx(d)
-   enddo
-   dr = dsqrt(dr)   
-
-   dvx(1) = parts%vx%x%r(i) - soil%vx%x%r(j)
-   dvx(2) = parts%vx%y%r(i) - soil%vx%y%r(j)
-
-!--- Kernel and derivations of kernel
-
-   call kernel_GPU(dr,dx,hsml,tw,tdwdx,2,4)  !!!!!!!!
-
-
-   rrw = tw/(parts%rho%r(i)*soil%rho%r(j))
-   cf = 150.*1.e-3*(1-parts%vof%r(i))**2/(parts%vof%r(i)*0.225e-3**2)
-
-   sp = cf*dvx(1)*rrw
-   parts%dvx%x%r(i) = parts%dvx%x%r(i)-soil%mass%r(j)*sp
-   sp = cf*dvx(2)*rrw
-   parts%dvx%y%r(i) = parts%dvx%y%r(i)-soil%mass%r(j)*sp
-
-
-   parts%dvof%r(i) = parts%dvof%r(i) -    &
-   soil%mass%r(j)*soil%vof%r(j)*(dvx(1)*tdwdx(1)+dvx(2)*tdwdx(2))/soil%rho%r(j)
-
-   enddo !neibor_j   
-enddo ! i
-!$omp end parallel do
-!$omp barrier
-
-!call cpu_time(t2)
-!write(*,*) 'time4: ', t2-t1
-
-!--------------darcy_law for soil-------------------------------
-
-ntotal = soil%ntotal + soil%nvirt
-!$omp parallel do &
-!$omp private(d,i,j,dx,dr,nneibor,neibor,neibor_j,tw,tdwdx,miu,dvx,tmp)  &
-!$omp private(rrw,cf,sp,mprr,factor,q) &
-!$omp private(xgcell,minxcell,maxxcell,dnxgcell,dpxgcell,zcell,ycell,xcell) &
-!$omp shared(ntotal,dim,scale_k,parts,soil)
-
-!$acc kernels loop independent vector &
-!$acc private(d,j,dx,dr,nneibor,neibor,neibor_j,tw,tdwdx,miu,dvx,tmp)  &
-!$acc private(rrw,cf,sp,mprr)
-
-do i = 1, ntotal
-
-   call find_neibors2(soil,i,parts,scale_k,hsml,nneibor,neibor,max_neibor)
-
-soil%spp%r(i) = 0.d0
-do neibor_j = 1, nneibor
-   dr = 0.d0
-   j = neibor(neibor_j)
-   do d = 1, dim
-      dx(d) = parts%x(d,j) - soil%x(d,i)
-      dr = dr + dx(d)*dx(d)
-   enddo
-   dr = dsqrt(dr)   
-
-   dvx(1) = parts%vx%x%r(j) - soil%vx%x%r(i)
-   dvx(2) = parts%vx%y%r(j) - soil%vx%y%r(i)
-
-!--- Kernel and derivations of kernel
-
-   call kernel_GPU(dr,dx,hsml,tw,tdwdx,2,4)  !!!!!!!!
-
-   rrw = tw/(parts%rho%r(j)*soil%rho%r(i))
-   cf = 150.*1.e-3*(1-parts%vof%r(j))**2/(parts%vof%r(j)*0.225e-3**2)
-
-   sp = cf*dvx(1)*rrw
-   soil%dvx%x%r(i) = soil%dvx%x%r(i)+parts%mass%r(j)*sp
-   sp = cf*dvx(2)*rrw
-   soil%dvx%y%r(i) = soil%dvx%y%r(i)+parts%mass%r(j)*sp
-
-!--- Pore water pressure
-
-   mprr = parts%mass%r(j)*(parts%p%r(j)-soil%spp0%r(i))/(parts%rho%r(j)*soil%rho%r(i))*soil%vof%r(i)
-   soil%dvx%x%r(i) = soil%dvx%x%r(i) + mprr * tdwdx(1)
-   soil%dvx%y%r(i) = soil%dvx%y%r(i) + mprr * tdwdx(2)
-
-!--- Pore water pressure interpolation
-
-    soil%spp%r(i) = soil%spp%r(i) +  &
-                    parts%mass%r(j)*parts%p%r(j)*tw/parts%rho%r(j)
-
-   enddo !neibor_j   
-enddo ! i
-!$omp end parallel do
-!$omp barrier
-
-!$omp parallel do private(i) shared(ntotal)
-!$acc kernels loop independent vector
-do i = 1, ntotal
-   soil%spp0%r(i) = soil%spp%r(i)
-enddo
-!$omp end parallel do
-!$omp barrier
-
-      if(parts%itimestep>=parts%save_step_from.and.   &
-         mod(parts%itimestep,parts%save_step).eq.0)then
-         call output
-      endif 
-
-end subroutine
-
-
-!----------------------------------------------------------------------      
-      subroutine single_step_water_GPU
-!----------------------------------------------------------------------
-!   Subroutine to calculate the smoothing funciton for each particle and
-!   the interaction parameters used by the SPH algorithm. Interaction 
-!   pairs are determined by using a sorting grid linked list  
-!----------------------------------------------------------------------
-implicit none
-
-integer i, j, d, dim,scale_k, ntotal, niac, ntotal2    
-real(dp) hsml,dr,r,dx(3),tdwdx(3),x(3),dvx(3),tmp(5)
-real(dp) :: t1,t2,t3, tw, small = 1.0d-8, miu
-integer, parameter :: max_neibor = 30
-integer :: nneibor, neibor_j, neibor(max_neibor)
-real(dp) :: dudx, dudy, dvdx, dvdy
-real(dp) :: rrw,cf,sp,mprr,gravity
-real(dp) :: delta, water_c, soil_c
-real(dp) :: alpha,beta,etq
-real(dp), parameter :: pi = 3.14159265358979323846
-real(dp) :: factor,q
-
-      integer xgcell(3),xcell, ycell,zcell,minxcell(3),maxxcell(3)
-      integer dnxgcell(3),dpxgcell(3)
-
-integer itmod
-itmod = mod(parts%itimestep,10000)
-
-dim = parts%dim
-scale_k = parts%get_scale_k()
-hsml = parts%hsml(1)             !!! hsml is same for all particles!
-gravity = parts%gravity
-ntotal = parts%ntotal + parts%nvirt
-ntotal2= soil%ntotal+soil%nvirt
-delta = parts%numeric%delta
-water_c  = parts%material%c
-soil_c = soil%material%c
-alpha = parts%numeric%alpha; beta = parts%numeric%beta; etq=parts%numeric%etq
-
-!call cpu_time(t1)
-
-!$acc update self(parts%x(1:2,ntotal))
-!$acc update self(soil%x(1:2,ntotal2))
-      
-call create_link_list(parts)
-call create_link_list(soil)
-
-!$acc update device(parts%grid,parts%celldata(1:ntotal),parts%maxgridx,parts%mingridx) 
-!$acc update device(parts%ngridx,parts%dgeomx,parts%ghsmlx,parts%dim)
-!$acc update device(soil%grid, soil%celldata(1:ntotal2),soil%maxgridx,soil%mingridx)
-!$acc update device(soil%ngridx,soil%dgeomx,soil%ghsmlx,soil%dim)
-
-call cpu_time(t2)
-!write(*,*) 'time:', t2-t1
-
-ntotal  = parts%ntotal + parts%nvirt
-
-!$omp parallel do private(i) shared(ntotal,H2O)
-
-!!$acc parallel loop independent present(parts%p%r,parts%rho%r,parts%vof%r) &
-!!$acc default(present) !num_gangs(ntotal)
-
-!$acc kernels present(parts%p%r,parts%rho%r,parts%vof%r) &
-!$acc default(present) num_gangs(ntotal) !vector_length(64) !num_workers(2)
-!$acc loop independent vector
-do i = 1, ntotal
-  parts%p%r(i) = H2O%b*((parts%rho%r(i)/(H2O%rho0*parts%vof%r(i)))**H2O%gamma-1.d0)
-enddo
-!$omp end parallel do
-!$omp barrier
-
-!$acc end loop
-!$acc end kernels
-
-!$omp parallel do &
-!$omp private(i,d,j,dx,dr,nneibor,neibor,neibor_j,tw,tdwdx,miu,dvx,tmp) &
-!$omp private(factor,q) &
-!$omp private(xgcell,minxcell,maxxcell,dnxgcell,dpxgcell,zcell,ycell,xcell) &
-!$omp shared(ntotal,dim,scale_k,hsml,gravity,H2O,alpha,beta,etq,parts)
-
-!$acc loop independent &!present(parts%drho%r,parts%dvx%x%r,parts%dvx%y%r) &
-!!$acc present(parts%x,parts%vx%x%r,parts%vx%y%r,parts%mass%r,parts%vof%r)  &
-!!$acc present(parts%p%r,parts%rho%r,parts%dvof%r)  &
-!!$acc present(parts%maxgridx,parts%mingridx,parts%ngridx,parts%dgeomx) &
-!!$acc present(parts%ghsmlx,parts%grid,parts%celldata) &
-!!$acc default(present) num_gangs(ntotal) & 
-!!$acc num_gangs(ntotal) &
-!$acc private(d,j,dx,dr,nneibor,neibor,neibor_j,tw,tdwdx,miu,dvx,tmp) &
-!$acc private(xgcell,minxcell,maxxcell,dnxgcell,dpxgcell,zcell,ycell,xcell) &
-!$acc vector
-
-
-!!$acc kernels present(parts%drho%r,parts%dvx%x%r,parts%dvx%y%r) &
-!!$acc present(parts%x,parts%vx%x%r,parts%vx%y%r,parts%mass%r,parts%vof%r)  &
-!!$acc present(parts%p%r,parts%rho%r,parts%dvof%r)  &
-!!$acc present(parts%maxgridx,parts%mingridx,parts%ngridx,parts%dgeomx) &
-!!$acc present(parts%ghsmlx,parts%grid,parts%celldata) !&
-!!$acc default(present) num_gangs(ntotal) !vector_length(64) !num_workers(2)
-!!$acc num_gangs(100) !vector_length(512) !num_workers(2)
-
-!!$acc loop independent private(d,j,dx,dr,nneibor,neibor,neibor_j,tw,tdwdx,miu,dvx,tmp) &
-!!$acc private(xgcell,minxcell,maxxcell,dnxgcell,dpxgcell,zcell,ycell,xcell) !&
-!!$acc worker
-
-do i=1,ntotal
-
-parts%drho%r(i) = 0.d0
-parts%dvx%x%r(i) = 0.d0
-parts%dvx%y%r(i) = 0.d0
-parts%dvof%r(i) = 0.d0
-
-call find_neibors(parts,i,scale_k,hsml,nneibor,neibor,max_neibor)
-
-#if abc
-      do d=1,3
-        xgcell(d) = 1
-      enddo
-      do d=1,dim
-        if ((parts%x(d,i).gt.parts%maxgridx(d)).or.(parts%x(d,i).lt.parts%mingridx(d))) then
-          print *,' >>> ERROR <<< : Particle out of range'
-          print *,'    Particle position: x(',i,d,') = ',parts%x(d,i)
-          print *,'    Range: [xmin,xmax](',D,') =                    &
-                 [',parts%mingridx(d),',',parts%maxgridx(d),']'
-          stop
-        else
-          xgcell(d) = int(real(parts%ngridx(d))/parts%dgeomx(d)*      &
-                      (parts%x(d,i)-parts%mingridx(d)) + 1.e0)
-!          xgcell(d) = int((parts%x(d,i)-parts%mingridx(d))/parts%dx_grid(d)) + 1
-        endif
-      enddo
-        do d=1,3
-          minxcell(d) = 1
-          maxxcell(d) = 1
-        enddo
-        do d=1,dim
-          dnxgcell(d) = xgcell(d) - parts%ghsmlx(d) - 1 
-          dpxgcell(d) = xgcell(d) + parts%ghsmlx(d) + 1
-          minxcell(d) = max(dnxgcell(d),1)
-          maxxcell(d) = min(dpxgcell(d),parts%ngridx(d))
-        enddo
-
-!     Search grid:
-        nneibor = 0; neibor = 0
-!$acc loop seq
-        do zcell=minxcell(3),maxxcell(3)
-          do ycell=minxcell(2),maxxcell(2)
-            do xcell=minxcell(1),maxxcell(1)
-              j = parts%grid(xcell,ycell,zcell)
-              if(j==i)j=parts%celldata(j)
-              do while(j.gt.0)
-                dx(1) = parts%x(1,i) - parts%x(1,j)
-                dr    = dx(1)*dx(1)
-                do d=2,dim
-                  dx(d) = parts%x(d,i) - parts%x(d,j)
-                  dr    = dr + dx(d)*dx(d)
-                enddo
-                if (sqrt(dr).lt.scale_k*hsml) then
-                   nneibor = nneibor + 1 
-                   if(nneibor>max_neibor) stop 'max_neibor reached!'
-                   neibor(nneibor) = j
-                endif
-                j = parts%celldata(j)
-                if(j==i) j=parts%celldata(j)
-               enddo !(j.gt.0)
-            enddo !xcell
-          enddo !ycell
-        enddo !zcell
-!$acc end loop
-#endif
-
-
-do neibor_j = 1, nneibor
-   dr = 0.d0
-   j = neibor(neibor_j)
-   do d = 1, dim
-      dx(d) = parts%x(d,i) - parts%x(d,j)
-      dr = dr + dx(d)*dx(d)
-   enddo
-   dr = dsqrt(dr)   
-
-   dvx(1) = parts%vx%x%r(i) - parts%vx%x%r(j)
-   dvx(2) = parts%vx%y%r(i) - parts%vx%y%r(j)
-
-!--- Kernel and derivations of kernel
-
-   call kernel_GPU(dr,dx,hsml,tw,tdwdx,2,4)  
-#if abc
-          q=dr/hsml
-          factor = 7.e0 / (4.e0*pi*hsml*hsml)
-	if(q.ge.0.and.q.le.2) then
-          tw = factor * ( (1-q/2)**4 *(1+2*q) )
-          do d= 1, dim
-            tdwdx(d) = factor*(-5+15*q/2-15*q**2/4+5*q**3/8)/    &
-                      hsml**2*dx(d)
-          enddo 
-	else   
-	  tw = 0.
-          do d = 1, dim
-            tdwdx(d) = 0.
-          enddo  
-        endif 
-#endif
- 
-   parts%drho%r(i)=parts%drho%r(i) + (dvx(1)*tdwdx(1)+dvx(2)*tdwdx(2))*parts%mass%r(j)
-
-!---Delta SPH
-
-   tmp(1)=(dx(1)*tdwdx(1)+dx(2)*tdwdx(2))/(dr**2.d0+small)
-
-!Without delta-sph, OK, but particles disordered. With delta-sph, particles well organized,
-!e.g. line by line.
-if(parts%vof%r(i)+parts%vof%r(j)>1.8.or.parts%vof%r(i)+parts%vof%r(j)<1.2)then
-   parts%drho%r(i) = parts%drho%r(i) + 2.d0*delta*hsml*water_c*   &
-                    (parts%rho%r(i)-parts%rho%r(j))*tmp(1)*parts%mass%r(j)/parts%rho%r(j)
-   parts%dvof%r(i) = parts%dvof%r(i) + 2.d0*delta*hsml*water_c*   &
-                    (parts%vof%r(i)-parts%vof%r(j))*tmp(1)*parts%mass%r(j)/parts%rho%r(j)
-endif
-   
-   tmp(2) = -parts%vof%r(i)*parts%mass%r(j)*(parts%p%r(i)+parts%p%r(j))/   &
-            (parts%rho%r(i)*parts%rho%r(j))
-   parts%dvx%x%r(i) = parts%dvx%x%r(i) + tmp(2) * tdwdx(1)
-   parts%dvx%y%r(i) = parts%dvx%y%r(i) + tmp(2) * tdwdx(2)
-
-   tmp(2) = 2.0*H2O%viscosity*tmp(1)*parts%mass%r(j)/(parts%rho%r(i)*parts%rho%r(j))
-   parts%dvx%x%r(i) = parts%dvx%x%r(i) + tmp(2) *                                &
-         (parts%vof%r(i)*parts%vx%x%r(i)-parts%vof%r(j)*parts%vx%x%r(j))
-   parts%dvx%y%r(i) = parts%dvx%y%r(i) + tmp(2) *                                &
-         (parts%vof%r(i)*parts%vx%y%r(i)-parts%vof%r(j)*parts%vx%y%r(j))
-
-!---artifical viscosity----
-   tmp(3) = dx(1)*dvx(1) + dx(2)*dvx(2)
-   if(tmp(3)<0.d0)then
-      tmp(3) = hsml*tmp(3)/(dr**2.d0+hsml*hsml*etq*etq)
-      tmp(3) = 2.d0*(beta*tmp(3)-alpha*water_c)*tmp(3)*parts%mass%r(j)/        &
-              (parts%rho%r(i)+parts%rho%r(j))
-      parts%dvx%x%r(i) = parts%dvx%x%r(i) - tmp(3)*tdwdx(1)
-      parts%dvx%y%r(i) = parts%dvx%y%r(i) - tmp(3)*tdwdx(2)
-   endif 
-enddo ! neibor
-
-   parts%dvx%y%r(i) = parts%dvx%y%r(i) + gravity
-
-enddo !i
-!$omp end parallel do
-!$omp barrier
-
-!$acc end loop
-!!$acc end kernels
-
-call cpu_time(t1)
-write(*,*) 'time2: ', t1-t2
-
-return
-end subroutine
-
-
-!----------------------------------------------------------------------      
-      subroutine single_step_soil_GPU
-!----------------------------------------------------------------------
-!   Subroutine to calculate the smoothing funciton for each particle and
-!   the interaction parameters used by the SPH algorithm. Interaction 
-!   pairs are determined by using a sorting grid linked list  
-!----------------------------------------------------------------------
-implicit none
-
-integer i, j, d, dim,scale_k, ntotal, niac, ntotal2    
-real(dp) hsml,dr,r,dx(3),tdwdx(3),x(3),dvx(3),tmp(5)
-real(dp) :: t1,t2,t3, tw, small = 1.0d-8, miu
-integer, parameter :: max_neibor = 30
-integer :: nneibor, neibor_j, neibor(max_neibor)
-real(dp) :: dudx, dudy, dvdx, dvdy
-real(dp) :: rrw,cf,sp,mprr,gravity
-real(dp) :: delta, water_c, soil_c
-real(dp) :: alpha,beta,etq
-real(dp), parameter :: pi = 3.14159265358979323846
-real(dp) :: factor,q
-real(dp) :: phi_eq,J2
-
-      integer xgcell(3),xcell, ycell,zcell,minxcell(3),maxxcell(3)
-      integer dnxgcell(3),dpxgcell(3)
-
-integer itmod
-itmod = mod(parts%itimestep,10000)
-
-dim = parts%dim
-scale_k = parts%get_scale_k()
-hsml = parts%hsml(1)             !!! hsml is same for all particles!
-gravity = parts%gravity
-ntotal = parts%ntotal + parts%nvirt
-ntotal2= soil%ntotal+soil%nvirt
-delta = parts%numeric%delta
-water_c  = parts%material%c
-soil_c = soil%material%c
-alpha = parts%numeric%alpha; beta = parts%numeric%beta; etq=parts%numeric%etq
-
-phi_eq = 0.58d0
-
-!call cpu_time(t1)
-!--------------------------internal force for soil----------------------------------
-
-ntotal = soil%ntotal + soil%nvirt
-
-!$omp parallel do &
-!$omp private(d,i,j,dx,dr,nneibor,neibor,neibor_j,tw,tdwdx,miu,dvx,tmp)  &
-!$omp private(dudx,dudy,dvdx,dvdy) &
-!$omp private(factor,q) &
-!$omp private(xgcell,minxcell,maxxcell,dnxgcell,dpxgcell,zcell,ycell,xcell) &
-!$omp shared(ntotal,dim,scale_k,hsml,alpha,beta,etq,soil) &
-!$omp private(J2)
-
-!!$acc parallel loop independent present(soil%drho%r,soil%dvx%x%r) &
-!!$acc present(soil%dvx%y%r,soil%x,soil%vx%x%r,soil%vx%y%r,soil%mass%r) &
-!!$acc present(soil%vof%r,soil%p%r,soil%rho%r,soil%str%x%r,soil%str%xy%r) &
-!!$acc present(soil%str%y%r,soil%tab%x%r,soil%tab%xy%r,soil%tab%y%r) &
-!!$acc present(soil%vcc%r,soil%wxy%r,soil%dp%r,soil%dstr%x%r) &
-!!$acc present(soil%dstr,soil%dstr%x,soil%dstr%xy,soil%dstr%y) &
-!!$acc present(soil%dstr%xy%r,soil%dstr%y%r,soil%dvof%r,soil%psi%r) &
-!!$acc default(present) &
-!!$acc private(d,j,dx,dr,nneibor,neibor,neibor_j,tw,tdwdx,miu,dvx,tmp)  &
-!!$acc private(dudx,dudy,dvdx,dvdy,J2)
-
-!$acc parallel present(soil%drho%r,soil%dvx%x%r) &
-!$acc present(soil%dvx%y%r,soil%x,soil%vx%x%r,soil%vx%y%r,soil%mass%r) &
-!$acc present(soil%vof%r,soil%p%r,soil%rho%r,soil%str%x%r,soil%str%xy%r) &
-!$acc present(soil%str%y%r,soil%tab%x%r,soil%tab%xy%r,soil%tab%y%r) &
-!$acc present(soil%vcc%r,soil%wxy%r,soil%dp%r,soil%dstr%x%r) &
-!$acc present(soil%dstr,soil%dstr%x,soil%dstr%xy,soil%dstr%y) &
-!$acc present(soil%dstr%xy%r,soil%dstr%y%r,soil%dvof%r,soil%psi%r) &
-!$acc default(present) num_gangs(ntotal)
-
-!$acc loop independent private(d,j,dx,dr,nneibor,neibor,neibor_j,tw,tdwdx,miu,dvx,tmp)  &
-!$acc private(dudx,dudy,dvdx,dvdy,J2) vector
-do i = 1, ntotal
-
-   soil%drho%r(i) = 0.d0
-   soil%dvx%x%r(i) = 0.d0
-   soil%dvx%y%r(i) = 0.d0
-   soil%dp%r(i) = 0.d0
-   soil%dstr%x%r(i) = 0.d0
-   soil%dstr%xy%r(i) = 0.d0
-   soil%dstr%y%r(i) = 0.d0
-   dudx = 0.d0; dudy = 0.d0; dvdx = 0.d0; dvdy = 0.d0
-
-   call find_neibors(soil,i,scale_k,hsml,nneibor,neibor,max_neibor)
-
-
-#if abc
-      do d=1,3
-        xgcell(d) = 1
-      enddo
-!      if(i==1) write(*,*)'adfad'
-      do d=1,dim
-        if ((soil%x(d,i).gt.soil%maxgridx(d)).or.(soil%x(d,i).lt.soil%mingridx(d))) then
-          print *,' >>> ERROR <<< : Particle out of range'
-          print *,'    Particle position: x(',i,d,') = ',soil%x(d,i)
-          print *,'    Range: [xmin,xmax](',D,') =                    &
-                 [',soil%mingridx(d),',',soil%maxgridx(d),']'
-          stop
-        else
-          xgcell(d) = int(real(soil%ngridx(d))/soil%dgeomx(d)*      &
-                      (soil%x(d,i)-soil%mingridx(d)) + 1.e0)
-          !xgcell(d) = int((soil%x(d,i)-soil%mingridx(d))/soil%dx_grid(d)) + 1
-        endif
-      enddo
-        do d=1,3
-          minxcell(d) = 1
-          maxxcell(d) = 1
-        enddo
-        do d=1,dim
-          dnxgcell(d) = xgcell(d)- soil%ghsmlx(d) - 1
-          dpxgcell(d) = xgcell(d)+ soil%ghsmlx(d) + 1
-          minxcell(d) = max(dnxgcell(d),1)
-          maxxcell(d) = min(dpxgcell(d),soil%ngridx(d))
-        enddo
-
-!     Search grid:
-        nneibor = 0; neibor = 0
-!$acc loop seq
-        do zcell=minxcell(3),maxxcell(3)
-          do ycell=minxcell(2),maxxcell(2)
-            do xcell=minxcell(1),maxxcell(1)
-              j = soil%grid(xcell,ycell,zcell)
-              if(j==i)j=soil%celldata(j)
-              do while(j.gt.0)
-                dx(1) = soil%x(1,i) - soil%x(1,j)
-                dr    = dx(1)*dx(1)
-                do d=2,dim
-                  dx(d) = soil%x(d,i) - soil%x(d,j)
-                  dr    = dr + dx(d)*dx(d)
-                enddo
-                if (sqrt(dr).lt.scale_k*hsml) then
-                   nneibor = nneibor + 1 
-                   if(nneibor>max_neibor) stop 'max_neibor reached!'
-                   neibor(nneibor) = j
-                endif
-                j = soil%celldata(j)
-                if(j==i) j=soil%celldata(j)
-               enddo !(j.gt.0)
-            enddo !xcell
-          enddo !ycell
-        enddo !zcell
-!$acc end loop
-#endif
-
-!$acc loop seq   
-do neibor_j = 1, nneibor
-   dr = 0.d0
-   j = neibor(neibor_j)
-   do d = 1, dim
-      dx(d) = soil%x(d,i) - soil%x(d,j)
-      dr = dr + dx(d)*dx(d)
-   enddo
-   dr = dsqrt(dr)   
-
-   dvx(1) = soil%vx%x%r(i) - soil%vx%x%r(j)
-   dvx(2) = soil%vx%y%r(i) - soil%vx%y%r(j)
-
-!--- Kernel and derivations of kernel
-
-   call kernel_GPU(dr,dx,hsml,tw,tdwdx,2,4)
-
-!---continuous equation
-
-    soil%drho%r(i)=soil%drho%r(i) + (dvx(1)*tdwdx(1)+dvx(2)*tdwdx(2))*soil%mass%r(j)
-
-!---Delta SPH
-
-   tmp(1)=(dx(1)*tdwdx(1)+dx(2)*tdwdx(2))/(dr**2.d0+small)
-
-if(soil%vof%r(i)+soil%vof%r(j)>1.8d0.or.soil%vof%r(i)+soil%vof%r(j)<1.2d0)then
-
-   soil%drho%r(i) = soil%drho%r(i) + 2.d0*delta*hsml*soil_c*   &
-                    (soil%rho%r(i)-soil%rho%r(j))*tmp(1)*soil%mass%r(j)/soil%rho%r(j)    
-   soil%dp%r(i) = soil%dp%r(i) + 2.d0*delta*hsml*soil_c*   &
-                    (soil%p%r(i)-soil%p%r(j))*tmp(1)*soil%mass%r(j)/soil%rho%r(j)   
-   soil%dstr%x%r(i) = soil%dstr%x%r(i) + 2.d0*delta*hsml*soil_c*   &
-              (soil%str%x%r(i)-soil%str%x%r(j))*tmp(1)*soil%mass%r(j)/soil%rho%r(j)    
-   soil%dstr%xy%r(i) = soil%dstr%xy%r(i) + 2.d0*delta*hsml*soil_c*   &
-              (soil%str%xy%r(i)-soil%str%xy%r(j))*tmp(1)*soil%mass%r(j)/soil%rho%r(j)    
-   soil%dstr%y%r(i) = soil%dstr%y%r(i) + 2.d0*delta*hsml*soil_c*   &
-              (soil%str%y%r(i)-soil%str%y%r(j))*tmp(1)*soil%mass%r(j)/soil%rho%r(j)    
-
-endif            
-
-!---momentum equation
-
-    tmp(1) = soil%vof%r(i)*soil%p%r(i)/soil%rho%r(i)**2                  &
-           + soil%vof%r(j)*soil%p%r(j)/soil%rho%r(j)**2
-
-    tmp(2) = soil%vof%r(i)*soil%str%x%r(i)/soil%rho%r(i)**2              &
-           + soil%vof%r(j)*soil%str%x%r(j)/soil%rho%r(j)**2   
-
-    tmp(3) = soil%vof%r(i)*soil%str%xy%r(i)/soil%rho%r(i)**2             &
-           + soil%vof%r(j)*soil%str%xy%r(j)/soil%rho%r(j)**2  
-    
-    tmp(4) = soil%vof%r(i)*soil%str%y%r(i)/soil%rho%r(i)**2              &
-           + soil%vof%r(j)*soil%str%y%r(j)/soil%rho%r(j)**2
-
-           
-    soil%dvx%x%r(i) = soil%dvx%x%r(i) + soil%mass%r(j)*                  &
-                    (-tmp(1)*tdwdx(1)+tmp(2)*tdwdx(1)+tmp(3)*tdwdx(2)) 
-
-    soil%dvx%y%r(i) = soil%dvx%y%r(i) + soil%mass%r(j)*                  &
-                    (-tmp(1)*tdwdx(2)+tmp(3)*tdwdx(1)+tmp(4)*tdwdx(2))
-
-!---artifical viscosity----
-
-   tmp(3) = dx(1)*dvx(1) + dx(2)*dvx(2)
-   if(tmp(3)<0.d0)then
-      tmp(3) = hsml*tmp(3)/(dr**2.d0+hsml*hsml*etq*etq)
-      tmp(3) = 2.d0*(beta*tmp(3)-alpha*soil_c)*tmp(3)*soil%mass%r(j)/        &
-              (soil%rho%r(i)+soil%rho%r(j))
-      soil%dvx%x%r(i) = soil%dvx%x%r(i) - tmp(3)*tdwdx(1)
-      soil%dvx%y%r(i) = soil%dvx%y%r(i) - tmp(3)*tdwdx(2)
-   endif        
-
-!---velocity gradient
-
-    dudx = dudx - soil%mass%r(j)*dvx(1)*tdwdx(1)/soil%rho%r(j)
-    dudy = dudy - soil%mass%r(j)*dvx(1)*tdwdx(2)/soil%rho%r(j)
-    dvdx = dvdx - soil%mass%r(j)*dvx(2)*tdwdx(1)/soil%rho%r(j)
-    dvdy = dvdy - soil%mass%r(j)*dvx(2)*tdwdx(2)/soil%rho%r(j)
-enddo !neibor_j
-!$acc end loop
-
-    soil%dvx%y%r(i) = soil%dvx%y%r(i) + gravity
-    
-    soil%tab%x%r(i) = 2.d0/3.d0*(2.d0*dudx-dvdy)
-    soil%tab%xy%r(i)= dudy + dvdx
-    soil%tab%y%r(i) = 2.d0/3.d0*(2.d0*dvdy-dudx)
-
-    soil%vcc%r(i)   = dudx + dvdy
-    soil%wxy%r(i)   = 0.5d0*(dudy-dvdx)
-
-! No critical state    
-!    soil%vof%r(i) = soil%rho%r(i)/sio2%rho0
-
-!Critical state
-    J2 = soil%tab%x%r(i)**2.+2.*soil%tab%xy%r(i)**2.+soil%tab%y%r(i)**2.+  &
-         (soil%tab%x%r(i)+soil%tab%y%r(i))**2.
-    J2 = sqrt(J2/2)
-
-         !if(parts%p%r(i)>1.d-3)then
-         !   phi_eq = 0.58 - 25.d0*0.012*J2/parts%p%r(i)         !!! 0.60
-         !else
-            !phi_eq = 0.58
-         !endif
-
-!parts%psi%r(i) = atan(0.5109d0*(parts%vof%r(i)-phi_eq))  !!!K3=4.09,Pouliquen
-soil%psi%r(i) = atan(4.09d0*(soil%vof%r(i)-phi_eq))  !!!K3=4.09,Pouliquen
-soil%dvof%r(i) = -soil%vof%r(i)*tan(soil%psi%r(i))*J2
-
-enddo  ! i
-!$omp end parallel do
-!$omp barrier
-
-!$acc end loop
-!$acc end parallel
-
-!call cpu_time(t2)
-
-!write(*,*) 'time3: ', t2-t1
-
-
-call stress_rate_GPU(soil)
-
-
-!-------------interaction for water---------------------
-!call cpu_time(t1)
-ntotal = parts%ntotal+parts%nvirt
-
-!$omp parallel do &
-!$omp private(d,i,j,dx,dr,nneibor,neibor,neibor_j,tw,tdwdx,miu,dvx,tmp)  &
-!$omp private(rrw,cf,sp)  &
-!$omp private(factor,q) &
-!$omp private(xgcell,minxcell,maxxcell,dnxgcell,dpxgcell,zcell,ycell,xcell) &
-!$omp shared(ntotal,scale_k,hsml,parts,soil)
-
-!!$acc parallel loop independent present(parts%dvof%r,parts%x,soil%x) &
-!!$acc present(parts%vx%x%r,parts%vx%y%r,soil%vx%x%r,soil%vx%y%r) &
-!!$acc present(parts%rho%r,soil%rho%r,parts%vof%r,parts%dvx%x%r)  &
-!!$acc present(parts%dvx%y%r,soil%mass%r,soil%vof%r)  &
-!!$acc default(present) & !num_gangs(ntotal) &
-!!$acc private(d,j,dx,dr,nneibor,neibor,neibor_j,tw,tdwdx,miu,dvx,tmp)  &
-!!$acc private(rrw,cf,sp)
-
-!$acc parallel present(parts%dvof%r,parts%x,soil%x) &
-!$acc present(parts%vx%x%r,parts%vx%y%r,soil%vx%x%r,soil%vx%y%r) &
-!$acc present(parts%rho%r,soil%rho%r,parts%vof%r,parts%dvx%x%r)  &
-!$acc present(parts%dvx%y%r,soil%mass%r,soil%vof%r)  &
-!$acc default(present) num_gangs(ntotal) 
-
-!$acc loop independent private(d,j,dx,dr,nneibor,neibor,neibor_j,tw,tdwdx,miu,dvx,tmp)  &
-!$acc private(rrw,cf,sp) vector
-do i = 1, ntotal 
-
-call find_neibors2(parts,i,soil,scale_k,hsml,nneibor,neibor,max_neibor)
-
-#if abc
-      do d=1,3
-        xgcell(d) = 1
-      enddo
-
-      do d=1,dim
-        if ((parts%x(d,i).gt.soil%maxgridx(d)).or.(parts%x(d,i).lt.soil%mingridx(d))) then
-          print *,' >>> ERROR <<< : Particle out of range'
-          print *,'    Particle position: x(',i,d,') = ',parts%x(d,i)
-          print *,'    Range: [xmin,xmax](',D,') =                    &
-                 [',soil%mingridx(d),',',soil%maxgridx(d),']'
-          stop
-        else
-          xgcell(d) = int(real(soil%ngridx(d))/soil%dgeomx(d)*      &
-                      (parts%x(d,i)-soil%mingridx(d)) + 1.e0)
-          !xgcell(d) = int((parts%x(d,i)-soil%mingridx(d))/soil%dx_grid(d)) + 1
-        endif
-      enddo
-
-        do d=1,3
-          minxcell(d) = 1
-          maxxcell(d) = 1
-        enddo
-        do d=1,dim
-          dnxgcell(d) = xgcell(d) - soil%ghsmlx(d) - 1
-          dpxgcell(d) = xgcell(d) + soil%ghsmlx(d) + 1
-          minxcell(d) = max(dnxgcell(d),1)
-          maxxcell(d) = min(dpxgcell(d),soil%ngridx(d))
-        enddo
-!     Search grid:
-        nneibor = 0; neibor = 0
-        do zcell=minxcell(3),maxxcell(3)
-          do ycell=minxcell(2),maxxcell(2)
-            do xcell=minxcell(1),maxxcell(1)
-              j = soil%grid(xcell,ycell,zcell)
-              do while(j.gt.0)
-                dx(1) = parts%x(1,i) - soil%x(1,j)
-                dr    = dx(1)*dx(1)
-                do d=2,dim
-                  dx(d) = parts%x(d,i) - soil%x(d,j)
-                  dr    = dr + dx(d)*dx(d)
-                enddo
-                if (sqrt(dr).lt.scale_k*hsml) then
-                   nneibor = nneibor + 1 
-                   if(nneibor>max_neibor) stop 'max_neibor reached!'
-                   neibor(nneibor) = j
-                endif
-                j = soil%celldata(j)
-                !if(j==i) j=parts%celldata(j)
-               enddo !(j.gt.0)
-            enddo !xcell
-          enddo !ycell
-        enddo !zcell
-#endif
-
-do neibor_j = 1, nneibor
-   dr = 0.d0
-   j = neibor(neibor_j)
-   do d = 1, dim
-      dx(d) = parts%x(d,i) - soil%x(d,j)
-      dr = dr + dx(d)*dx(d)
-   enddo
-   dr = dsqrt(dr)   
-
-   dvx(1) = parts%vx%x%r(i) - soil%vx%x%r(j)
-   dvx(2) = parts%vx%y%r(i) - soil%vx%y%r(j)
-
-!--- Kernel and derivations of kernel
-
-   call kernel_GPU(dr,dx,hsml,tw,tdwdx,2,4)  !!!!!!!!
-#if abc
-          q=dr/hsml
-          factor = 7.e0 / (4.e0*pi*hsml*hsml)
-	if(q.ge.0.and.q.le.2) then
-          tw = factor * ( (1-q/2)**4 *(1+2*q) )
-          do d= 1, dim
-            tdwdx(d) = factor*(-5+15*q/2-15*q**2/4+5*q**3/8)/    &
-                      hsml**2*dx(d)
-          enddo 
-	else   
-	  tw = 0.
-          do d = 1, dim
-            tdwdx(d) = 0.
-          enddo  
-        endif 
-#endif
-
-   rrw = tw/(parts%rho%r(i)*soil%rho%r(j))
-   cf = 150.*1.e-3*(1-parts%vof%r(i))**2/(parts%vof%r(i)*0.225e-3**2)
-
-   sp = cf*dvx(1)*rrw
-   parts%dvx%x%r(i) = parts%dvx%x%r(i)-soil%mass%r(j)*sp
-   sp = cf*dvx(2)*rrw
-   parts%dvx%y%r(i) = parts%dvx%y%r(i)-soil%mass%r(j)*sp
-
-
-   parts%dvof%r(i) = parts%dvof%r(i) -    &
-   soil%mass%r(j)*soil%vof%r(j)*(dvx(1)*tdwdx(1)+dvx(2)*tdwdx(2))/soil%rho%r(j)
-
-   enddo !neibor_j   
-enddo ! i
-!$omp end parallel do
-!$omp barrier
-
-!$acc end loop
-!$acc end parallel
-
-!call cpu_time(t2)
-!write(*,*) 'time4: ', t2-t1
-
-!--------------darcy_law for soil-------------------------------
-
-ntotal = soil%ntotal + soil%nvirt
-!$omp parallel do &
-!$omp private(d,i,j,dx,dr,nneibor,neibor,neibor_j,tw,tdwdx,miu,dvx,tmp)  &
-!$omp private(rrw,cf,sp,mprr,factor,q) &
-!$omp private(xgcell,minxcell,maxxcell,dnxgcell,dpxgcell,zcell,ycell,xcell) &
-!$omp shared(ntotal,dim,scale_k,parts,soil)
-
-!!$acc parallel loop independent present(parts%x,soil%x,parts%vx%x%r)   &
-!!$acc present(parts%vx%y%r,soil%vx%x%r,soil%vx%y%r,parts%rho%r,soil%rho%r) &
-!!$acc present(parts%vof%r,soil%dvx%x%r,soil%dvx%y%r,parts%mass%r) &
-!!$acc present(parts%p%r,soil%vof%r,soil%spp%r,soil%spp0%r) &
-!!$acc default(present) &
-!!$acc private(d,j,dx,dr,nneibor,neibor,neibor_j,tw,tdwdx,miu,dvx,tmp)  &
-!!$acc private(rrw,cf,sp,mprr)
-
-
-!$acc parallel present(parts%x,soil%x,parts%vx%x%r)   &
-!$acc present(parts%vx%y%r,soil%vx%x%r,soil%vx%y%r,parts%rho%r,soil%rho%r) &
-!$acc present(parts%vof%r,soil%dvx%x%r,soil%dvx%y%r,parts%mass%r) &
-!$acc present(parts%p%r,soil%vof%r,soil%spp%r,soil%spp0%r) &
-!$acc default(present) num_gangs(ntotal)
-
-!$acc loop independent vector &
-!$acc private(d,j,dx,dr,nneibor,neibor,neibor_j,tw,tdwdx,miu,dvx,tmp)  &
-!$acc private(rrw,cf,sp,mprr)
-
-do i = 1, ntotal
-
-   call find_neibors2(soil,i,parts,scale_k,hsml,nneibor,neibor,max_neibor)
-
-#if abc
-
-      do d=1,3
-        xgcell(d) = 1
-      enddo
-
-      do d=1,dim
-        if ((soil%x(d,i).gt.parts%maxgridx(d)).or.(soil%x(d,i).lt.parts%mingridx(d))) then
-          print *,' >>> ERROR <<< : Particle out of range'
-          print *,'    Particle position: x(',i,d,') = ',soil%x(d,i)
-          print *,'    Range: [xmin,xmax](',D,') =                    &
-                 [',parts%mingridx(d),',',parts%maxgridx(d),']'
-          stop
-        else
-          xgcell(d) = int(real(parts%ngridx(d))/parts%dgeomx(d)*      &
-                      (soil%x(d,i)-parts%mingridx(d)) + 1.e0)
-          !xgcell(d) = int((soil%x(d,i)-parts%mingridx(d))/parts%dx_grid(d)) + 1
-        endif
-      enddo
-
-        do d=1,3
-          minxcell(d) = 1
-          maxxcell(d) = 1
-        enddo
-        do d=1,dim
-          dnxgcell(d) = xgcell(d) - parts%ghsmlx(d) - 1
-          dpxgcell(d) = xgcell(d) + parts%ghsmlx(d) + 1
-          minxcell(d) = max(dnxgcell(d),1)
-          maxxcell(d) = min(dpxgcell(d),parts%ngridx(d))
-        enddo
-!     Search grid:
-        nneibor = 0; neibor = 0
-        do zcell=minxcell(3),maxxcell(3)
-          do ycell=minxcell(2),maxxcell(2)
-            do xcell=minxcell(1),maxxcell(1)
-              j = parts%grid(xcell,ycell,zcell)
-              do while(j.gt.0)
-                dx(1) = soil%x(1,i) - parts%x(1,j)
-                dr    = dx(1)*dx(1)
-                do d=2,dim
-                  dx(d) = soil%x(d,i) - parts%x(d,j)
-                  dr    = dr + dx(d)*dx(d)
-                enddo
-                if (sqrt(dr).lt.scale_k*hsml) then
-                   nneibor = nneibor + 1 
-                   if(nneibor>max_neibor) stop 'max_neibor reached!'
-                   neibor(nneibor) = j
-                endif
-                j = parts%celldata(j)
-                !if(j==i) j=parts%celldata(j)
-               enddo !(j.gt.0)
-            enddo !xcell
-          enddo !ycell
-        enddo !zcell
-
-#endif
-
-soil%spp%r(i) = 0.d0
-do neibor_j = 1, nneibor
-   dr = 0.d0
-   j = neibor(neibor_j)
-   do d = 1, dim
-      dx(d) = parts%x(d,j) - soil%x(d,i)
-      dr = dr + dx(d)*dx(d)
-   enddo
-   dr = dsqrt(dr)   
-
-   dvx(1) = parts%vx%x%r(j) - soil%vx%x%r(i)
-   dvx(2) = parts%vx%y%r(j) - soil%vx%y%r(i)
-
-!--- Kernel and derivations of kernel
-
-   call kernel_GPU(dr,dx,hsml,tw,tdwdx,2,4)  !!!!!!!!
-#if abc
-          q=dr/hsml
-          factor = 7.e0 / (4.e0*pi*hsml*hsml)
-	if(q.ge.0.and.q.le.2) then
-          tw = factor * ( (1-q/2)**4 *(1+2*q) )
-          do d= 1, dim
-            tdwdx(d) = factor*(-5+15*q/2-15*q**2/4+5*q**3/8)/    &
-                      hsml**2*dx(d)
-          enddo 
-	else   
-	  tw = 0.
-          do d = 1, dim
-            tdwdx(d) = 0.
-          enddo  
-        endif 
-#endif   
-
-
-   rrw = tw/(parts%rho%r(j)*soil%rho%r(i))
-   cf = 150.*1.e-3*(1-parts%vof%r(j))**2/(parts%vof%r(j)*0.225e-3**2)
-
-   sp = cf*dvx(1)*rrw
-   soil%dvx%x%r(i) = soil%dvx%x%r(i)+parts%mass%r(j)*sp
-   sp = cf*dvx(2)*rrw
-   soil%dvx%y%r(i) = soil%dvx%y%r(i)+parts%mass%r(j)*sp
-
-!--- Pore water pressure
-
-   mprr = parts%mass%r(j)*(parts%p%r(j)-soil%spp0%r(i))/(parts%rho%r(j)*soil%rho%r(i))*soil%vof%r(i)
-   soil%dvx%x%r(i) = soil%dvx%x%r(i) + mprr * tdwdx(1)
-   soil%dvx%y%r(i) = soil%dvx%y%r(i) + mprr * tdwdx(2)
-
-!--- Pore water pressure interpolation
-
-    soil%spp%r(i) = soil%spp%r(i) +  &
-                    parts%mass%r(j)*parts%p%r(j)*tw/parts%rho%r(j)
-
-   enddo !neibor_j   
-enddo ! i
-!$omp end parallel do
-!$omp barrier
-
-!$acc end loop
-!$acc end parallel
-
-!$omp parallel do private(i) shared(ntotal)
-!!$acc parallel loop independent present(soil%spp%r,soil%spp0%r) &
-!!$acc default(present)
-
-!$acc parallel present(soil%spp%r,soil%spp0%r) &
-!$acc default(present) num_gangs(ntotal)
-
-!$acc loop independent vector
-do i = 1, ntotal
-   soil%spp0%r(i) = soil%spp%r(i)
-enddo
-!$omp end parallel do
-!$omp barrier
-
-!$acc end loop
-!$acc end parallel
-
-      if(parts%itimestep>=parts%save_step_from.and.   &
-         mod(parts%itimestep,parts%save_step).eq.0)then
-         call output
-      endif 
-
-end subroutine
+                   
 
 !-------------------------------------------------
       subroutine single_step_for_water
@@ -4194,9 +2379,6 @@ end subroutine
 
       integer ntotal, ntotal2
       integer i, d, npart, i1, i2, f1, f2, f3     
-
-      call update_self(parts)
-      call update_self(soil)
 
       ntotal =  parts%ntotal+parts%nvirt
       ntotal2=  soil%ntotal+soil%nvirt
